@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}וועדות - מערכת ניהול וועדות{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="bi bi-people me-2"></i>וועדות במערכת</h2>
+        <p class="text-muted">הצגת כל הוועדות והזמנים הקבועים שלהן</p>
+    </div>
+</div>
+
+<div class="row">
+    {% for committee in committees %}
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card h-100 border-start border-primary border-4">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-people me-2"></i>{{ committee.name }}
+                </h5>
+                
+                <div class="mb-3">
+                    <h6 class="text-muted">פרטי תזמון:</h6>
+                    <p class="mb-1">
+                        <i class="bi bi-calendar me-1"></i>
+                        <strong>יום:</strong> {{ committee.scheduled_day_name }}
+                    </p>
+                    <p class="mb-1">
+                        <i class="bi bi-clock me-1"></i>
+                        <strong>תדירות:</strong> 
+                        {% if committee.frequency == 'monthly' %}
+                            חודשי
+                            {% if committee.week_of_month %}
+                                (שבוע {{ committee.week_of_month }})
+                            {% endif %}
+                        {% else %}
+                            שבועי
+                        {% endif %}
+                    </p>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('suggest_dates') }}?committee_id={{ committee.vaadot_id }}" 
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-calendar-plus me-1"></i>הצע תאריכים
+                    </a>
+                    <a href="{{ url_for('events') }}?committee_id={{ committee.vaadot_id }}" 
+                       class="btn btn-outline-success btn-sm">
+                        <i class="bi bi-calendar-event me-1"></i>צפה באירועים
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Committee Rules Info -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-info-circle me-2"></i>כללי תזמון וועדות
+                </h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <ul class="list-unstyled">
+                            <li><i class="bi bi-check-circle text-success me-2"></i>פעילות בימי עסקים בלבד</li>
+                            <li><i class="bi bi-check-circle text-success me-2"></i>ללא שבתות וחגים</li>
+                            <li><i class="bi bi-check-circle text-success me-2"></i>ועדה אחת בלבד ביום</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <ul class="list-unstyled">
+                            <li><i class="bi bi-check-circle text-success me-2"></i>מקסימום 3 וועדות בשבוע רגיל</li>
+                            <li><i class="bi bi-check-circle text-success me-2"></i>מקסימום 4 וועדות בשבוע השלישי</li>
+                            <li><i class="bi bi-check-circle text-success me-2"></i>גמישות להוספת ימי שבתון</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

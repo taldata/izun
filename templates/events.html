@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}ניהול אירועים - מערכת ניהול וועדות{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-calendar-event me-2"></i>ניהול אירועים</h2>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEventModal">
+                <i class="bi bi-plus me-1"></i>צור אירוע חדש
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Events List -->
+<div class="row">
+    <div class="col-12">
+        {% if events %}
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>מזהה</th>
+                                    <th>שם האירוע</th>
+                                    <th>ועדה</th>
+                                    <th>מסלול</th>
+                                    <th>סוג</th>
+                                    <th>בקשות צפויות</th>
+                                    <th>סטטוס</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for event in events %}
+                                <tr>
+                                    <td><span class="badge bg-secondary">{{ event.event_id }}</span></td>
+                                    <td><strong>{{ event.name }}</strong></td>
+                                    <td>{{ event.vaadot_name }}</td>
+                                    <td>
+                                        {{ event.maslul_name }}
+                                        <small class="text-muted d-block">{{ event.hativa_name }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'warning' if event.event_type == 'kokok' else 'info' }}">
+                                            {{ 'קו"ק' if event.event_type == 'kokok' else 'שוטף' }}
+                                        </span>
+                                    </td>
+                                    <td>{{ event.expected_requests }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if event.status == 'completed' else 'primary' if event.status == 'scheduled' else 'secondary' }}">
+                                            {{ event.status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-calendar-event text-muted" style="font-size: 4rem;"></i>
+                    <h4 class="mt-3 text-muted">אין אירועים במערכת</h4>
+                    <p class="text-muted">התחל ביצירת האירוע הראשון</p>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEventModal">
+                        <i class="bi bi-plus me-1"></i>צור אירוע ראשון
+                    </button>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Event Modal -->
+<div class="modal fade" id="addEventModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-plus-circle me-2"></i>יצירת אירוע חדש
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_event') }}" id="eventForm">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="vaadot_id" class="form-label">ועדה <span class="text-danger">*</span></label>
+                                <select class="form-select" id="vaadot_id" name="vaadot_id" required>
+                                    <option value="">בחר ועדה</option>
+                                    {% for committee in committees %}
+                                        <option value="{{ committee.vaadot_id }}">
+                                            {{ committee.name }} ({{ committee.scheduled_day_name }})
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="hativa_select" class="form-label">חטיבה</label>
+                                <select class="form-select" id="hativa_select">
+                                    <option value="">בחר חטיבה</option>
+                                    {% for hativa in (maslulim | map(attribute='hativa_name') | unique | list) %}
+                                        <option value="{{ hativa }}">{{ hativa }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="maslul_id" class="form-label">מסלול <span class="text-danger">*</span></label>
+                        <select class="form-select" id="maslul_id" name="maslul_id" required>
+                            <option value="">בחר מסלול</option>
+                            {% for maslul in maslulim %}
+                                <option value="{{ maslul.maslul_id }}" data-hativa="{{ maslul.hativa_name }}">
+                                    {{ maslul.name }} ({{ maslul.hativa_name }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="name" class="form-label">שם האירוע <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="event_type" class="form-label">סוג האירוע <span class="text-danger">*</span></label>
+                                <select class="form-select" id="event_type" name="event_type" required>
+                                    <option value="">בחר סוג</option>
+                                    <option value="kokok">קו"ק</option>
+                                    <option value="shotef">שוטף</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="expected_requests" class="form-label">היקף בקשות צפוי</label>
+                                <input type="number" class="form-control" id="expected_requests" name="expected_requests" min="0" value="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>צור אירוע
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Filter routes by division
+document.getElementById('hativa_select').addEventListener('change', function() {
+    const selectedHativa = this.value;
+    const maslulSelect = document.getElementById('maslul_id');
+    const options = maslulSelect.querySelectorAll('option');
+    
+    options.forEach(option => {
+        if (option.value === '') {
+            option.style.display = 'block';
+            return;
+        }
+        
+        const hativa = option.getAttribute('data-hativa');
+        if (selectedHativa === '' || hativa === selectedHativa) {
+            option.style.display = 'block';
+        } else {
+            option.style.display = 'none';
+        }
+    });
+    
+    // Reset selection if current selection is not visible
+    if (maslulSelect.value && maslulSelect.querySelector(`option[value="${maslulSelect.value}"]`).style.display === 'none') {
+        maslulSelect.value = '';
+    }
+});
+</script>
+{% endblock %}

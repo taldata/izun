@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}דף הבית - מערכת ניהול וועדות{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="jumbotron bg-gradient-primary text-white rounded p-5 mb-4">
+            <h1 class="display-4">
+                <i class="bi bi-calendar-check me-3"></i>
+                ברוכים הבאים למערכת ניהול וועדות
+            </h1>
+            <p class="lead">מערכת מקיפה לניהול וועדות, תזמון ישיבות ויצירת אירועים</p>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-2">
+        <div class="card text-center h-100 border-primary">
+            <div class="card-body">
+                <i class="bi bi-diagram-3 text-primary" style="font-size: 2rem;"></i>
+                <h5 class="card-title mt-2">{{ stats.hativot_count }}</h5>
+                <p class="card-text">חטיבות</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center h-100 border-info">
+            <div class="card-body">
+                <i class="bi bi-arrow-right-circle text-info" style="font-size: 2rem;"></i>
+                <h5 class="card-title mt-2">{{ stats.maslulim_count }}</h5>
+                <p class="card-text">מסלולים</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center h-100 border-success">
+            <div class="card-body">
+                <i class="bi bi-people text-success" style="font-size: 2rem;"></i>
+                <h5 class="card-title mt-2">{{ stats.committees_count }}</h5>
+                <p class="card-text">וועדות</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center h-100 border-warning">
+            <div class="card-body">
+                <i class="bi bi-calendar-event text-warning" style="font-size: 2rem;"></i>
+                <h5 class="card-title mt-2">{{ stats.events_count }}</h5>
+                <p class="card-text">אירועים</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center h-100 border-danger">
+            <div class="card-body">
+                <i class="bi bi-calendar-x text-danger" style="font-size: 2rem;"></i>
+                <h5 class="card-title mt-2">{{ stats.exception_dates_count }}</h5>
+                <p class="card-text">תאריכי חריגים</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center h-100 border-secondary">
+            <div class="card-body">
+                <i class="bi bi-calendar3 text-secondary" style="font-size: 2rem;"></i>
+                <h5 class="card-title mt-2">{{ stats.business_days_this_month }}</h5>
+                <p class="card-text">ימי עסקים החודש</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <h3><i class="bi bi-lightning me-2"></i>פעולות מהירות</h3>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <i class="bi bi-plus-circle text-primary" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">יצירת אירוע חדש</h5>
+                <p class="card-text">הוסף אירוע חדש לועדה קיימת</p>
+                <a href="{{ url_for('events') }}" class="btn btn-primary">
+                    <i class="bi bi-plus me-1"></i>צור אירוע
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <i class="bi bi-calendar3 text-success" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">לוח זמנים</h5>
+                <p class="card-text">צפה בלוח הזמנים החודשי</p>
+                <a href="{{ url_for('schedule') }}" class="btn btn-success">
+                    <i class="bi bi-calendar3 me-1"></i>צפה בלוח
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <i class="bi bi-calendar-plus text-info" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">הצעת תאריכים</h5>
+                <p class="card-text">מצא תאריכים פנויים לוועדות</p>
+                <a href="{{ url_for('suggest_dates') }}" class="btn btn-info">
+                    <i class="bi bi-search me-1"></i>חפש תאריכים
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <i class="bi bi-gear text-warning" style="font-size: 3rem;"></i>
+                <h5 class="card-title mt-3">ניהול נתונים</h5>
+                <p class="card-text">נהל חטיבות, מסלולים ותאריכים</p>
+                <a href="{{ url_for('hativot') }}" class="btn btn-warning">
+                    <i class="bi bi-gear me-1"></i>נהל נתונים
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Committees Overview -->
+<div class="row">
+    <div class="col-12">
+        <h3><i class="bi bi-people me-2"></i>וועדות במערכת</h3>
+    </div>
+</div>
+
+<div class="row">
+    {% for committee in committees %}
+    <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card border-start border-primary border-4">
+            <div class="card-body">
+                <h6 class="card-title">{{ committee.name }}</h6>
+                <p class="card-text">
+                    <i class="bi bi-calendar me-1"></i>{{ committee.scheduled_day_name }}
+                </p>
+                <p class="card-text">
+                    <small class="text-muted">
+                        {% if committee.frequency == 'monthly' %}
+                            חודשי - שבוע {{ committee.week_of_month }}
+                        {% else %}
+                            שבועי
+                        {% endif %}
+                    </small>
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

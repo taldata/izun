@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}לוח זמנים חודשי - מערכת ניהול וועדות{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-calendar3 me-2"></i>לוח זמנים חודשי</h2>
+            <div class="btn-group">
+                <a href="{{ url_for('schedule', year=schedule.year, month=schedule.month-1 if schedule.month > 1 else 12) }}" 
+                   class="btn btn-outline-primary">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+                <button class="btn btn-primary disabled">
+                    {{ schedule.month }}/{{ schedule.year }}
+                </button>
+                <a href="{{ url_for('schedule', year=schedule.year, month=schedule.month+1 if schedule.month < 12 else 1) }}" 
+                   class="btn btn-outline-primary">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Month Statistics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center border-success">
+            <div class="card-body">
+                <i class="bi bi-calendar3 text-success" style="font-size: 2rem;"></i>
+                <h5 class="card-title mt-2">{{ schedule.business_days|length }}</h5>
+                <p class="card-text">ימי עסקים</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-danger">
+            <div class="card-body">
+                <i class="bi bi-calendar-x text-danger" style="font-size: 2rem;"></i>
+                <h5 class="card-title mt-2">{{ schedule.exception_dates|length }}</h5>
+                <p class="card-text">ימי חריג</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-info">
+            <div class="card-body">
+                <i class="bi bi-people text-info" style="font-size: 2rem;"></i>
+                <h5 class="card-title mt-2">{{ schedule.committees|length }}</h5>
+                <p class="card-text">וועדות</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-warning">
+            <div class="card-body">
+                <i class="bi bi-calendar-event text-warning" style="font-size: 2rem;"></i>
+                <h5 class="card-title mt-2">
+                    {% set total_meetings = 0 %}
+                    {% for committee_name, dates in schedule.committees.items() %}
+                        {% set total_meetings = total_meetings + (dates|selectattr('can_schedule')|list|length) %}
+                    {% endfor %}
+                    {{ total_meetings }}
+                </h5>
+                <p class="card-text">ישיבות מתוזמנות</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Committees Schedule -->
+<div class="row">
+    {% for committee_name, dates in schedule.committees.items() %}
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-people me-2"></i>{{ committee_name }}
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if dates %}
+                    <div class="list-group list-group-flush">
+                        {% for date_info in dates %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ date_info.date.strftime('%d/%m') }}</strong>
+                                <small class="text-muted d-block">
+                                    {% set weekdays = ['יום ב\'', 'יום ג\'', 'יום ד\'', 'יום ה\'', 'יום ו\'', 'שבת', 'יום א\''] %}
+                                    {{ weekdays[date_info.date.weekday()] }}
+                                </small>
+                            </div>
+                            <div>
+                                {% if date_info.can_schedule %}
+                                    <span class="badge bg-success">זמין</span>
+                                {% else %}
+                                    <span class="badge bg-danger" title="{{ date_info.reason }}">לא זמין</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted text-center py-3">אין תאריכים מתוזמנים החודש</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Exception Dates -->
+{% if schedule.exception_dates %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card border-warning">
+            <div class="card-header bg-warning">
+                <h5 class="mb-0">
+                    <i class="bi bi-calendar-x me-2"></i>תאריכי חריגים החודש
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for exc_date in schedule.exception_dates %}
+                    <div class="col-md-4 mb-2">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-calendar-x text-warning me-2"></i>
+                            <span>{{ exc_date.strftime('%d/%m/%Y') }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

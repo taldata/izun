@@ -1,0 +1,15 @@
+# Committee Management System Requirements
+
+# Core Flask dependencies
+Flask>=2.3.0
+Werkzeug>=2.3.0
+
+# Python 3.7+ built-in modules used:
+# - sqlite3 (built-in)
+# - datetime (built-in)
+# - typing (built-in)
+# - calendar (built-in)
+
+# For development/testing (optional):
+# pytest>=6.0.0
+# black>=21.0.0
