@@ -16,6 +16,9 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         
+        # Check if we need to migrate existing database
+        self._migrate_database(cursor)
+        
         # Hativot (Divisions) table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS hativot (
@@ -38,20 +41,34 @@ class DatabaseManager:
             )
         ''')
         
-        # Vaadot (Committees) table
+        # Committee Types table (general committee definitions)
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS vaadot (
-                vaadot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            CREATE TABLE IF NOT EXISTS committee_types (
+                committee_type_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
                 scheduled_day INTEGER NOT NULL, -- 0=Monday, 1=Tuesday, etc.
                 frequency TEXT DEFAULT 'weekly', -- weekly, monthly
                 week_of_month INTEGER DEFAULT NULL, -- for monthly committees (1-4)
-                vaada_date DATE, -- actual date of the committee meeting
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Vaadot (Committee Meetings) table - specific meeting instances
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS vaadot (
+                vaadot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                committee_type_id INTEGER NOT NULL,
+                hativa_id INTEGER NOT NULL,
+                vaada_date DATE NOT NULL, -- actual date of the committee meeting
+                status TEXT DEFAULT 'planned', -- planned, scheduled, completed, cancelled
                 exception_date_id INTEGER, -- reference to exception_dates if meeting is affected
-                hativa_id INTEGER,
+                notes TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (committee_type_id) REFERENCES committee_types (committee_type_id),
                 FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id),
-                FOREIGN KEY (exception_date_id) REFERENCES exception_dates (date_id)
+                FOREIGN KEY (exception_date_id) REFERENCES exception_dates (date_id),
+                UNIQUE(committee_type_id, hativa_id, vaada_date)
             )
         ''')
         
@@ -86,29 +103,45 @@ class DatabaseManager:
         conn.commit()
         conn.close()
         
-        # Insert default committees
-        self._insert_default_committees()
+        # Insert default committee types and committees
+        self._insert_default_committee_types()
     
-    def _insert_default_committees(self):
-        """Insert the default committees with their scheduled days"""
+    def _migrate_database(self, cursor):
+        """Migrate existing database to add new columns if they don't exist"""
+        try:
+            # Check if vaada_date column exists
+            cursor.execute("PRAGMA table_info(vaadot)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'vaada_date' not in columns:
+                cursor.execute('ALTER TABLE vaadot ADD COLUMN vaada_date DATE')
+                print("Added vaada_date column to vaadot table")
+            
+            if 'exception_date_id' not in columns:
+                cursor.execute('ALTER TABLE vaadot ADD COLUMN exception_date_id INTEGER REFERENCES exception_dates(date_id)')
+                print("Added exception_date_id column to vaadot table")
+                
+        except Exception as e:
+            print(f"Migration error: {e}")
+            # Continue with normal initialization if migration fails
+    
+    def _insert_default_committee_types(self):
+        """Insert the default committee types with their scheduled days"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        default_committees = [
-            ('ועדת הזנק', 0),  # Monday
-            ('ועדת תשתיות', 2),  # Wednesday  
-            ('ועדת צמיחה', 3),  # Thursday
-            ('ייצור מתקדם', 1)   # Tuesday (monthly, third week)
+        default_committee_types = [
+            ('ועדת הזנק', 0, 'weekly', None, 'ועדת הזנק שבועית'),
+            ('ועדת תשתיות', 2, 'weekly', None, 'ועדת תשתיות שבועית'),
+            ('ועדת צמיחה', 3, 'weekly', None, 'ועדת צמיחה שבועית'),
+            ('ייצור מתקדם', 1, 'monthly', 3, 'ועדת ייצור מתקדם חודשית')
         ]
         
-        for name, day in default_committees:
-            frequency = 'monthly' if name == 'ייצור מתקדם' else 'weekly'
-            week_of_month = 3 if name == 'ייצור מתקדם' else None
-            
+        for name, day, frequency, week_of_month, description in default_committee_types:
             cursor.execute('''
-                INSERT OR IGNORE INTO vaadot (name, scheduled_day, frequency, week_of_month)
-                VALUES (?, ?, ?, ?)
-            ''', (name, day, frequency, week_of_month))
+                INSERT OR IGNORE INTO committee_types (name, scheduled_day, frequency, week_of_month, description)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (name, day, frequency, week_of_month, description))
         
         conn.commit()
         conn.close()
@@ -202,27 +235,91 @@ class DatabaseManager:
         conn.close()
         return count > 0
     
-    # Vaadot operations
-    def get_vaadot(self) -> List[Dict]:
-        """Get all committees"""
+    # Committee Types operations
+    def add_committee_type(self, name: str, scheduled_day: int, frequency: str = 'weekly', 
+                          week_of_month: Optional[int] = None, description: str = "") -> int:
+        """Add a new committee type"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT v.*, ed.exception_date, ed.description as exception_description, ed.type as exception_type
-            FROM vaadot v
-            LEFT JOIN exception_dates ed ON v.exception_date_id = ed.date_id
-            ORDER BY v.scheduled_day
-        ''')
+            INSERT INTO committee_types (name, scheduled_day, frequency, week_of_month, description)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (name, scheduled_day, frequency, week_of_month, description))
+        committee_type_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return committee_type_id
+    
+    def get_committee_types(self) -> List[Dict]:
+        """Get all committee types"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM committee_types ORDER BY scheduled_day')
         rows = cursor.fetchall()
         conn.close()
         
         days = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון']
         
-        return [{'vaadot_id': row[0], 'name': row[1], 'scheduled_day': row[2], 
+        return [{'committee_type_id': row[0], 'name': row[1], 'scheduled_day': row[2],
                 'scheduled_day_name': days[row[2]], 'frequency': row[3], 
-                'week_of_month': row[4], 'vaada_date': row[5], 'exception_date_id': row[6],
-                'exception_date': row[9], 'exception_description': row[10], 
-                'exception_type': row[11]} for row in rows]
+                'week_of_month': row[4], 'description': row[5]} for row in rows]
+    
+    # Vaadot operations (specific meeting instances)
+    def add_vaada(self, committee_type_id: int, hativa_id: int, vaada_date: date, 
+                  status: str = 'planned', exception_date_id: Optional[int] = None, 
+                  notes: str = "") -> int:
+        """Add a specific committee meeting instance"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, status, exception_date_id, notes)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (committee_type_id, hativa_id, vaada_date, status, exception_date_id, notes))
+        vaadot_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return vaadot_id
+    
+    def get_vaadot(self, hativa_id: Optional[int] = None, start_date: Optional[date] = None, 
+                   end_date: Optional[date] = None) -> List[Dict]:
+        """Get committee meetings with optional filters"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        query = '''
+            SELECT v.*, ct.name as committee_name, h.name as hativa_name,
+                   ed.exception_date, ed.description as exception_description, ed.type as exception_type
+            FROM vaadot v
+            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+            JOIN hativot h ON v.hativa_id = h.hativa_id
+            LEFT JOIN exception_dates ed ON v.exception_date_id = ed.date_id
+            WHERE 1=1
+        '''
+        params = []
+        
+        if hativa_id:
+            query += ' AND v.hativa_id = ?'
+            params.append(hativa_id)
+        
+        if start_date:
+            query += ' AND v.vaada_date >= ?'
+            params.append(start_date)
+            
+        if end_date:
+            query += ' AND v.vaada_date <= ?'
+            params.append(end_date)
+            
+        query += ' ORDER BY v.vaada_date, ct.name'
+        
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2],
+                'vaada_date': row[3], 'status': row[4], 'exception_date_id': row[5],
+                'notes': row[6], 'committee_name': row[8], 'hativa_name': row[9],
+                'exception_date': row[10], 'exception_description': row[11], 
+                'exception_type': row[12]} for row in rows]
     
     def update_vaada_date(self, vaadot_id: int, vaada_date: date, exception_date_id: Optional[int] = None):
         """Update the actual meeting date for a committee and optionally link to exception date"""

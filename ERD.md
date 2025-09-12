@@ -21,15 +21,24 @@ erDiagram
         timestamp created_at
     }
     
-    VAADOT {
-        int vaadot_id PK
+    COMMITTEE_TYPES {
+        int committee_type_id PK
         text name UK
         int scheduled_day
         text frequency
         int week_of_month
-        date vaada_date
-        int exception_date_id FK
+        text description
+        timestamp created_at
+    }
+    
+    VAADOT {
+        int vaadot_id PK
+        int committee_type_id FK
         int hativa_id FK
+        date vaada_date
+        text status
+        int exception_date_id FK
+        text notes
         timestamp created_at
     }
     
@@ -55,7 +64,8 @@ erDiagram
 
     %% Relationships
     HATIVOT ||--o{ MASLULIM : "has"
-    HATIVOT ||--o{ VAADOT : "belongs_to"
+    HATIVOT ||--o{ VAADOT : "hosts_meeting"
+    COMMITTEE_TYPES ||--o{ VAADOT : "defines"
     VAADOT ||--o{ EVENTS : "schedules"
     MASLULIM ||--o{ EVENTS : "participates_in"
     EXCEPTION_DATES ||--o{ VAADOT : "affects"
@@ -80,17 +90,27 @@ erDiagram
   - `description`: Optional description
   - `created_at`: Timestamp of creation
 
-### VAADOT (Committees)
-- **Purpose**: Represents committees with scheduling information
+### COMMITTEE_TYPES (Committee Definitions)
+- **Purpose**: Defines general committee types and their scheduling rules
 - **Key Fields**:
-  - `vaadot_id`: Primary key, auto-increment
-  - `name`: Unique committee name
+  - `committee_type_id`: Primary key, auto-increment
+  - `name`: Unique committee type name
   - `scheduled_day`: Day of week (0=Monday, 1=Tuesday, etc.)
   - `frequency`: Meeting frequency ('weekly', 'monthly')
   - `week_of_month`: For monthly committees (1-4)
-  - `vaada_date`: Actual date of the committee meeting
+  - `description`: Committee description
+  - `created_at`: Timestamp of creation
+
+### VAADOT (Committee Meeting Instances)
+- **Purpose**: Represents specific committee meetings (date + division)
+- **Key Fields**:
+  - `vaadot_id`: Primary key, auto-increment
+  - `committee_type_id`: Foreign key to COMMITTEE_TYPES (required)
+  - `hativa_id`: Foreign key to HATIVOT (required)
+  - `vaada_date`: Actual date of the committee meeting (required)
+  - `status`: Meeting status ('planned', 'scheduled', 'completed', 'cancelled')
   - `exception_date_id`: Optional foreign key to EXCEPTION_DATES
-  - `hativa_id`: Optional foreign key to HATIVOT
+  - `notes`: Optional meeting notes
   - `created_at`: Timestamp of creation
 
 ### EVENTS
@@ -121,21 +141,25 @@ erDiagram
    - Each division can have multiple routes
    - Each route belongs to exactly one division
 
-2. **HATIVOT → VAADOT** (One-to-Many, Optional)
-   - Each division can have multiple committees
-   - Committees can optionally belong to a division
+2. **COMMITTEE_TYPES → VAADOT** (One-to-Many)
+   - Each committee type can have multiple meeting instances
+   - Each meeting belongs to exactly one committee type
 
-3. **VAADOT → EVENTS** (One-to-Many)
-   - Each committee can schedule multiple events
-   - Each event belongs to exactly one committee
+3. **HATIVOT → VAADOT** (One-to-Many)
+   - Each division can host multiple committee meetings
+   - Each meeting belongs to exactly one division
 
-4. **MASLULIM → EVENTS** (One-to-Many)
+4. **VAADOT → EVENTS** (One-to-Many)
+   - Each committee meeting can schedule multiple events
+   - Each event belongs to exactly one committee meeting
+
+5. **MASLULIM → EVENTS** (One-to-Many)
    - Each route can participate in multiple events
    - Each event involves exactly one route
 
-5. **VAADOT → EXCEPTION_DATES** (Many-to-One, Optional)
-   - Committees can be linked to exception dates when affected
-   - Exception dates can affect multiple committees
+6. **VAADOT → EXCEPTION_DATES** (Many-to-One, Optional)
+   - Committee meetings can be linked to exception dates when affected
+   - Exception dates can affect multiple committee meetings
 
 6. **EXCEPTION_DATES** (Referenced by VAADOT)
    - Table for managing non-working dates
