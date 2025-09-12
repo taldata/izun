@@ -27,6 +27,8 @@ erDiagram
         int scheduled_day
         text frequency
         int week_of_month
+        date vaada_date
+        int exception_date_id FK
         int hativa_id FK
         timestamp created_at
     }
@@ -56,6 +58,7 @@ erDiagram
     HATIVOT ||--o{ VAADOT : "belongs_to"
     VAADOT ||--o{ EVENTS : "schedules"
     MASLULIM ||--o{ EVENTS : "participates_in"
+    EXCEPTION_DATES ||--o{ VAADOT : "affects"
 ```
 
 ## Table Descriptions
@@ -85,6 +88,8 @@ erDiagram
   - `scheduled_day`: Day of week (0=Monday, 1=Tuesday, etc.)
   - `frequency`: Meeting frequency ('weekly', 'monthly')
   - `week_of_month`: For monthly committees (1-4)
+  - `vaada_date`: Actual date of the committee meeting
+  - `exception_date_id`: Optional foreign key to EXCEPTION_DATES
   - `hativa_id`: Optional foreign key to HATIVOT
   - `created_at`: Timestamp of creation
 
@@ -128,9 +133,13 @@ erDiagram
    - Each route can participate in multiple events
    - Each event involves exactly one route
 
-5. **EXCEPTION_DATES** (Independent)
-   - Standalone table for managing non-working dates
-   - Used for scheduling logic but no direct foreign key relationships
+5. **VAADOT → EXCEPTION_DATES** (Many-to-One, Optional)
+   - Committees can be linked to exception dates when affected
+   - Exception dates can affect multiple committees
+
+6. **EXCEPTION_DATES** (Referenced by VAADOT)
+   - Table for managing non-working dates
+   - Can be referenced by committees when meetings are affected by exceptions
 
 ## Default Data
 
