@@ -20,7 +20,8 @@ def index():
     # Get summary statistics
     hativot = db.get_hativot()
     maslulim = db.get_maslulim()
-    committees = db.get_vaadot()
+    committee_types = db.get_committee_types()
+    committees = db.get_vaadot()  # This now returns meeting instances
     events = db.get_events()
     exception_dates = db.get_exception_dates()
     
@@ -31,13 +32,14 @@ def index():
     stats = {
         'hativot_count': len(hativot),
         'maslulim_count': len(maslulim),
+        'committee_types_count': len(committee_types),
         'committees_count': len(committees),
         'events_count': len(events),
         'exception_dates_count': len(exception_dates),
         'business_days_this_month': len(monthly_schedule['business_days'])
     }
     
-    return render_template('index.html', stats=stats, committees=committees)
+    return render_template('index.html', stats=stats, committee_types=committee_types, committees=committees)
 
 @app.route('/hativot')
 def hativot():
@@ -120,16 +122,43 @@ def add_exception_date():
 @app.route('/committees')
 def committees():
     """View committees"""
+    committee_types = db.get_committee_types()
     committees_list = db.get_vaadot()
-    return render_template('committees.html', committees=committees_list)
+    hativot = db.get_hativot()
+    return render_template('committees.html', committee_types=committee_types, committees=committees_list, hativot=hativot)
+
+@app.route('/committees/add', methods=['POST'])
+def add_committee_meeting():
+    """Add new committee meeting"""
+    committee_type_id = request.form.get('committee_type_id')
+    hativa_id = request.form.get('hativa_id')
+    vaada_date = request.form.get('vaada_date')
+    status = request.form.get('status', 'planned')
+    notes = request.form.get('notes', '').strip()
+    
+    if not all([committee_type_id, hativa_id, vaada_date]):
+        flash('סוג ועדה, חטיבה ותאריך הם שדות חובה', 'error')
+        return redirect(url_for('committees'))
+    
+    try:
+        meeting_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+        vaadot_id = db.add_vaada(int(committee_type_id), int(hativa_id), meeting_date, status, notes=notes)
+        flash('ישיבת ועדה נוספה בהצלחה', 'success')
+    except ValueError:
+        flash('פורמט תאריך לא תקין', 'error')
+    except Exception as e:
+        flash(f'שגיאה בהוספת הישיבה: {str(e)}', 'error')
+    
+    return redirect(url_for('committees'))
 
 @app.route('/events')
 def events():
     """Manage events"""
     events_list = db.get_events()
     committees_list = db.get_vaadot()
+    committee_types = db.get_committee_types()
     maslulim_list = db.get_maslulim()
-    return render_template('events.html', events=events_list, committees=committees_list, maslulim=maslulim_list)
+    return render_template('events.html', events=events_list, committees=committees_list, committee_types=committee_types, maslulim=maslulim_list)
 
 @app.route('/events/add', methods=['POST'])
 def add_event():
@@ -185,17 +214,17 @@ def schedule():
 @app.route('/suggest_dates')
 def suggest_dates():
     """Suggest available dates for committees"""
-    committees_list = db.get_vaadot()
+    committee_types = db.get_committee_types()
     
-    committee_id = request.args.get('committee_id', type=int)
+    committee_type_id = request.args.get('committee_type_id', type=int)
     suggestions = []
     
-    if committee_id:
-        committee = next((c for c in committees_list if c['vaadot_id'] == committee_id), None)
-        if committee:
-            suggestions = scheduler.suggest_next_available_dates(committee['name'], date.today(), 10)
+    if committee_type_id:
+        committee_type = next((c for c in committee_types if c['committee_type_id'] == committee_type_id), None)
+        if committee_type:
+            suggestions = scheduler.suggest_next_available_dates(committee_type['name'], date.today(), 10)
     
-    return render_template('suggest_dates.html', committees=committees_list, suggestions=suggestions, selected_committee_id=committee_id)
+    return render_template('suggest_dates.html', committee_types=committee_types, suggestions=suggestions, selected_committee_type_id=committee_type_id)
 
 @app.route('/api/maslulim/<int:hativa_id>')
 def api_maslulim_by_hativa(hativa_id):
@@ -224,4 +253,6 @@ def api_validate_date(committee_name, date_str):
         })
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    import os
+    port = int(os.environ.get('FLASK_RUN_PORT', 5001))
+    app.run(debug=True, host='0.0.0.0', port=port)

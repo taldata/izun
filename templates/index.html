@@ -5,69 +5,84 @@
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <div class="jumbotron bg-gradient-primary text-white rounded p-5 mb-4">
-            <h1 class="display-4">
-                <i class="bi bi-calendar-check me-3"></i>
-                ברוכים הבאים למערכת ניהול וועדות
-            </h1>
-            <p class="lead">מערכת מקיפה לניהול וועדות, תזמון ישיבות ויצירת אירועים</p>
+        <div class="jumbotron text-white rounded p-5 mb-4">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="display-4 fw-bold mb-3">
+                        <i class="bi bi-calendar-check me-3"></i>
+                        מערכת ניהול וועדות
+                    </h1>
+                    <p class="lead mb-4">פלטפורמה מתקדמת לניהול ישיבות וועדות, תזמון אירועים וארגון חטיבות</p>
+                    <div class="d-flex gap-3">
+                        <a href="{{ url_for('committees') }}" class="btn btn-light btn-lg rounded-pill px-4">
+                            <i class="bi bi-plus-circle me-2"></i>צור ישיבה חדשה
+                        </a>
+                        <a href="{{ url_for('schedule') }}" class="btn btn-outline-light btn-lg rounded-pill px-4">
+                            <i class="bi bi-calendar3 me-2"></i>צפה בלוח זמנים
+                        </a>
+                    </div>
+                </div>
+                <div class="col-md-4 text-center">
+                    <i class="bi bi-calendar-week" style="font-size: 8rem; opacity: 0.3;"></i>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
 <!-- Statistics Cards -->
-<div class="row mb-4">
-    <div class="col-md-2">
-        <div class="card text-center h-100 border-primary">
-            <div class="card-body">
-                <i class="bi bi-diagram-3 text-primary" style="font-size: 2rem;"></i>
-                <h5 class="card-title mt-2">{{ stats.hativot_count }}</h5>
-                <p class="card-text">חטיבות</p>
+<div class="row mb-5">
+    <div class="col-lg-2 col-md-4 col-6 mb-3">
+        <div class="stats-card card text-center h-100" style="border-left-color: #3498db;">
+            <div class="card-body py-4">
+                <i class="bi bi-diagram-3 text-primary mb-2" style="font-size: 2.5rem;"></i>
+                <h3 class="fw-bold mb-1">{{ stats.hativot_count }}</h3>
+                <p class="card-text text-muted small mb-0">חטיבות</p>
             </div>
         </div>
     </div>
-    <div class="col-md-2">
-        <div class="card text-center h-100 border-info">
-            <div class="card-body">
-                <i class="bi bi-arrow-right-circle text-info" style="font-size: 2rem;"></i>
-                <h5 class="card-title mt-2">{{ stats.maslulim_count }}</h5>
-                <p class="card-text">מסלולים</p>
+    <div class="col-lg-2 col-md-4 col-6 mb-3">
+        <div class="stats-card card text-center h-100" style="border-left-color: #17a2b8;">
+            <div class="card-body py-4">
+                <i class="bi bi-arrow-right-circle text-info mb-2" style="font-size: 2.5rem;"></i>
+                <h3 class="fw-bold mb-1">{{ stats.maslulim_count }}</h3>
+                <p class="card-text text-muted small mb-0">מסלולים</p>
             </div>
         </div>
     </div>
-    <div class="col-md-2">
-        <div class="card text-center h-100 border-success">
-            <div class="card-body">
-                <i class="bi bi-people text-success" style="font-size: 2rem;"></i>
-                <h5 class="card-title mt-2">{{ stats.committees_count }}</h5>
-                <p class="card-text">וועדות</p>
+    <div class="col-lg-2 col-md-4 col-6 mb-3">
+        <div class="stats-card card text-center h-100" style="border-left-color: #28a745;">
+            <div class="card-body py-4">
+                <i class="bi bi-people text-success mb-2" style="font-size: 2.5rem;"></i>
+                <h3 class="fw-bold mb-1">{{ stats.committees_count }}</h3>
+                <p class="card-text text-muted small mb-0">ישיבות מתוכננות</p>
             </div>
         </div>
     </div>
-    <div class="col-md-2">
-        <div class="card text-center h-100 border-warning">
-            <div class="card-body">
-                <i class="bi bi-calendar-event text-warning" style="font-size: 2rem;"></i>
-                <h5 class="card-title mt-2">{{ stats.events_count }}</h5>
-                <p class="card-text">אירועים</p>
+    <div class="col-lg-2 col-md-4 col-6 mb-3">
+        <div class="stats-card card text-center h-100" style="border-left-color: #ffc107;">
+            <div class="card-body py-4">
+                <i class="bi bi-calendar-event text-warning mb-2" style="font-size: 2.5rem;"></i>
+                <h3 class="fw-bold mb-1">{{ stats.events_count }}</h3>
+                <p class="card-text text-muted small mb-0">אירועים</p>
             </div>
         </div>
     </div>
-    <div class="col-md-2">
-        <div class="card text-center h-100 border-danger">
-            <div class="card-body">
-                <i class="bi bi-calendar-x text-danger" style="font-size: 2rem;"></i>
-                <h5 class="card-title mt-2">{{ stats.exception_dates_count }}</h5>
-                <p class="card-text">תאריכי חריגים</p>
+    <div class="col-lg-2 col-md-4 col-6 mb-3">
+        <div class="stats-card card text-center h-100" style="border-left-color: #dc3545;">
+            <div class="card-body py-4">
+                <i class="bi bi-calendar-x text-danger mb-2" style="font-size: 2.5rem;"></i>
+                <h3 class="fw-bold mb-1">{{ stats.exception_dates_count }}</h3>
+                <p class="card-text text-muted small mb-0">תאריכי חריגים</p>
             </div>
         </div>
     </div>
-    <div class="col-md-2">
-        <div class="card text-center h-100 border-secondary">
-            <div class="card-body">
-                <i class="bi bi-calendar3 text-secondary" style="font-size: 2rem;"></i>
-                <h5 class="card-title mt-2">{{ stats.business_days_this_month }}</h5>
-                <p class="card-text">ימי עסקים החודש</p>
+    <div class="col-lg-2 col-md-4 col-6 mb-3">
+        <div class="stats-card card text-center h-100" style="border-left-color: #6c757d;">
+            <div class="card-body py-4">
+                <i class="bi bi-calendar3 text-secondary mb-2" style="font-size: 2.5rem;"></i>
+                <h3 class="fw-bold mb-1">{{ stats.business_days_this_month }}</h3>
+                <p class="card-text text-muted small mb-0">ימי עסקים החודש</p>
             </div>
         </div>
     </div>
@@ -76,92 +91,169 @@
 <!-- Quick Actions -->
 <div class="row mb-4">
     <div class="col-12">
-        <h3><i class="bi bi-lightning me-2"></i>פעולות מהירות</h3>
+        <h2 class="section-title">
+            <i class="bi bi-lightning me-2"></i>פעולות מהירות
+        </h2>
     </div>
 </div>
 
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card h-100 shadow-sm">
+<div class="row mb-5">
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="quick-action-card card">
             <div class="card-body text-center">
-                <i class="bi bi-plus-circle text-primary" style="font-size: 3rem;"></i>
-                <h5 class="card-title mt-3">יצירת אירוע חדש</h5>
-                <p class="card-text">הוסף אירוע חדש לועדה קיימת</p>
-                <a href="{{ url_for('events') }}" class="btn btn-primary">
-                    <i class="bi bi-plus me-1"></i>צור אירוע
+                <div class="mb-3">
+                    <i class="bi bi-people-fill text-primary" style="font-size: 3.5rem;"></i>
+                </div>
+                <h5 class="card-title fw-bold">ישיבת ועדה חדשה</h5>
+                <p class="card-text text-muted">תזמן ישיבה חדשה לחטיבה מסוימת</p>
+                <a href="{{ url_for('committees') }}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-plus me-2"></i>צור ישיבה
                 </a>
             </div>
         </div>
     </div>
     
-    <div class="col-md-3">
-        <div class="card h-100 shadow-sm">
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="quick-action-card card">
             <div class="card-body text-center">
-                <i class="bi bi-calendar3 text-success" style="font-size: 3rem;"></i>
-                <h5 class="card-title mt-3">לוח זמנים</h5>
-                <p class="card-text">צפה בלוח הזמנים החודשי</p>
-                <a href="{{ url_for('schedule') }}" class="btn btn-success">
-                    <i class="bi bi-calendar3 me-1"></i>צפה בלוח
+                <div class="mb-3">
+                    <i class="bi bi-calendar-event-fill text-success" style="font-size: 3.5rem;"></i>
+                </div>
+                <h5 class="card-title fw-bold">אירוע חדש</h5>
+                <p class="card-text text-muted">הוסף אירוע לישיבה קיימת</p>
+                <a href="{{ url_for('events') }}" class="btn btn-success btn-lg">
+                    <i class="bi bi-plus me-2"></i>צור אירוע
                 </a>
             </div>
         </div>
     </div>
     
-    <div class="col-md-3">
-        <div class="card h-100 shadow-sm">
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="quick-action-card card">
             <div class="card-body text-center">
-                <i class="bi bi-calendar-plus text-info" style="font-size: 3rem;"></i>
-                <h5 class="card-title mt-3">הצעת תאריכים</h5>
-                <p class="card-text">מצא תאריכים פנויים לוועדות</p>
-                <a href="{{ url_for('suggest_dates') }}" class="btn btn-info">
-                    <i class="bi bi-search me-1"></i>חפש תאריכים
+                <div class="mb-3">
+                    <i class="bi bi-calendar3 text-info" style="font-size: 3.5rem;"></i>
+                </div>
+                <h5 class="card-title fw-bold">לוח זמנים</h5>
+                <p class="card-text text-muted">צפה בלוח הזמנים החודשי</p>
+                <a href="{{ url_for('schedule') }}" class="btn btn-info btn-lg">
+                    <i class="bi bi-eye me-2"></i>צפה בלוח
                 </a>
             </div>
         </div>
     </div>
     
-    <div class="col-md-3">
-        <div class="card h-100 shadow-sm">
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="quick-action-card card">
             <div class="card-body text-center">
-                <i class="bi bi-gear text-warning" style="font-size: 3rem;"></i>
-                <h5 class="card-title mt-3">ניהול נתונים</h5>
-                <p class="card-text">נהל חטיבות, מסלולים ותאריכים</p>
-                <a href="{{ url_for('hativot') }}" class="btn btn-warning">
-                    <i class="bi bi-gear me-1"></i>נהל נתונים
+                <div class="mb-3">
+                    <i class="bi bi-gear-fill text-warning" style="font-size: 3.5rem;"></i>
+                </div>
+                <h5 class="card-title fw-bold">הגדרות מערכת</h5>
+                <p class="card-text text-muted">נהל חטיבות, מסלולים ותאריכים</p>
+                <a href="{{ url_for('hativot') }}" class="btn btn-warning btn-lg">
+                    <i class="bi bi-gear me-2"></i>הגדרות
                 </a>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Committees Overview -->
+<!-- Recent Activity -->
 <div class="row">
     <div class="col-12">
-        <h3><i class="bi bi-people me-2"></i>וועדות במערכת</h3>
+        <h2 class="section-title">
+            <i class="bi bi-clock-history me-2"></i>פעילות אחרונה
+        </h2>
     </div>
 </div>
 
 <div class="row">
-    {% for committee in committees %}
-    <div class="col-md-6 col-lg-3 mb-3">
-        <div class="card border-start border-primary border-4">
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-people me-2"></i>ישיבות מתוכננות
+                </h5>
+            </div>
             <div class="card-body">
-                <h6 class="card-title">{{ committee.name }}</h6>
-                <p class="card-text">
-                    <i class="bi bi-calendar me-1"></i>{{ committee.scheduled_day_name }}
-                </p>
-                <p class="card-text">
-                    <small class="text-muted">
-                        {% if committee.frequency == 'monthly' %}
-                            חודשי - שבוע {{ committee.week_of_month }}
-                        {% else %}
-                            שבועי
-                        {% endif %}
-                    </small>
-                </p>
+                {% if committees %}
+                    {% for committee in committees[:5] %}
+                    <div class="d-flex align-items-center mb-3 pb-3 {% if not loop.last %}border-bottom{% endif %}">
+                        <div class="flex-shrink-0">
+                            <div class="bg-primary bg-opacity-10 rounded-circle p-2">
+                                <i class="bi bi-calendar-check text-primary"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="mb-1">{{ committee.committee_name }}</h6>
+                            <p class="mb-1 text-muted small">{{ committee.hativa_name }}</p>
+                            <small class="text-muted">
+                                <i class="bi bi-calendar me-1"></i>{{ committee.vaada_date }}
+                            </small>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <span class="badge bg-{{ 'success' if committee.status == 'completed' else 'warning' if committee.status == 'scheduled' else 'secondary' }}">{{ committee.status }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% if committees|length > 5 %}
+                    <div class="text-center">
+                        <a href="{{ url_for('committees') }}" class="btn btn-outline-primary btn-sm">
+                            צפה בכל הישיבות <i class="bi bi-arrow-left ms-1"></i>
+                        </a>
+                    </div>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-3">אין ישיבות מתוכננות</p>
+                        <a href="{{ url_for('committees') }}" class="btn btn-primary">
+                            <i class="bi bi-plus me-2"></i>צור ישיבה ראשונה
+                        </a>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
-    {% endfor %}
+    
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-list-check me-2"></i>סוגי ועדות
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if committee_types %}
+                    {% for committee_type in committee_types %}
+                    <div class="d-flex align-items-center mb-3 pb-3 {% if not loop.last %}border-bottom{% endif %}">
+                        <div class="flex-shrink-0">
+                            <div class="bg-success bg-opacity-10 rounded-circle p-2">
+                                <i class="bi bi-people text-success"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="mb-1">{{ committee_type.name }}</h6>
+                            <small class="text-muted">
+                                <i class="bi bi-calendar me-1"></i>{{ committee_type.scheduled_day_name }}
+                                {% if committee_type.frequency == 'monthly' %}
+                                    - חודשי
+                                {% else %}
+                                    - שבועי
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-people text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-3">אין סוגי ועדות מוגדרים</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}

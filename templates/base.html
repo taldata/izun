@@ -12,13 +12,71 @@
     <!-- Custom CSS -->
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
     
+    <style>
+        .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            transform: translateY(-1px);
+            transition: all 0.3s ease;
+        }
+        
+        .card {
+            transition: all 0.3s ease;
+            border: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .btn {
+            border-radius: 25px;
+            padding: 8px 20px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .jumbotron {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+        }
+        
+        .stats-card {
+            border-radius: 15px;
+            background: white;
+            border-left: 4px solid;
+        }
+        
+        .quick-action-card {
+            border-radius: 15px;
+            height: 100%;
+            background: white;
+        }
+        
+        .quick-action-card .card-body {
+            padding: 2rem;
+        }
+        
+        .section-title {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 1.5rem;
+        }
+    </style>
+    
     {% block extra_head %}{% endblock %}
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav class="navbar navbar-expand-lg navbar-dark" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
         <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">
+            <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">
                 <i class="bi bi-calendar-check me-2"></i>
                 מערכת ניהול וועדות
             </a>
@@ -30,45 +88,44 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">
+                        <a class="nav-link rounded-pill px-3 mx-1" href="{{ url_for('index') }}">
                             <i class="bi bi-house me-1"></i>דף הבית
                         </a>
                     </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-building me-1"></i>ניהול נתונים
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{{ url_for('hativot') }}">
-                                <i class="bi bi-diagram-3 me-1"></i>חטיבות
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('maslulim') }}">
-                                <i class="bi bi-arrow-right-circle me-1"></i>מסלולים
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('exception_dates') }}">
-                                <i class="bi bi-calendar-x me-1"></i>תאריכי חריגים
-                            </a></li>
-                        </ul>
-                    </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('committees') }}">
-                            <i class="bi bi-people me-1"></i>וועדות
+                        <a class="nav-link rounded-pill px-3 mx-1" href="{{ url_for('committees') }}">
+                            <i class="bi bi-people me-1"></i>ישיבות וועדות
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('events') }}">
+                        <a class="nav-link rounded-pill px-3 mx-1" href="{{ url_for('events') }}">
                             <i class="bi bi-calendar-event me-1"></i>אירועים
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('schedule') }}">
+                        <a class="nav-link rounded-pill px-3 mx-1" href="{{ url_for('schedule') }}">
                             <i class="bi bi-calendar3 me-1"></i>לוח זמנים
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('suggest_dates') }}">
-                            <i class="bi bi-calendar-plus me-1"></i>הצעת תאריכים
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle rounded-pill px-3 mx-1" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-gear me-1"></i>הגדרות
                         </a>
+                        <ul class="dropdown-menu shadow border-0">
+                            <li><a class="dropdown-item" href="{{ url_for('hativot') }}">
+                                <i class="bi bi-diagram-3 me-2 text-primary"></i>חטיבות
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('maslulim') }}">
+                                <i class="bi bi-arrow-right-circle me-2 text-info"></i>מסלולים
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('exception_dates') }}">
+                                <i class="bi bi-calendar-x me-2 text-danger"></i>תאריכי חריגים
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('suggest_dates') }}">
+                                <i class="bi bi-calendar-plus me-2 text-success"></i>הצעת תאריכים
+                            </a></li>
+                        </ul>
                     </li>
                 </ul>
             </div>

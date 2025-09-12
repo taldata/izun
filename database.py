@@ -398,9 +398,12 @@ class DatabaseManager:
         
         if vaadot_id:
             cursor.execute('''
-                SELECT e.*, v.name as vaadot_name, m.name as maslul_name, h.name as hativa_name
+                SELECT e.*, ct.name as committee_name, v.vaada_date, vh.name as vaada_hativa_name, 
+                       m.name as maslul_name, h.name as hativa_name
                 FROM events e
                 JOIN vaadot v ON e.vaadot_id = v.vaadot_id
+                JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+                JOIN hativot vh ON v.hativa_id = vh.hativa_id
                 JOIN maslulim m ON e.maslul_id = m.maslul_id
                 JOIN hativot h ON m.hativa_id = h.hativa_id
                 WHERE e.vaadot_id = ?
@@ -408,9 +411,12 @@ class DatabaseManager:
             ''', (vaadot_id,))
         else:
             cursor.execute('''
-                SELECT e.*, v.name as vaadot_name, m.name as maslul_name, h.name as hativa_name
+                SELECT e.*, ct.name as committee_name, v.vaada_date, vh.name as vaada_hativa_name,
+                       m.name as maslul_name, h.name as hativa_name
                 FROM events e
                 JOIN vaadot v ON e.vaadot_id = v.vaadot_id
+                JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+                JOIN hativot vh ON v.hativa_id = vh.hativa_id
                 JOIN maslulim m ON e.maslul_id = m.maslul_id
                 JOIN hativot h ON m.hativa_id = h.hativa_id
                 ORDER BY e.created_at DESC
@@ -421,5 +427,5 @@ class DatabaseManager:
         
         return [{'event_id': row[0], 'vaadot_id': row[1], 'maslul_id': row[2], 'name': row[3],
                 'event_type': row[4], 'expected_requests': row[5], 'scheduled_date': row[6],
-                'status': row[7], 'vaadot_name': row[9], 'maslul_name': row[10], 
-                'hativa_name': row[11]} for row in rows]
+                'status': row[7], 'committee_name': row[9], 'vaada_date': row[10], 
+                'vaada_hativa_name': row[11], 'maslul_name': row[12], 'hativa_name': row[13]} for row in rows]
