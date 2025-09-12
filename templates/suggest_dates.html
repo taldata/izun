@@ -18,12 +18,12 @@
                 <h5 class="card-title">בחר ועדה</h5>
                 <form method="GET" action="{{ url_for('suggest_dates') }}">
                     <div class="mb-3">
-                        <select class="form-select" name="committee_id" onchange="this.form.submit()">
-                            <option value="">בחר ועדה</option>
-                            {% for committee in committees %}
-                                <option value="{{ committee.vaadot_id }}" 
-                                        {% if selected_committee_id == committee.vaadot_id %}selected{% endif %}>
-                                    {{ committee.name }} ({{ committee.scheduled_day_name }})
+                        <select class="form-select" name="committee_type_id" onchange="this.form.submit()">
+                            <option value="">בחר סוג ועדה</option>
+                            {% for committee_type in committee_types %}
+                                <option value="{{ committee_type.committee_type_id }}" 
+                                        {% if selected_committee_type_id == committee_type.committee_type_id %}selected{% endif %}>
+                                    {{ committee_type.name }} ({{ committee_type.scheduled_day_name }})
                                 </option>
                             {% endfor %}
                         </select>
@@ -36,14 +36,14 @@
 
 <!-- Suggestions -->
 {% if suggestions %}
-    {% set selected_committee = committees|selectattr('vaadot_id', 'equalto', selected_committee_id)|first %}
+    {% set selected_committee_type = committee_types|selectattr('committee_type_id', 'equalto', selected_committee_type_id)|first %}
     <div class="row">
         <div class="col-12">
             <div class="card">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
                         <i class="bi bi-calendar-plus me-2"></i>
-                        תאריכים מוצעים עבור {{ selected_committee.name }}
+                        תאריכים מוצעים עבור {{ selected_committee_type.name }}
                     </h5>
                 </div>
                 <div class="card-body">
@@ -60,8 +60,19 @@
                             </thead>
                             <tbody>
                                 {% for suggestion in suggestions %}
-                                <tr class="{{ 'table-success' if suggestion.can_schedule else 'table-warning' }}">
-                                    <td><strong>{{ suggestion.date.strftime('%d/%m/%Y') }}</strong></td>
+                                <tr class="{{ 'table-success' if suggestion.can_schedule else 'table-warning' }} {{ 'clickable-row' if suggestion.can_schedule else '' }}" 
+                                    {% if suggestion.can_schedule %}
+                                    data-date="{{ suggestion.date.strftime('%Y-%m-%d') }}"
+                                    data-committee-type-id="{{ selected_committee_type_id }}"
+                                    style="cursor: pointer;"
+                                    title="לחץ ליצירת ישיבה בתאריך זה"
+                                    {% endif %}>
+                                    <td>
+                                        <strong>{{ suggestion.date.strftime('%d/%m/%Y') }}</strong>
+                                        {% if suggestion.can_schedule %}
+                                            <i class="bi bi-plus-circle text-primary ms-2" title="לחץ ליצירת ישיבה"></i>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         {% set weekdays = ['יום ב\'', 'יום ג\'', 'יום ד\'', 'יום ה\'', 'יום ו\'', 'שבת', 'יום א\''] %}
                                         {{ weekdays[suggestion.date.weekday()] }}
@@ -90,7 +101,7 @@
                                         {% if not suggestion.can_schedule %}
                                             <small class="text-muted">{{ suggestion.reason }}</small>
                                         {% else %}
-                                            <small class="text-success">מומלץ לתזמון</small>
+                                            <small class="text-success">לחץ ליצירת ישיבה</small>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -113,16 +124,16 @@
                     </h6>
                     <div class="row">
                         <div class="col-md-4">
-                            <p class="mb-1"><strong>שם:</strong> {{ selected_committee.name }}</p>
+                            <p class="mb-1"><strong>שם:</strong> {{ selected_committee_type.name }}</p>
                         </div>
                         <div class="col-md-4">
-                            <p class="mb-1"><strong>יום קבוע:</strong> {{ selected_committee.scheduled_day_name }}</p>
+                            <p class="mb-1"><strong>יום קבוע:</strong> {{ selected_committee_type.scheduled_day_name }}</p>
                         </div>
                         <div class="col-md-4">
                             <p class="mb-1">
                                 <strong>תדירות:</strong> 
-                                {% if selected_committee.frequency == 'monthly' %}
-                                    חודשי (שבוע {{ selected_committee.week_of_month }})
+                                {% if selected_committee_type.frequency == 'monthly' %}
+                                    חודשי (שבוע {{ selected_committee_type.week_of_month }})
                                 {% else %}
                                     שבועי
                                 {% endif %}
@@ -133,7 +144,7 @@
             </div>
         </div>
     </div>
-{% elif selected_committee_id %}
+{% elif selected_committee_type_id %}
     <div class="row">
         <div class="col-12">
             <div class="alert alert-info">
@@ -155,4 +166,101 @@
         </div>
     </div>
 {% endif %}
+
+<!-- Modal for Division Selection -->
+<div class="modal fade" id="divisionModal" tabindex="-1" aria-labelledby="divisionModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="divisionModalLabel">בחר חטיבה לישיבה</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createMeetingForm" method="POST" action="{{ url_for('add_committee_meeting') }}">
+                    <input type="hidden" id="selectedDate" name="vaada_date">
+                    <input type="hidden" id="selectedCommitteeType" name="committee_type_id">
+                    <input type="hidden" name="status" value="planned">
+                    
+                    <div class="mb-3">
+                        <label for="hativa_id" class="form-label">חטיבה</label>
+                        <select class="form-select" name="hativa_id" required>
+                            <option value="">בחר חטיבה</option>
+                            {% for hativa in hativot %}
+                                <option value="{{ hativa.hativa_id }}">{{ hativa.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">הערות (אופציונלי)</label>
+                        <textarea class="form-control" name="notes" rows="3" placeholder="הערות נוספות לישיבה"></textarea>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>תאריך נבחר:</strong> <span id="selectedDateDisplay"></span><br>
+                        <strong>סוג ועדה:</strong> <span id="selectedCommitteeTypeDisplay"></span>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                <button type="submit" form="createMeetingForm" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>צור ישיבה
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add click event listeners to clickable rows
+    const clickableRows = document.querySelectorAll('.clickable-row');
+    clickableRows.forEach(row => {
+        row.addEventListener('click', function() {
+            const dateStr = this.getAttribute('data-date');
+            const committeeTypeId = this.getAttribute('data-committee-type-id');
+            createMeetingFromSuggestion(dateStr, committeeTypeId);
+        });
+    });
+});
+
+function createMeetingFromSuggestion(dateStr, committeeTypeId) {
+    // Set the hidden form fields
+    document.getElementById('selectedDate').value = dateStr;
+    document.getElementById('selectedCommitteeType').value = committeeTypeId;
+    
+    // Format date for display
+    const date = new Date(dateStr);
+    const formattedDate = date.toLocaleDateString('he-IL', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+    document.getElementById('selectedDateDisplay').textContent = formattedDate;
+    
+    // Find and display committee type name
+    const committeeTypeSelect = document.querySelector('select[name="committee_type_id"] option[value="' + committeeTypeId + '"]');
+    if (committeeTypeSelect) {
+        document.getElementById('selectedCommitteeTypeDisplay').textContent = committeeTypeSelect.textContent;
+    }
+    
+    // Show the modal
+    const modal = new bootstrap.Modal(document.getElementById('divisionModal'));
+    modal.show();
+}
+</script>
+
+<style>
+.clickable-row:hover {
+    background-color: rgba(25, 135, 84, 0.1) !important;
+    transform: translateY(-1px);
+    transition: all 0.2s ease;
+}
+
+.clickable-row {
+    transition: all 0.2s ease;
+}
+</style>
 {% endblock %}
