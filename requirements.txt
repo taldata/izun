@@ -4,6 +4,9 @@
 Flask>=2.3.0
 Werkzeug>=2.3.0
 
+# Production server
+gunicorn>=20.1.0
+
 # Python 3.7+ built-in modules used:
 # - sqlite3 (built-in)
 # - datetime (built-in)
