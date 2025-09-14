@@ -122,11 +122,19 @@
                                                name="selected_meetings" value="{{ loop.index0 }}" checked>
                                     </td>
                                     <td>
-                                        <strong>{{ suggestion.suggested_date.strftime('%d/%m/%Y') }}</strong>
+                                        {% if suggestion.suggested_date is string %}
+                                            <strong>{{ suggestion.suggested_date }}</strong>
+                                        {% else %}
+                                            <strong>{{ suggestion.suggested_date.strftime('%d/%m/%Y') }}</strong>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         {% set weekdays = ['יום ב\'', 'יום ג\'', 'יום ד\'', 'יום ה\'', 'יום ו\'', 'שבת', 'יום א\''] %}
-                                        {{ weekdays[suggestion.suggested_date.weekday()] }}
+                                        {% if suggestion.suggested_date is string %}
+                                            {{ suggestion.date }}
+                                        {% else %}
+                                            {{ weekdays[suggestion.suggested_date.weekday()] }}
+                                        {% endif %}
                                     </td>
                                     <td>
                                         <span class="badge bg-{{ 'primary' if suggestion.committee_type == 'ועדת הזנק' 

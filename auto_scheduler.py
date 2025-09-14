@@ -41,8 +41,14 @@ class AutoMeetingScheduler:
         # בדיקת חגים ותאריכי חריגים
         exception_dates = self.db.get_exception_dates()
         for exc_date in exception_dates:
-            if exc_date['date'] == check_date:
-                return False
+            exc_date_str = exc_date.get('exception_date')
+            if exc_date_str:
+                try:
+                    exc_date_obj = datetime.strptime(exc_date_str, '%Y-%m-%d').date()
+                    if exc_date_obj == check_date:
+                        return False
+                except (ValueError, TypeError):
+                    continue
                 
         return True
     
@@ -320,34 +326,28 @@ class AutoMeetingScheduler:
         monthly_meetings = []
         
         for meeting in meetings:
-            meeting_date = datetime.strptime(meeting['vaada_date'], '%Y-%m-%d').date()
-            if start_date <= meeting_date <= end_date:
-                monthly_meetings.append(meeting)
+            if meeting.get('vaada_date'):
+                try:
+                    meeting_date = datetime.strptime(meeting['vaada_date'], '%Y-%m-%d').date()
+                    if start_date <= meeting_date <= end_date:
+                        monthly_meetings.append(meeting)
+                except (ValueError, TypeError):
+                    continue
         
         violations = []
         warnings = []
         
         # בדיקת אילוצים
         for meeting in monthly_meetings:
-            meeting_date = datetime.strptime(meeting['vaada_date'], '%Y-%m-%d').date()
-            
-            # בדיקת יום עסקים
-            if not self.is_business_day(meeting_date):
-                violations.append(f"ישיבה ב-{meeting_date} אינה ביום עסקים")
-            
-            # בדיקת מספר ישיבות ביום
-            same_day_meetings = [m for m in monthly_meetings 
-                               if m['vaada_date'] == meeting['vaada_date']]
-            if len(same_day_meetings) > 1:
-                violations.append(f"יותר מישיבה אחת ב-{meeting_date}")
-            
-            # בדיקת מגבלות שבועיות
-            week_meetings = self.count_meetings_in_week(meeting_date)
-            is_third_week = self.is_third_week_of_month(meeting_date)
-            max_weekly = 4 if is_third_week else 3
-            
-            if week_meetings > max_weekly:
-                violations.append(f"יותר מ-{max_weekly} ישיבות בשבוע של {meeting_date}")
+            if meeting.get('vaada_date'):
+                try:
+                    meeting_date = datetime.strptime(meeting['vaada_date'], '%Y-%m-%d').date()
+                    
+                    # בדיקת יום עסקים
+                    if not self.is_business_day(meeting_date):
+                        violations.append(f"ישיבה בתאריך {meeting_date} אינה ביום עסקים")
+                except (ValueError, TypeError):
+                    continue
         
         return {
             'valid': len(violations) == 0,

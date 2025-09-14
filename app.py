@@ -332,7 +332,9 @@ def generate_auto_schedule():
         return redirect(url_for('review_auto_schedule'))
         
     except Exception as e:
+        import traceback
         app.logger.error(f'Error generating auto schedule: {str(e)}')
+        app.logger.error(f'Traceback: {traceback.format_exc()}')
         flash('שגיאה פנימית ביצירת התזמון. אנא נסה שוב מאוחר יותר.', 'error')
         return redirect(url_for('auto_schedule'))
 
