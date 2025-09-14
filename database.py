@@ -355,6 +355,24 @@ class DatabaseManager:
                 'exception_date': row[9], 'exception_description': row[10], 
                 'exception_type': row[11]} for row in rows]
     
+    def get_vaadot_by_date_and_hativa(self, vaada_date: str, hativa_id: int) -> List[Dict]:
+        """Get committees scheduled for a specific date and hativa"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT v.*, ct.name as committee_name, h.name as hativa_name
+            FROM vaadot v
+            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+            JOIN hativot h ON v.hativa_id = h.hativa_id
+            WHERE v.vaada_date = ? AND v.hativa_id = ?
+        ''', (vaada_date, hativa_id))
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2],
+                'vaada_date': row[3], 'status': row[4], 'notes': row[5],
+                'committee_name': row[6], 'hativa_name': row[7]} for row in rows]
+    
     def get_vaadot_affected_by_exception(self, exception_date_id: int) -> List[Dict]:
         """Get committees affected by a specific exception date"""
         conn = self.get_connection()

@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+
+{% block title %}בדיקת לוח זמנים אוטומטי - מערכת ניהול וועדות{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="bi bi-clipboard-check me-2"></i>בדיקת לוח זמנים אוטומטי</h2>
+        <p class="text-muted">בדוק ואשר את הישיבות המוצעות לחודש {{ schedule_info.month }}/{{ schedule_info.year }}</p>
+    </div>
+</div>
+
+<!-- Validation Results -->
+<div class="row mb-4">
+    <div class="col-12">
+        {% if validation.valid %}
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle me-2"></i>
+            <strong>לוח הזמנים תקין!</strong> כל האילוצים מתקיימים.
+        </div>
+        {% else %}
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <strong>נמצאו הפרות אילוצים:</strong>
+            <ul class="mb-0 mt-2">
+                {% for violation in validation.violations %}
+                <li>{{ violation }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        
+        {% if validation.warnings %}
+        <div class="alert alert-warning mt-2">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>אזהרות:</strong>
+            <ul class="mb-0 mt-2">
+                {% for warning in validation.warnings %}
+                <li>{{ warning }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-primary">{{ suggestions|length }}</h3>
+                <p class="mb-0">ישיבות מוצעות</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-success">{{ suggestions|selectattr('frequency', 'equalto', 'weekly')|list|length }}</h3>
+                <p class="mb-0">ישיבות שבועיות</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-warning">{{ suggestions|selectattr('frequency', 'equalto', 'monthly')|list|length }}</h3>
+                <p class="mb-0">ישיבות חודשיות</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-info">{{ suggestions|map(attribute='hativa_name')|unique|list|length }}</h3>
+                <p class="mb-0">חטיבות מעורבות</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Approval Form -->
+<form method="POST" action="{{ url_for('approve_auto_schedule') }}">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-list-check me-2"></i>ישיבות מוצעות
+                    </h5>
+                    <div>
+                        <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="selectAll()">
+                            <i class="bi bi-check-all me-1"></i>בחר הכל
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="selectNone()">
+                            <i class="bi bi-x-square me-1"></i>בטל הכל
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th width="50">
+                                        <input type="checkbox" class="form-check-input" id="selectAllCheckbox">
+                                    </th>
+                                    <th>תאריך</th>
+                                    <th>יום</th>
+                                    <th>סוג ועדה</th>
+                                    <th>חטיבה</th>
+                                    <th>תדירות</th>
+                                    <th>סטטוס</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for suggestion in suggestions %}
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input meeting-checkbox" 
+                                               name="selected_meetings" value="{{ loop.index0 }}" checked>
+                                    </td>
+                                    <td>
+                                        <strong>{{ suggestion.suggested_date.strftime('%d/%m/%Y') }}</strong>
+                                    </td>
+                                    <td>
+                                        {% set weekdays = ['יום ב\'', 'יום ג\'', 'יום ד\'', 'יום ה\'', 'יום ו\'', 'שבת', 'יום א\''] %}
+                                        {{ weekdays[suggestion.suggested_date.weekday()] }}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'primary' if suggestion.committee_type == 'ועדת הזנק' 
+                                                                else 'success' if suggestion.committee_type == 'ועדת תשתיות'
+                                                                else 'warning' if suggestion.committee_type == 'ועדת צמיחה'
+                                                                else 'danger' }}">
+                                            {{ suggestion.committee_type_name }}
+                                        </span>
+                                    </td>
+                                    <td>{{ suggestion.hativa_name }}</td>
+                                    <td>
+                                        {% if suggestion.frequency == 'weekly' %}
+                                            <span class="badge bg-info">שבועי</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">חודשי</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle me-1"></i>מוכן ליצירה
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Approval Options -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-gear me-2"></i>אפשרויות אישור
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="auto_approve" id="auto_approve">
+                        <label class="form-check-label" for="auto_approve">
+                            <strong>אישור אוטומטי</strong> - שנה סטטוס הישיבות ל"מתוזמן" (במקום "מתוכנן")
+                        </label>
+                        <div class="form-text">
+                            אם לא תסמן, הישיבות ייוצרו בסטטוס "מתוכנן" ותוכל לתזמן אותן מאוחר יותר.
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>שים לב:</strong> לאחר האישור, הישיבות ייוצרו במערכת ולא ניתן יהיה לבטל את הפעולה.
+                        וודא שבחרת את הישיבות הנכונות.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between">
+                <a href="{{ url_for('auto_schedule') }}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>חזור לתזמון אוטומטי
+                </a>
+                
+                <div>
+                    <button type="submit" class="btn btn-success btn-lg">
+                        <i class="bi bi-check-circle me-2"></i>אשר ויצור ישיבות
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+function selectAll() {
+    const checkboxes = document.querySelectorAll('.meeting-checkbox');
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    selectAllCheckbox.checked = true;
+}
+
+function selectNone() {
+    const checkboxes = document.querySelectorAll('.meeting-checkbox');
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    selectAllCheckbox.checked = false;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const meetingCheckboxes = document.querySelectorAll('.meeting-checkbox');
+    
+    selectAllCheckbox.addEventListener('change', function() {
+        meetingCheckboxes.forEach(checkbox => {
+            checkbox.checked = selectAllCheckbox.checked;
+        });
+    });
+    
+    meetingCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const allChecked = Array.from(meetingCheckboxes).every(cb => cb.checked);
+            const noneChecked = Array.from(meetingCheckboxes).every(cb => !cb.checked);
+            
+            selectAllCheckbox.checked = allChecked;
+            selectAllCheckbox.indeterminate = !allChecked && !noneChecked;
+        });
+    });
+    
+    // Initial state
+    const allChecked = Array.from(meetingCheckboxes).every(cb => cb.checked);
+    selectAllCheckbox.checked = allChecked;
+});
+</script>
+{% endblock %}

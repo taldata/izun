@@ -143,16 +143,30 @@
         </div>
     </div>
     
-    <div class="col-lg-3 col-md-6 mb-4">
-        <div class="quick-action-card card">
+    <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card action-card h-100 border-0 shadow-sm">
             <div class="card-body text-center">
-                <div class="mb-3">
-                    <i class="bi bi-gear-fill text-warning" style="font-size: 3.5rem;"></i>
+                <div class="action-icon bg-info bg-opacity-10 text-info mb-3">
+                    <i class="bi bi-robot"></i>
                 </div>
-                <h5 class="card-title fw-bold">הגדרות מערכת</h5>
-                <p class="card-text text-muted">נהל חטיבות, מסלולים ותאריכים</p>
-                <a href="{{ url_for('hativot') }}" class="btn btn-warning btn-lg">
-                    <i class="bi bi-gear me-2"></i>הגדרות
+                <h5 class="card-title">תזמון אוטומטי</h5>
+                <p class="card-text text-muted">יצירה אוטומטית של לוח זמנים חודשי</p>
+                <a href="{{ url_for('auto_schedule') }}" class="btn btn-outline-info">
+                    <i class="bi bi-arrow-left me-2"></i>כניסה
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card action-card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <div class="action-icon bg-warning bg-opacity-10 text-warning mb-3">
+                    <i class="bi bi-gear-fill"></i>
+                </div>
+                <h5 class="card-title">הגדרות</h5>
+                <p class="card-text text-muted">ניהול חטיבות, מסלולים ותאריכי חריגים</p>
+                <a href="{{ url_for('hativot') }}" class="btn btn-outline-warning">
+                    <i class="bi bi-arrow-left me-2"></i>כניסה
                 </a>
             </div>
         </div>

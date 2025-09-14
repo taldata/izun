@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}תזמון אוטומטי - מערכת ניהול וועדות{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="bi bi-robot me-2"></i>תזמון אוטומטי של ישיבות</h2>
+        <p class="text-muted">יצירה אוטומטית של לוח זמנים חודשי על בסיס אילוצים עסקיים</p>
+    </div>
+</div>
+
+<!-- Constraints Info -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-info-circle me-2"></i>אילוצי התזמון האוטומטי
+                </h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <ul class="list-unstyled mb-0">
+                            <li><i class="bi bi-check-circle me-2"></i>פעילות בימי עסקים בלבד</li>
+                            <li><i class="bi bi-check-circle me-2"></i>ללא שבתות וחגים</li>
+                            <li><i class="bi bi-check-circle me-2"></i>ועדה אחת בלבד ביום</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <ul class="list-unstyled mb-0">
+                            <li><i class="bi bi-check-circle me-2"></i>מקסימום 3 ועדות בשבוע רגיל</li>
+                            <li><i class="bi bi-check-circle me-2"></i>מקסימום 4 ועדות בשבוע השלישי</li>
+                            <li><i class="bi bi-check-circle me-2"></i>ימים קבועים לכל סוג ועדה</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Committee Schedule Rules -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-calendar-week me-2"></i>לוח זמנים קבוע לועדות
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="text-center p-3 border rounded">
+                            <h6 class="text-primary">ועדת הזנק</h6>
+                            <p class="mb-0">יום שני - שבועי</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3 border rounded">
+                            <h6 class="text-success">ועדת תשתיות</h6>
+                            <p class="mb-0">יום רביעי - שבועי</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3 border rounded">
+                            <h6 class="text-warning">ועדת צמיחה</h6>
+                            <p class="mb-0">יום חמישי - שבועי</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3 border rounded">
+                            <h6 class="text-danger">ייצור מתקדם</h6>
+                            <p class="mb-0">יום שלישי - חודשי<br><small>(שבוע שלישי)</small></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Generation Form -->
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-gear me-2"></i>הגדרות יצירה אוטומטית
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('generate_auto_schedule') }}">
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <div class="form-group">
+                                <label for="year" class="form-label fw-semibold">שנה</label>
+                                <select class="form-select form-select-lg" id="year" name="year" required>
+                                    {% for y in range(2024, 2031) %}
+                                        <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="form-group">
+                                <label for="month" class="form-label fw-semibold">חודש</label>
+                                <select class="form-select form-select-lg" id="month" name="month" required>
+                                    {% for m in range(1, 13) %}
+                                        <option value="{{ m }}" {% if m == current_month %}selected{% endif %}>
+                                            {{ ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+                                                'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'][m-1] }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">חטיבות לתזמון</label>
+                        <div class="border rounded p-3">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="select_all_hativot">
+                                <label class="form-check-label fw-bold" for="select_all_hativot">
+                                    <i class="bi bi-check-all me-2"></i>בחר הכל
+                                </label>
+                            </div>
+                            <div class="row g-2">
+                                {% for hativa in hativot %}
+                                <div class="col-sm-6 col-lg-4 mb-2">
+                                    <div class="form-check p-2 border rounded hover-bg-light">
+                                        <input class="form-check-input hativa-checkbox" type="checkbox" 
+                                               name="hativot_ids" value="{{ hativa.hativa_id }}" 
+                                               id="hativa_{{ hativa.hativa_id }}">
+                                        <label class="form-check-label w-100 cursor-pointer" for="hativa_{{ hativa.hativa_id }}">
+                                            <i class="bi bi-building me-2 text-primary"></i>{{ hativa.name }}
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>שים לב:</strong> המערכת תיצור הצעות ישיבות על בסיס האילוצים. 
+                        תוכל לבדוק ולאשר את ההצעות לפני היצירה הסופית.
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-robot me-2"></i>צור לוח זמנים אוטומטי
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-lightbulb me-2"></i>איך זה עובד?
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="step-item mb-3">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h6>בחירת פרמטרים</h6>
+                        <p class="small mb-0">בחר שנה, חודש וחטיבות לתזמון</p>
+                    </div>
+                </div>
+                
+                <div class="step-item mb-3">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h6>יצירת הצעות</h6>
+                        <p class="small mb-0">המערכת תיצור הצעות על בסיס האילוצים</p>
+                    </div>
+                </div>
+                
+                <div class="step-item mb-3">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h6>בדיקה ואישור</h6>
+                        <p class="small mb-0">תוכל לבדוק ולערוך את ההצעות</p>
+                    </div>
+                </div>
+                
+                <div class="step-item">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h6>יצירה סופית</h6>
+                        <p class="small mb-0">הישיבות ייוצרו במערכת</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('select_all_hativot');
+    const hativaCheckboxes = document.querySelectorAll('.hativa-checkbox');
+    
+    selectAllCheckbox.addEventListener('change', function() {
+        hativaCheckboxes.forEach(checkbox => {
+            checkbox.checked = selectAllCheckbox.checked;
+        });
+    });
+    
+    hativaCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const allChecked = Array.from(hativaCheckboxes).every(cb => cb.checked);
+            const noneChecked = Array.from(hativaCheckboxes).every(cb => !cb.checked);
+            
+            selectAllCheckbox.checked = allChecked;
+            selectAllCheckbox.indeterminate = !allChecked && !noneChecked;
+        });
+    });
+});
+</script>
+
+<style>
+.step-item {
+    display: flex;
+    align-items: flex-start;
+}
+
+.step-number {
+    width: 30px;
+    height: 30px;
+    background-color: #007bff;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-right: 15px;
+    flex-shrink: 0;
+}
+
+.step-content h6 {
+    margin-bottom: 5px;
+    color: #333;
+}
+
+.step-content p {
+    color: #666;
+    line-height: 1.4;
+}
+</style>
+{% endblock %}
