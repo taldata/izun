@@ -213,21 +213,6 @@ def schedule():
         flash(f'שגיאה בטעינת הלוח: {str(e)}', 'error')
         return redirect(url_for('index'))
 
-@app.route('/suggest_dates')
-def suggest_dates():
-    """Suggest available dates for committees"""
-    committee_types = db.get_committee_types()
-    hativot = db.get_hativot()
-    
-    committee_type_id = request.args.get('committee_type_id', type=int)
-    suggestions = []
-    
-    if committee_type_id:
-        committee_type = next((c for c in committee_types if c['committee_type_id'] == committee_type_id), None)
-        if committee_type:
-            suggestions = scheduler.suggest_next_available_dates(committee_type['name'], date.today(), 10)
-    
-    return render_template('suggest_dates.html', committee_types=committee_types, hativot=hativot, suggestions=suggestions, selected_committee_type_id=committee_type_id)
 
 @app.route('/api/maslulim/<int:hativa_id>')
 def api_maslulim_by_hativa(hativa_id):
@@ -473,5 +458,6 @@ def validate_monthly_schedule(year: int, month: int):
 
 if __name__ == '__main__':
     import os
-    port = int(os.environ.get('FLASK_RUN_PORT', 5001))
-    app.run(debug=True, host='0.0.0.0', port=port)
+    port = int(os.environ.get('PORT', 5001))
+    debug = os.environ.get('FLASK_ENV') != 'production'
+    app.run(debug=debug, host='0.0.0.0', port=port)
