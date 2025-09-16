@@ -112,6 +112,14 @@
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h3 class="fw-bold text-dark"><i class="fas fa-th-large me-2"></i>סוגי ועדות</h3>
                 <div class="d-flex gap-2">
+                    <select class="form-select" id="filterHativa" style="width: 200px;" onchange="filterByHativa()">
+                        <option value="">כל החטיבות</option>
+                        {% for hativa in hativot %}
+                        <option value="{{ hativa.hativa_id }}" {% if selected_hativa_id == hativa.hativa_id %}selected{% endif %}>
+                            {{ hativa.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
                     <div class="input-group" style="width: 300px;">
                         <span class="input-group-text"><i class="fas fa-search"></i></span>
                         <input type="text" class="form-control" id="searchInput" placeholder="חיפוש סוגי ועדות...">
@@ -149,6 +157,12 @@
                                     </div>
                                 </div>
                                 
+                                <div class="mb-2">
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle badge-sm">
+                                        🏢 {{ committee_type.hativa_name }}
+                                    </span>
+                                </div>
+                                
                                 <div class="d-flex flex-wrap gap-1 mb-2">
                                     {% if committee_type.frequency == 'weekly' %}
                                         <span class="badge bg-success-subtle text-success border border-success-subtle badge-sm">
@@ -180,6 +194,16 @@
                             <div class="card-body p-3">
                                 <form class="inline-edit-form">
                                     <input type="hidden" class="edit-id" value="{{ committee_type.committee_type_id }}">
+                                    
+                                    <div class="mb-2">
+                                        <select class="form-select form-select-sm edit-hativa-id">
+                                            {% for hativa in hativot %}
+                                            <option value="{{ hativa.hativa_id }}" {% if committee_type.hativa_id == hativa.hativa_id %}selected{% endif %}>
+                                                {{ hativa.name }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
                                     
                                     <div class="mb-2">
                                         <input type="text" class="form-control form-control-sm edit-name" 
@@ -261,6 +285,16 @@
             <form method="POST" action="{{ url_for('add_committee_type') }}" id="addCommitteeTypeForm">
                 <div class="modal-body">
                     <div class="mb-3">
+                        <label for="hativa_id" class="form-label">חטיבה <span class="text-danger">*</span></label>
+                        <select class="form-select" id="hativa_id" name="hativa_id" required>
+                            <option value="">בחר חטיבה</option>
+                            {% for hativa in hativot %}
+                            <option value="{{ hativa.hativa_id }}">{{ hativa.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
                         <label for="name" class="form-label">שם הועדה <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="name" name="name" required>
                         <div class="form-text">לדוגמה: ועדת הזנק, ועדת תשתיות</div>
@@ -326,6 +360,15 @@
             <form method="POST" action="{{ url_for('update_committee_type') }}" id="editCommitteeTypeForm">
                 <input type="hidden" id="edit_committee_type_id" name="committee_type_id">
                 <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_hativa_id" class="form-label">חטיבה <span class="text-danger">*</span></label>
+                        <select class="form-select" id="edit_hativa_id" name="hativa_id" required>
+                            {% for hativa in hativot %}
+                            <option value="{{ hativa.hativa_id }}">{{ hativa.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
                     <div class="mb-3">
                         <label for="edit_name" class="form-label">שם הועדה <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="edit_name" name="name" required>
@@ -548,6 +591,10 @@
     background-color: rgba(108, 117, 125, 0.1) !important;
 }
 
+.bg-warning-subtle {
+    background-color: rgba(255, 193, 7, 0.1) !important;
+}
+
 .border-success-subtle {
     border-color: rgba(25, 135, 84, 0.3) !important;
 }
@@ -562,6 +609,10 @@
 
 .border-secondary-subtle {
     border-color: rgba(108, 117, 125, 0.3) !important;
+}
+
+.border-warning-subtle {
+    border-color: rgba(255, 193, 7, 0.3) !important;
 }
 
 @media (max-width: 768px) {
@@ -708,6 +759,7 @@ function submitInlineEdit(form) {
     
     // Get form values
     const id = form.querySelector('.edit-id').value;
+    const hativaId = form.querySelector('.edit-hativa-id').value;
     const name = form.querySelector('.edit-name').value.trim();
     const frequency = form.querySelector('.edit-frequency').value;
     const scheduledDay = form.querySelector('.edit-scheduled-day').value;
@@ -715,6 +767,11 @@ function submitInlineEdit(form) {
     const description = form.querySelector('.edit-description').value.trim();
     
     // Validation
+    if (!hativaId) {
+        alert('יש לבחור חטיבה');
+        return;
+    }
+    
     if (!name) {
         alert('שם הועדה הוא שדה חובה');
         return;
@@ -727,6 +784,7 @@ function submitInlineEdit(form) {
     
     // Prepare form data
     formData.append('committee_type_id', id);
+    formData.append('hativa_id', hativaId);
     formData.append('name', name);
     formData.append('frequency', frequency);
     formData.append('scheduled_day', scheduledDay);
@@ -785,6 +843,19 @@ function toggleEditWeekOfMonth() {
         weekOfMonthDiv.style.display = 'none';
         weekOfMonthSelect.value = '';
     }
+}
+
+function filterByHativa() {
+    const hativaId = document.getElementById('filterHativa').value;
+    const currentUrl = new URL(window.location);
+    
+    if (hativaId) {
+        currentUrl.searchParams.set('hativa_id', hativaId);
+    } else {
+        currentUrl.searchParams.delete('hativa_id');
+    }
+    
+    window.location.href = currentUrl.toString();
 }
 
 function editCommitteeType(id, name, scheduledDay, frequency, weekOfMonth, description) {

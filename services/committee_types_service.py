@@ -28,6 +28,7 @@ class CommitteeTypeError(Exception):
 @dataclass
 class CommitteeTypeRequest:
     """Data class for committee type creation/update requests"""
+    hativa_id: int
     name: str
     scheduled_day: int
     frequency: str
@@ -70,6 +71,15 @@ class CommitteeTypesService:
         """Validate committee type data"""
         logger.info(f"Validating committee type data: {request.name}")
         
+        # Validate hativa_id
+        if not request.hativa_id:
+            raise ValidationError('יש לבחור חטיבה')
+        
+        # Validate that hativa exists
+        hativot = self.db.get_hativot()
+        if not any(h['hativa_id'] == request.hativa_id for h in hativot):
+            raise ValidationError('החטיבה שנבחרה לא קיימת במערכת')
+        
         # Validate name
         if not request.name or not request.name.strip():
             raise ValidationError('שם הועדה הוא שדה חובה')
@@ -89,16 +99,16 @@ class CommitteeTypesService:
         
         logger.info(f"Validation successful for committee type: {request.name}")
     
-    def get_committee_types_with_statistics(self) -> CommitteeTypesListResponse:
-        """Get all committee types with statistics"""
+    def get_committee_types_with_statistics(self, hativa_id: Optional[int] = None) -> CommitteeTypesListResponse:
+        """Get committee types with statistics, optionally filtered by division"""
         try:
-            logger.info("Fetching committee types with statistics")
+            logger.info(f"Fetching committee types with statistics for hativa_id: {hativa_id}")
             
             # Get committee types
-            committee_types = self.db.get_committee_types()
+            committee_types = self.db.get_committee_types(hativa_id)
             
             # Get vaadot for statistics
-            vaadot_list = self.db.get_vaadot()
+            vaadot_list = self.db.get_vaadot(hativa_id)
             
             # Calculate statistics
             statistics = {
@@ -134,13 +144,14 @@ class CommitteeTypesService:
             # Validate input data
             self.validate_committee_type_data(request)
             
-            # Check if committee type with same name already exists
-            existing_types = self.db.get_committee_types()
+            # Check if committee type with same name already exists in the same division
+            existing_types = self.db.get_committee_types(request.hativa_id)
             if any(ct['name'].lower() == request.name.lower() for ct in existing_types):
-                raise ValidationError(f'סוג ועדה בשם "{request.name}" כבר קיים במערכת')
+                raise ValidationError(f'סוג ועדה בשם "{request.name}" כבר קיים בחטיבה זו')
             
             # Create committee type
             committee_type_id = self.db.add_committee_type(
+                hativa_id=request.hativa_id,
                 name=request.name.strip(),
                 scheduled_day=request.scheduled_day,
                 frequency=request.frequency,
@@ -187,14 +198,16 @@ class CommitteeTypesService:
             if not current_type:
                 raise ValidationError('סוג הועדה לא נמצא במערכת')
             
-            # Check if another committee type with same name exists (excluding current one)
+            # Check if another committee type with same name exists in the same division (excluding current one)
+            division_types = self.db.get_committee_types(request.hativa_id)
             if any(ct['name'].lower() == request.name.lower() and ct['committee_type_id'] != committee_type_id 
-                   for ct in existing_types):
-                raise ValidationError(f'סוג ועדה בשם "{request.name}" כבר קיים במערכת')
+                   for ct in division_types):
+                raise ValidationError(f'סוג ועדה בשם "{request.name}" כבר קיים בחטיבה זו')
             
             # Update committee type
             success = self.db.update_committee_type(
                 committee_type_id=committee_type_id,
+                hativa_id=request.hativa_id,
                 name=request.name.strip(),
                 scheduled_day=request.scheduled_day,
                 frequency=request.frequency,

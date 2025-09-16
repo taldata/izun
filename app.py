@@ -620,7 +620,14 @@ def validate_monthly_schedule(year: int, month: int):
 @app.route('/committee_types')
 def committee_types():
     """Manage committee types"""
-    response = committee_types_service.get_committee_types_with_statistics()
+    # Get hativa_id from query parameters
+    hativa_id = request.args.get('hativa_id', type=int)
+    
+    # Get committee types with statistics (filtered by division if specified)
+    response = committee_types_service.get_committee_types_with_statistics(hativa_id)
+    
+    # Get all hativot for the dropdown
+    hativot = db.get_hativot()
     
     if not response.success:
         flash(response.message, 'error')
@@ -629,13 +636,16 @@ def committee_types():
                          committee_types=response.committee_types,
                          weekly_count=response.statistics['weekly_count'],
                          monthly_count=response.statistics['monthly_count'],
-                         active_meetings_count=response.statistics['active_meetings_count'])
+                         active_meetings_count=response.statistics['active_meetings_count'],
+                         hativot=hativot,
+                         selected_hativa_id=hativa_id)
 
 @app.route('/committee_types/add', methods=['POST'])
 def add_committee_type():
     """Add new committee type"""
     # Create request object from form data
     committee_type_request = CommitteeTypeRequest(
+        hativa_id=request.form.get('hativa_id', type=int),
         name=request.form.get('name', '').strip(),
         scheduled_day=request.form.get('scheduled_day', type=int),
         frequency=request.form.get('frequency', '').strip(),
@@ -658,6 +668,7 @@ def update_committee_type():
     
     # Create request object from form data
     committee_type_request = CommitteeTypeRequest(
+        hativa_id=request.form.get('hativa_id', type=int),
         name=request.form.get('name', '').strip(),
         scheduled_day=request.form.get('scheduled_day', type=int),
         frequency=request.form.get('frequency', '').strip(),

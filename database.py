@@ -45,12 +45,15 @@ class DatabaseManager:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS committee_types (
                 committee_type_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
+                hativa_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
                 scheduled_day INTEGER NOT NULL, -- 0=Monday, 1=Tuesday, etc.
                 frequency TEXT DEFAULT 'weekly', -- weekly, monthly
                 week_of_month INTEGER DEFAULT NULL, -- for monthly committees (1-4)
                 description TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id),
+                UNIQUE(hativa_id, name)
             )
         ''')
         
@@ -109,17 +112,47 @@ class DatabaseManager:
     def _migrate_database(self, cursor):
         """Migrate existing database to add new columns if they don't exist"""
         try:
-            # Check if vaada_date column exists
+            # Check if vaada_date column exists in vaadot table
             cursor.execute("PRAGMA table_info(vaadot)")
-            columns = [column[1] for column in cursor.fetchall()]
+            vaadot_columns = [column[1] for column in cursor.fetchall()]
             
-            if 'vaada_date' not in columns:
+            if 'vaada_date' not in vaadot_columns:
                 cursor.execute('ALTER TABLE vaadot ADD COLUMN vaada_date DATE')
                 print("Added vaada_date column to vaadot table")
             
-            if 'exception_date_id' not in columns:
+            if 'exception_date_id' not in vaadot_columns:
                 cursor.execute('ALTER TABLE vaadot ADD COLUMN exception_date_id INTEGER REFERENCES exception_dates(date_id)')
                 print("Added exception_date_id column to vaadot table")
+            
+            # Check if hativa_id column exists in committee_types table
+            cursor.execute("PRAGMA table_info(committee_types)")
+            committee_types_columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'hativa_id' not in committee_types_columns:
+                # First, check if we have any hativot to assign to
+                cursor.execute("SELECT COUNT(*) FROM hativot")
+                hativot_count = cursor.fetchone()[0]
+                
+                if hativot_count == 0:
+                    # Create a default hativa if none exist
+                    cursor.execute("INSERT INTO hativot (name, description) VALUES (?, ?)", 
+                                 ("חטיבה כללית", "חטיבה ברירת מחדל למעבר"))
+                    default_hativa_id = cursor.lastrowid
+                else:
+                    # Get the first hativa ID
+                    cursor.execute("SELECT hativa_id FROM hativot LIMIT 1")
+                    default_hativa_id = cursor.fetchone()[0]
+                
+                # Add the column with a default value
+                cursor.execute(f'ALTER TABLE committee_types ADD COLUMN hativa_id INTEGER DEFAULT {default_hativa_id}')
+                
+                # Update all existing committee types to have the default hativa_id
+                cursor.execute(f'UPDATE committee_types SET hativa_id = {default_hativa_id} WHERE hativa_id IS NULL')
+                
+                print(f"Added hativa_id column to committee_types table with default value {default_hativa_id}")
+                
+                # Remove the unique constraint on name and add unique constraint on (hativa_id, name)
+                # Note: SQLite doesn't support dropping constraints directly, so we'll handle this in the application logic
                 
         except Exception as e:
             print(f"Migration error: {e}")
@@ -130,18 +163,25 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        default_committee_types = [
-            ('ועדת הזנק', 0, 'weekly', None, 'ועדת הזנק שבועית'),
-            ('ועדת תשתיות', 2, 'weekly', None, 'ועדת תשתיות שבועית'),
-            ('ועדת צמיחה', 3, 'weekly', None, 'ועדת צמיחה שבועית'),
-            ('ייצור מתקדם', 1, 'monthly', 3, 'ועדת ייצור מתקדם חודשית')
-        ]
+        # Check if we have any hativot
+        cursor.execute("SELECT hativa_id FROM hativot LIMIT 1")
+        hativa_result = cursor.fetchone()
         
-        for name, day, frequency, week_of_month, description in default_committee_types:
-            cursor.execute('''
-                INSERT OR IGNORE INTO committee_types (name, scheduled_day, frequency, week_of_month, description)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (name, day, frequency, week_of_month, description))
+        if hativa_result:
+            default_hativa_id = hativa_result[0]
+            
+            default_committee_types = [
+                (default_hativa_id, 'ועדת הזנק', 0, 'weekly', None, 'ועדת הזנק שבועית'),
+                (default_hativa_id, 'ועדת תשתיות', 2, 'weekly', None, 'ועדת תשתיות שבועית'),
+                (default_hativa_id, 'ועדת צמיחה', 3, 'weekly', None, 'ועדת צמיחה שבועית'),
+                (default_hativa_id, 'ייצור מתקדם', 1, 'monthly', 3, 'ועדת ייצור מתקדם חודשית')
+            ]
+            
+            for hativa_id, name, day, frequency, week_of_month, description in default_committee_types:
+                cursor.execute('''
+                    INSERT OR IGNORE INTO committee_types (hativa_id, name, scheduled_day, frequency, week_of_month, description)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (hativa_id, name, day, frequency, week_of_month, description))
         
         conn.commit()
         conn.close()
@@ -264,35 +304,53 @@ class DatabaseManager:
         return count > 0
     
     # Committee Types operations
-    def add_committee_type(self, name: str, scheduled_day: int, frequency: str = 'weekly', 
+    def add_committee_type(self, hativa_id: int, name: str, scheduled_day: int, frequency: str = 'weekly', 
                           week_of_month: Optional[int] = None, description: str = "") -> int:
         """Add a new committee type"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO committee_types (name, scheduled_day, frequency, week_of_month, description)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (name, scheduled_day, frequency, week_of_month, description))
+            INSERT INTO committee_types (hativa_id, name, scheduled_day, frequency, week_of_month, description)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (hativa_id, name, scheduled_day, frequency, week_of_month, description))
         committee_type_id = cursor.lastrowid
         conn.commit()
         conn.close()
         return committee_type_id
     
-    def get_committee_types(self) -> List[Dict]:
-        """Get all committee types"""
+    def get_committee_types(self, hativa_id: Optional[int] = None) -> List[Dict]:
+        """Get committee types, optionally filtered by division"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM committee_types ORDER BY scheduled_day')
+        
+        if hativa_id:
+            cursor.execute('''
+                SELECT ct.committee_type_id, ct.hativa_id, ct.name, ct.scheduled_day, 
+                       ct.frequency, ct.week_of_month, ct.description, h.name as hativa_name 
+                FROM committee_types ct
+                JOIN hativot h ON ct.hativa_id = h.hativa_id
+                WHERE ct.hativa_id = ?
+                ORDER BY ct.scheduled_day
+            ''', (hativa_id,))
+        else:
+            cursor.execute('''
+                SELECT ct.committee_type_id, ct.hativa_id, ct.name, ct.scheduled_day, 
+                       ct.frequency, ct.week_of_month, ct.description, h.name as hativa_name 
+                FROM committee_types ct
+                JOIN hativot h ON ct.hativa_id = h.hativa_id
+                ORDER BY h.name, ct.scheduled_day
+            ''')
+        
         rows = cursor.fetchall()
         conn.close()
         
         days = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון']
         
-        return [{'committee_type_id': row[0], 'name': row[1], 'scheduled_day': row[2],
-                'scheduled_day_name': days[row[2]], 'frequency': row[3], 
-                'week_of_month': row[4], 'description': row[5]} for row in rows]
+        return [{'committee_type_id': row[0], 'hativa_id': row[1], 'name': row[2], 'scheduled_day': row[3],
+                'scheduled_day_name': days[row[3]], 'frequency': row[4], 
+                'week_of_month': row[5], 'description': row[6], 'hativa_name': row[7]} for row in rows]
     
-    def update_committee_type(self, committee_type_id: int, name: str, scheduled_day: int, 
+    def update_committee_type(self, committee_type_id: int, hativa_id: int, name: str, scheduled_day: int, 
                              frequency: str = 'weekly', week_of_month: Optional[int] = None, 
                              description: str = "") -> bool:
         """Update an existing committee type"""
@@ -300,9 +358,9 @@ class DatabaseManager:
         cursor = conn.cursor()
         cursor.execute('''
             UPDATE committee_types 
-            SET name = ?, scheduled_day = ?, frequency = ?, week_of_month = ?, description = ?
+            SET hativa_id = ?, name = ?, scheduled_day = ?, frequency = ?, week_of_month = ?, description = ?
             WHERE committee_type_id = ?
-        ''', (name, scheduled_day, frequency, week_of_month, description, committee_type_id))
+        ''', (hativa_id, name, scheduled_day, frequency, week_of_month, description, committee_type_id))
         success = cursor.rowcount > 0
         conn.commit()
         conn.close()
