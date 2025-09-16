@@ -15,7 +15,7 @@ class CommitteeSystemApp:
     def display_menu(self):
         """Display the main menu"""
         print("\n" + "="*60)
-        print("           מערכת ניהול וועדות ואירועים")
+        print("           איזון עומסים")
         print("="*60)
         print("1. ניהול חטיבות ומסלולים")
         print("2. ניהול תאריכי חריגים")
@@ -390,7 +390,7 @@ class CommitteeSystemApp:
     
     def run(self):
         """Run the main application"""
-        print("ברוכים הבאים למערכת ניהול וועדות ואירועים")
+        print("ברוכים הבאים למערכת איזון עומסים")
         
         while True:
             self.display_menu()
