@@ -338,16 +338,280 @@ def add_event():
 
 @app.route('/schedule')
 def schedule():
-    """Monthly schedule view"""
+    """Unified schedule and calendar view"""
     year = request.args.get('year', date.today().year, type=int)
-    month = request.args.get('month', date.today().month, type=int)
+    month_param = request.args.get('month', str(date.today().month))
+    view_type = request.args.get('view', 'schedule')
     
     try:
-        monthly_schedule = scheduler.get_monthly_schedule(year, month)
-        return render_template('schedule.html', schedule=monthly_schedule)
+        # Always prepare schedule data
+        if month_param == 'all':
+            # Get yearly schedule - all months
+            yearly_schedule = {}
+            for month in range(1, 13):
+                monthly_schedule = scheduler.get_monthly_schedule(year, month)
+                yearly_schedule[month] = monthly_schedule
+            
+            schedule_data = yearly_schedule
+            is_yearly = True
+        else:
+            # Get monthly schedule
+            month = int(month_param)
+            monthly_schedule = scheduler.get_monthly_schedule(year, month)
+            schedule_data = monthly_schedule
+            is_yearly = False
+        
+        # Prepare calendar data if needed
+        calendar_data = None
+        if view_type.startswith('calendar'):
+            from datetime import datetime, timedelta
+            import calendar as cal
+            
+            # Get events and committees data for calendar
+            events = db.get_events()
+            vaadot = db.get_vaadot()
+            
+            if view_type == 'calendar-year':
+                calendar_data = prepare_year_data(year, events, vaadot)
+            elif view_type == 'calendar-month':
+                current_month = request.args.get('cal_month', date.today().month, type=int)
+                calendar_data = prepare_month_data(year, current_month, events, vaadot)
+            elif view_type == 'calendar-week':
+                current_week = request.args.get('cal_week', 1, type=int)
+                calendar_data = prepare_week_data(year, current_week, events, vaadot)
+        
+        hativot_list = db.get_hativot()
+        maslulim_list = db.get_maslulim()
+        
+        return render_template('schedule.html', 
+                             schedule=schedule_data, 
+                             is_yearly=is_yearly, 
+                             year=year,
+                             view_type=view_type,
+                             calendar_data=calendar_data,
+                             year_data=calendar_data if view_type == 'calendar-year' else {},
+                             week_data=calendar_data if view_type == 'calendar-week' else {},
+                             current_year=year,
+                             current_month=date.today().month,
+                             current_week=1,
+                             vaadot=vaadot if view_type.startswith('calendar') and 'vaadot' in locals() else [],
+                             month_names=['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+                                        'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'],
+                             hativot=hativot_list, 
+                             maslulim=maslulim_list)
     except Exception as e:
         flash(f'שגיאה בטעינת הלוח: {str(e)}', 'error')
         return redirect(url_for('index'))
+
+@app.route('/calendar')
+def calendar_view():
+    """Calendar view with multiple resolutions"""
+    from datetime import datetime, timedelta
+    import calendar as cal
+    
+    view_type = request.args.get('view', 'month')
+    year = request.args.get('year', date.today().year, type=int)
+    month = request.args.get('month', date.today().month, type=int)
+    week = request.args.get('week', 1, type=int)
+    
+    try:
+        # Get events and committees data
+        events = db.get_events()
+        vaadot = db.get_vaadot()
+        hativot_list = db.get_hativot()
+        
+        # Prepare calendar data based on view type
+        calendar_data = {}
+        period_title = ""
+        
+        if view_type == 'year':
+            calendar_data = prepare_year_data(year, events, vaadot)
+            period_title = f"שנת {year}"
+            
+        elif view_type == 'month':
+            calendar_data = prepare_month_data(year, month, events, vaadot)
+            month_names = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+                          'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
+            period_title = f"{month_names[month-1]} {year}"
+            
+        elif view_type == 'week':
+            calendar_data = prepare_week_data(year, week, events, vaadot)
+            period_title = f"שבוע {week}, {year}"
+        
+        return render_template('calendar.html',
+                             view_type=view_type,
+                             calendar_data=calendar_data,
+                             year_data=calendar_data if view_type == 'year' else {},
+                             week_data=calendar_data if view_type == 'week' else {},
+                             current_year=year,
+                             current_month=month,
+                             current_week=week,
+                             period_title=period_title,
+                             vaadot=vaadot,
+                             hativot=hativot_list,
+                             month_names=['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+                                        'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'])
+                             
+    except Exception as e:
+        flash(f'שגיאה בטעינת היומן: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
+def prepare_year_data(year, events, vaadot):
+    """Prepare data for year view"""
+    import calendar as cal
+    
+    year_data = {}
+    
+    for month_num in range(1, 13):
+        month_data = {
+            'first_day': cal.monthrange(year, month_num)[0],
+            'days_in_month': cal.monthrange(year, month_num)[1],
+            'events': {}
+        }
+        
+        # Add events for this month
+        for event in events:
+            if event.get('scheduled_date'):
+                try:
+                    if isinstance(event['scheduled_date'], str):
+                        event_date = datetime.fromisoformat(event['scheduled_date']).date()
+                    else:
+                        event_date = event['scheduled_date']
+                    
+                    if event_date.year == year and event_date.month == month_num:
+                        day = event_date.day
+                        if day not in month_data['events']:
+                            month_data['events'][day] = []
+                        month_data['events'][day].append(event)
+                except (ValueError, AttributeError):
+                    continue
+        
+        year_data[month_num] = month_data
+    
+    return year_data
+
+def prepare_month_data(year, month, events, vaadot):
+    """Prepare data for month view"""
+    import calendar as cal
+    
+    # Get calendar for the month
+    cal_data = cal.monthcalendar(year, month)
+    
+    # Prepare weeks data
+    weeks = []
+    for week in cal_data:
+        week_days = []
+        for day in week:
+            if day == 0:
+                # Previous/next month day
+                week_days.append({
+                    'day': '',
+                    'date': '',
+                    'in_month': False,
+                    'is_today': False,
+                    'events': [],
+                    'committees': []
+                })
+            else:
+                day_date = date(year, month, day)
+                is_today = day_date == date.today()
+                
+                # Get events for this day
+                day_events = []
+                for event in events:
+                    if event.get('scheduled_date'):
+                        try:
+                            if isinstance(event['scheduled_date'], str):
+                                event_date = datetime.fromisoformat(event['scheduled_date']).date()
+                            else:
+                                event_date = event['scheduled_date']
+                            
+                            if event_date == day_date:
+                                day_events.append(event)
+                        except (ValueError, AttributeError):
+                            continue
+                
+                # Get committees for this day
+                day_committees = []
+                for vaada in vaadot:
+                    vaada_date = vaada['vaada_date']
+                    if isinstance(vaada_date, str):
+                        vaada_date = datetime.fromisoformat(vaada_date).date()
+                    if vaada_date == day_date:
+                        day_committees.append(vaada)
+                
+                week_days.append({
+                    'day': day,
+                    'date': day_date.isoformat(),
+                    'in_month': True,
+                    'is_today': is_today,
+                    'events': day_events,
+                    'committees': day_committees
+                })
+        weeks.append(week_days)
+    
+    return {'weeks': weeks}
+
+def prepare_week_data(year, week_num, events, vaadot):
+    """Prepare data for week view"""
+    from datetime import datetime, timedelta
+    
+    # Calculate the start of the week
+    jan_1 = date(year, 1, 1)
+    week_start = jan_1 + timedelta(weeks=week_num-1)
+    
+    # Adjust to start on Sunday
+    days_since_sunday = week_start.weekday() + 1
+    if days_since_sunday == 7:
+        days_since_sunday = 0
+    week_start = week_start - timedelta(days=days_since_sunday)
+    
+    days = []
+    day_names = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת']
+    
+    for i in range(7):
+        day_date = week_start + timedelta(days=i)
+        is_today = day_date == date.today()
+        
+        # Get events for this day organized by hour
+        events_by_hour = {}
+        for event in events:
+            if event.get('scheduled_date'):
+                try:
+                    if isinstance(event['scheduled_date'], str):
+                        event_date = datetime.fromisoformat(event['scheduled_date']).date()
+                    else:
+                        event_date = event['scheduled_date']
+                    
+                    if event_date == day_date:
+                        hour = 9  # Default hour
+                        if hour not in events_by_hour:
+                            events_by_hour[hour] = []
+                        events_by_hour[hour].append(event)
+                except (ValueError, AttributeError):
+                    continue
+        
+        # Get committees for this day organized by hour
+        committees_by_hour = {}
+        for vaada in vaadot:
+            vaada_date = vaada['vaada_date']
+            if isinstance(vaada_date, str):
+                vaada_date = datetime.fromisoformat(vaada_date).date()
+            if vaada_date == day_date:
+                hour = 10  # Default hour for committees
+                if hour not in committees_by_hour:
+                    committees_by_hour[hour] = []
+                committees_by_hour[hour].append(vaada)
+        
+        days.append({
+            'date': day_date,
+            'day_name': day_names[i],
+            'is_today': is_today,
+            'events_by_hour': events_by_hour,
+            'committees_by_hour': committees_by_hour
+        })
+    
+    return {'days': days}
 
 
 @app.route('/api/maslulim/<int:hativa_id>')
@@ -371,6 +635,55 @@ def api_maslulim_by_hativa(hativa_id):
             'error': str(e),
             'data': [],
             'count': 0
+        }), 500
+
+@app.route('/api/vaadot/<int:vaadot_id>/hativa')
+def api_vaadot_hativa(vaadot_id):
+    """API endpoint to get division ID for a specific committee meeting"""
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT hativa_id FROM vaadot WHERE vaadot_id = ?', (vaadot_id,))
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return jsonify({
+                'success': True,
+                'hativa_id': result[0]
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Committee meeting not found'
+            }), 404
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/events/<int:event_id>')
+def api_event_details(event_id):
+    """API endpoint to get event details"""
+    try:
+        events = db.get_events()
+        event = next((e for e in events if e['event_id'] == event_id), None)
+        
+        if event:
+            return jsonify({
+                'success': True,
+                'event': event
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Event not found'
+            }), 404
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500
 
 @app.route('/api/maslulim/<int:maslul_id>/details')

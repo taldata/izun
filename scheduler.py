@@ -202,18 +202,26 @@ class CommitteeScheduler:
                 monthly_schedule['exception_dates'].append(current_date)
             current_date += timedelta(days=1)
         
-        # Get scheduled committees for each committee type
-        for committee_name in self.committee_days.keys():
-            committee_dates = self.get_valid_committee_dates(committee_name, first_day, last_day)
-            monthly_schedule['committees'][committee_name] = []
+        # Get scheduled committees from database (vaadot table)
+        vaadot = self.db.get_vaadot(start_date=first_day, end_date=last_day)
+        
+        for vaada in vaadot:
+            committee_key = f"{vaada['committee_name']} - {vaada['hativa_name']}"
+            if committee_key not in monthly_schedule['committees']:
+                monthly_schedule['committees'][committee_key] = []
             
-            for committee_date in committee_dates:
-                can_schedule, reason = self.can_schedule_committee(committee_name, committee_date)
-                monthly_schedule['committees'][committee_name].append({
-                    'date': committee_date,
-                    'can_schedule': can_schedule,
-                    'reason': reason
-                })
+            # Check if we can schedule events for this committee meeting
+            can_schedule = vaada['status'] == 'scheduled'
+            reason = 'זמין לתזמון אירועים' if can_schedule else 'לא זמין'
+            
+            monthly_schedule['committees'][committee_key].append({
+                'date': vaada['vaada_date'] if isinstance(vaada['vaada_date'], date) else date.fromisoformat(vaada['vaada_date']),
+                'can_schedule': can_schedule,
+                'reason': reason,
+                'vaadot_id': vaada['vaadot_id'],
+                'hativa_name': vaada['hativa_name'],
+                'committee_name': vaada['committee_name']
+            })
         
         return monthly_schedule
     

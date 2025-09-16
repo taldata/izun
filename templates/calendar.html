@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+
+{% block title %}יומן אירועים{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <!-- Header with view selector -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="bi bi-calendar3 me-2"></i>יומן אירועים</h2>
+                
+                <!-- View selector -->
+                <div class="btn-group" role="group">
+                    <input type="radio" class="btn-check" name="viewType" id="yearView" value="year" {% if view_type == 'year' %}checked{% endif %}>
+                    <label class="btn btn-outline-primary" for="yearView">
+                        <i class="bi bi-calendar-year me-1"></i>שנתי
+                    </label>
+                    
+                    <input type="radio" class="btn-check" name="viewType" id="monthView" value="month" {% if view_type == 'month' %}checked{% endif %}>
+                    <label class="btn btn-outline-primary" for="monthView">
+                        <i class="bi bi-calendar-month me-1"></i>חודשי
+                    </label>
+                    
+                    <input type="radio" class="btn-check" name="viewType" id="weekView" value="week" {% if view_type == 'week' %}checked{% endif %}>
+                    <label class="btn btn-outline-primary" for="weekView">
+                        <i class="bi bi-calendar-week me-1"></i>שבועי
+                    </label>
+                </div>
+            </div>
+
+            <!-- Navigation controls -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <button class="btn btn-outline-secondary" id="prevPeriod">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary" id="nextPeriod">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <button class="btn btn-outline-primary ms-2" id="todayBtn">היום</button>
+                </div>
+                
+                <h4 id="periodTitle">{{ period_title }}</h4>
+                
+                <div>
+                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addEventModal">
+                        <i class="bi bi-plus-circle me-1"></i>הוסף אירוע
+                    </button>
+                </div>
+            </div>
+
+            <!-- Calendar container -->
+            <div id="calendarContainer" class="card">
+                <div class="card-body">
+                    {% if view_type == 'year' %}
+                        {% include 'calendar_year.html' %}
+                    {% elif view_type == 'month' %}
+                        {% include 'calendar_month.html' %}
+                    {% elif view_type == 'week' %}
+                        {% include 'calendar_week.html' %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Event Modal -->
+<div class="modal fade" id="eventModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">פרטי אירוע</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="eventModalBody">
+                <!-- Event details will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Event Modal (reuse from schedule.html) -->
+<div class="modal fade" id="addEventModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">הוסף אירוע חדש</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="calendarEventForm" action="{{ url_for('add_event') }}" method="POST">
+                <div class="modal-body">
+                    <!-- Committee and Date Selection -->
+                    <div class="mb-3">
+                        <label for="calendar_vaadot_id" class="form-label">
+                            <i class="bi bi-people me-2"></i>בחר ישיבת ועדה <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="calendar_vaadot_id" name="vaadot_id" required>
+                            <option value="">בחר ישיבת ועדה</option>
+                            {% for vaada in vaadot %}
+                                <option value="{{ vaada.vaadot_id }}" data-hativa-id="{{ vaada.hativa_id }}">
+                                    {{ vaada.committee_name }} - {{ vaada.hativa_name }} ({{ vaada.vaada_date }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Route Selection -->
+                    <div class="mb-3">
+                        <label for="calendar_maslul_id" class="form-label">
+                            <i class="bi bi-signpost me-2"></i>בחר מסלול <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="calendar_maslul_id" name="maslul_id" required disabled>
+                            <option value="">תחילה בחר ועדה</option>
+                        </select>
+                    </div>
+
+                    <hr>
+
+                    <!-- Event Details -->
+                    <div class="mb-3">
+                        <label for="calendar_event_name" class="form-label">שם האירוע <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="calendar_event_name" name="name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="calendar_event_type" class="form-label">סוג האירוע <span class="text-danger">*</span></label>
+                        <select class="form-select" id="calendar_event_type" name="event_type" required>
+                            <option value="">בחר סוג</option>
+                            <option value="הכשרה">הכשרה</option>
+                            <option value="כנס">כנס</option>
+                            <option value="סדנה">סדנה</option>
+                            <option value="הרצאה">הרצאה</option>
+                            <option value="תרגיל">תרגיל</option>
+                            <option value="קורס">קורס</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="calendar_expected_requests" class="form-label">מספר משתתפים צפוי</label>
+                        <input type="number" class="form-control" id="calendar_expected_requests" name="expected_requests" min="1" placeholder="הכנס מספר משתתפים">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                    <button type="submit" class="btn btn-primary">צור אירוע</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentView = '{{ view_type|default("month") }}';
+    let currentYear = 2025;
+    let currentMonth = 1;
+    let currentWeek = 1;
+
+    // View type change handlers
+    document.querySelectorAll('input[name="viewType"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            if (this.checked) {
+                currentView = this.value;
+                updateCalendar();
+            }
+        });
+    });
+
+    // Navigation handlers
+    document.getElementById('prevPeriod').addEventListener('click', function() {
+        navigatePeriod(-1);
+    });
+
+    document.getElementById('nextPeriod').addEventListener('click', function() {
+        navigatePeriod(1);
+    });
+
+    document.getElementById('todayBtn').addEventListener('click', function() {
+        const today = new Date();
+        currentYear = today.getFullYear();
+        currentMonth = today.getMonth() + 1;
+        currentWeek = getWeekNumber(today);
+        updateCalendar();
+    });
+
+    function navigatePeriod(direction) {
+        if (currentView === 'year') {
+            currentYear += direction;
+        } else if (currentView === 'month') {
+            currentMonth += direction;
+            if (currentMonth > 12) {
+                currentMonth = 1;
+                currentYear++;
+            } else if (currentMonth < 1) {
+                currentMonth = 12;
+                currentYear--;
+            }
+        } else if (currentView === 'week') {
+            currentWeek += direction;
+            // Handle year boundaries for weeks
+            if (currentWeek > 52) {
+                currentWeek = 1;
+                currentYear++;
+            } else if (currentWeek < 1) {
+                currentWeek = 52;
+                currentYear--;
+            }
+        }
+        updateCalendar();
+    }
+
+    function updateCalendar() {
+        const params = new URLSearchParams({
+            view: currentView,
+            year: currentYear,
+            month: currentMonth,
+            week: currentWeek
+        });
+        
+        window.location.href = `/calendar?${params.toString()}`;
+    }
+
+    function getWeekNumber(date) {
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+        return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+    }
+
+    // Committee selection handler for filtering routes
+    document.getElementById('calendar_vaadot_id').addEventListener('change', function() {
+        const vaadotId = this.value;
+        const maslulSelect = document.getElementById('calendar_maslul_id');
+        
+        if (!vaadotId) {
+            maslulSelect.disabled = true;
+            maslulSelect.innerHTML = '<option value="">תחילה בחר ועדה</option>';
+            return;
+        }
+
+        // Get committee's division and filter routes
+        fetch(`/api/vaadot/${vaadotId}/hativa`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const hativaId = data.hativa_id;
+                    
+                    // Fetch routes for this division
+                    fetch(`/api/maslulim/${hativaId}`)
+                        .then(response => response.json())
+                        .then(routeData => {
+                            maslulSelect.disabled = false;
+                            maslulSelect.innerHTML = '<option value="">בחר מסלול</option>';
+                            
+                            if (routeData.success && routeData.data.length > 0) {
+                                routeData.data.forEach(route => {
+                                    const option = document.createElement('option');
+                                    option.value = route.maslul_id;
+                                    option.textContent = route.name;
+                                    maslulSelect.appendChild(option);
+                                });
+                            } else {
+                                maslulSelect.innerHTML = '<option value="">אין מסלולים זמינים</option>';
+                            }
+                        });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                maslulSelect.disabled = false;
+                maslulSelect.innerHTML = '<option value="">שגיאה בטעינת מסלולים</option>';
+            });
+    });
+
+    // Handle clicks on committee items in calendar
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.clickable-committee')) {
+            const committeeElement = e.target.closest('.clickable-committee');
+            const committee = committeeElement.getAttribute('data-committee');
+            const hativa = committeeElement.getAttribute('data-hativa');
+            const date = committeeElement.getAttribute('data-date');
+            const vaadotId = committeeElement.getAttribute('data-vaadot-id');
+            
+            console.log('Clicked committee:', committee, 'hativa:', hativa, 'date:', date, 'vaadot_id:', vaadotId);
+            
+            // Pre-select the committee in the modal
+            const vaadotSelect = document.getElementById('calendar_vaadot_id');
+            vaadotSelect.value = vaadotId;
+            
+            // Trigger change event to load routes
+            vaadotSelect.dispatchEvent(new Event('change'));
+            
+            // Show the modal
+            new bootstrap.Modal(document.getElementById('addEventModal')).show();
+        }
+    });
+
+    // Handle clicks on event items
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.event-item')) {
+            const eventElement = e.target.closest('.event-item');
+            const eventId = eventElement.getAttribute('data-event-id');
+            
+            // Load event details in modal
+            fetch(`/api/events/${eventId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('eventModalBody').innerHTML = `
+                            <h5>${data.event.name}</h5>
+                            <p><strong>סוג:</strong> ${data.event.event_type}</p>
+                            <p><strong>ועדה:</strong> ${data.event.committee_name}</p>
+                            <p><strong>חטיבה:</strong> ${data.event.hativa_name}</p>
+                            <p><strong>מסלול:</strong> ${data.event.maslul_name}</p>
+                            <p><strong>משתתפים צפויים:</strong> ${data.event.expected_requests}</p>
+                        `;
+                        new bootstrap.Modal(document.getElementById('eventModal')).show();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading event:', error);
+                });
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,134 @@
+<!-- Year View Template -->
+<div class="year-view">
+    <div class="row">
+        {% for month_num in range(1, 13) %}
+        <div class="col-lg-3 col-md-4 col-sm-6 mb-4">
+            <div class="card month-card">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0 text-center">
+                        {{ month_names[month_num-1] }} {{ current_year }}
+                    </h6>
+                </div>
+                <div class="card-body p-2">
+                    <div class="mini-calendar">
+                        {% set month_data = year_data.get(month_num, {}) %}
+                        {% set first_day = month_data.get('first_day', 1) %}
+                        {% set days_in_month = month_data.get('days_in_month', 30) %}
+                        
+                        <!-- Mini calendar grid -->
+                        <div class="mini-cal-grid">
+                            <div class="mini-cal-header">
+                                <div class="mini-day-header">א</div>
+                                <div class="mini-day-header">ב</div>
+                                <div class="mini-day-header">ג</div>
+                                <div class="mini-day-header">ד</div>
+                                <div class="mini-day-header">ה</div>
+                                <div class="mini-day-header">ו</div>
+                                <div class="mini-day-header">ש</div>
+                            </div>
+                            
+                            <!-- Empty cells for days before month starts -->
+                            {% for i in range(first_day) %}
+                                <div class="mini-day empty"></div>
+                            {% endfor %}
+                            
+                            <!-- Days of the month -->
+                            {% for day in range(1, days_in_month + 1) %}
+                                {% set day_events = month_data.get('events', {}).get(day, []) %}
+                                <div class="mini-day {% if day_events %}has-events{% endif %}" 
+                                     data-date="{{ current_year }}-{{ '%02d'|format(month_num) }}-{{ '%02d'|format(day) }}"
+                                     title="{% if day_events %}{{ day_events|length }} אירועים{% endif %}">
+                                    {{ day }}
+                                    {% if day_events %}
+                                        <div class="event-dots">
+                                            {% for event in day_events[:3] %}
+                                                <span class="event-dot"></span>
+                                            {% endfor %}
+                                            {% if day_events|length > 3 %}
+                                                <span class="more-events">+{{ day_events|length - 3 }}</span>
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+.mini-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    font-size: 0.75rem;
+}
+
+.mini-cal-header {
+    display: contents;
+}
+
+.mini-day-header {
+    background-color: #f8f9fa;
+    padding: 2px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 0.7rem;
+}
+
+.mini-day {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e9ecef;
+    cursor: pointer;
+    position: relative;
+    min-height: 25px;
+}
+
+.mini-day:hover {
+    background-color: #e3f2fd;
+}
+
+.mini-day.empty {
+    cursor: default;
+}
+
+.mini-day.has-events {
+    background-color: #e8f5e8;
+    font-weight: bold;
+}
+
+.event-dots {
+    display: flex;
+    gap: 1px;
+    margin-top: 1px;
+}
+
+.event-dot {
+    width: 3px;
+    height: 3px;
+    background-color: #007bff;
+    border-radius: 50%;
+}
+
+.more-events {
+    font-size: 0.6rem;
+    color: #666;
+}
+
+.month-card {
+    transition: transform 0.2s;
+}
+
+.month-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+</style>
