@@ -1,5 +1,5 @@
 from datetime import datetime, date, timedelta
-from typing import List, Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 import calendar
 from database import DatabaseManager
 
