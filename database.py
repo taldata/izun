@@ -206,6 +206,34 @@ class DatabaseManager:
         return [{'maslul_id': row[0], 'hativa_id': row[1], 'name': row[2], 
                 'description': row[3], 'hativa_name': row[5]} for row in rows]
     
+    def update_maslul(self, maslul_id: int, name: str, description: str = "") -> bool:
+        """Update an existing route"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE maslulim 
+            SET name = ?, description = ? 
+            WHERE maslul_id = ?
+        ''', (name, description, maslul_id))
+        
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
+    
+    def delete_maslul(self, maslul_id: int) -> bool:
+        """Delete a route"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM maslulim WHERE maslul_id = ?', (maslul_id,))
+        
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
+    
     # Exception dates operations
     def add_exception_date(self, exception_date: date, description: str = "", date_type: str = "holiday"):
         """Add an exception date (holiday, sabbath, etc.)"""

@@ -69,27 +69,137 @@ def add_hativa():
 
 @app.route('/maslulim')
 def maslulim():
-    """Manage routes"""
-    maslulim_list = db.get_maslulim()
-    hativot_list = db.get_hativot()
-    return render_template('maslulim.html', maslulim=maslulim_list, hativot=hativot_list)
+    """Manage routes with enhanced functionality"""
+    try:
+        # Get data with error handling
+        maslulim_list = db.get_maslulim()
+        hativot_list = db.get_hativot()
+        
+        # Group maslulim by hativa for better organization
+        maslulim_by_hativa = {}
+        for maslul in maslulim_list:
+            hativa_name = maslul['hativa_name']
+            if hativa_name not in maslulim_by_hativa:
+                maslulim_by_hativa[hativa_name] = []
+            maslulim_by_hativa[hativa_name].append(maslul)
+        
+        # Calculate statistics
+        stats = {
+            'total_maslulim': len(maslulim_list),
+            'total_hativot': len(hativot_list),
+            'maslulim_per_hativa': {hativa['name']: len([m for m in maslulim_list if m['hativa_id'] == hativa['hativa_id']]) for hativa in hativot_list}
+        }
+        
+        return render_template('maslulim.html', 
+                             maslulim=maslulim_list, 
+                             hativot=hativot_list,
+                             maslulim_by_hativa=maslulim_by_hativa,
+                             stats=stats)
+    except Exception as e:
+        flash(f'שגיאה בטעינת נתוני המסלולים: {str(e)}', 'error')
+        return render_template('maslulim.html', maslulim=[], hativot=[], maslulim_by_hativa={}, stats={})
 
 @app.route('/maslulim/add', methods=['POST'])
 def add_maslul():
-    """Add new route"""
-    hativa_id = request.form.get('hativa_id')
-    name = request.form.get('name', '').strip()
-    description = request.form.get('description', '').strip()
-    
-    if not hativa_id or not name:
-        flash('חטיבה ושם המסלול הם שדות חובה', 'error')
-        return redirect(url_for('maslulim'))
-    
+    """Add new route with enhanced validation"""
     try:
+        hativa_id = request.form.get('hativa_id')
+        name = request.form.get('name', '').strip()
+        description = request.form.get('description', '').strip()
+        
+        # Enhanced validation
+        if not hativa_id:
+            flash('יש לבחור חטיבה', 'error')
+            return redirect(url_for('maslulim'))
+            
+        if not name:
+            flash('שם המסלול הוא שדה חובה', 'error')
+            return redirect(url_for('maslulim'))
+            
+        if len(name) < 2:
+            flash('שם המסלול חייב להכיל לפחות 2 תווים', 'error')
+            return redirect(url_for('maslulim'))
+            
+        # Check if hativa exists
+        hativot = db.get_hativot()
+        if not any(h['hativa_id'] == int(hativa_id) for h in hativot):
+            flash('החטיבה שנבחרה לא קיימת במערכת', 'error')
+            return redirect(url_for('maslulim'))
+            
+        # Check for duplicate names within the same hativa
+        existing_maslulim = db.get_maslulim(int(hativa_id))
+        if any(m['name'].lower() == name.lower() for m in existing_maslulim):
+            flash(f'מסלול בשם "{name}" כבר קיים בחטיבה זו', 'error')
+            return redirect(url_for('maslulim'))
+        
+        # Add the maslul
         maslul_id = db.add_maslul(int(hativa_id), name, description)
-        flash(f'מסלול "{name}" נוסף בהצלחה', 'success')
+        hativa_name = next(h['name'] for h in hativot if h['hativa_id'] == int(hativa_id))
+        flash(f'מסלול "{name}" נוסף בהצלחה לחטיבת {hativa_name}', 'success')
+        
+    except ValueError as e:
+        flash('נתונים לא תקינים', 'error')
     except Exception as e:
         flash(f'שגיאה בהוספת המסלול: {str(e)}', 'error')
+    
+    return redirect(url_for('maslulim'))
+
+@app.route('/maslulim/edit/<int:maslul_id>', methods=['POST'])
+def edit_maslul(maslul_id):
+    """Edit existing route"""
+    try:
+        name = request.form.get('name', '').strip()
+        description = request.form.get('description', '').strip()
+        
+        if not name:
+            flash('שם המסלול הוא שדה חובה', 'error')
+            return redirect(url_for('maslulim'))
+            
+        if len(name) < 2:
+            flash('שם המסלול חייב להכיל לפחות 2 תווים', 'error')
+            return redirect(url_for('maslulim'))
+        
+        # Update the maslul
+        success = db.update_maslul(maslul_id, name, description)
+        if success:
+            flash(f'מסלול "{name}" עודכן בהצלחה', 'success')
+        else:
+            flash('המסלול לא נמצא במערכת', 'error')
+            
+    except Exception as e:
+        flash(f'שגיאה בעדכון המסלול: {str(e)}', 'error')
+    
+    return redirect(url_for('maslulim'))
+
+@app.route('/maslulim/delete/<int:maslul_id>', methods=['POST'])
+def delete_maslul(maslul_id):
+    """Delete route with safety checks"""
+    try:
+        # Check if maslul is used in any events
+        events = db.get_events()
+        maslul_events = [e for e in events if e['maslul_id'] == maslul_id]
+        
+        if maslul_events:
+            flash(f'לא ניתן למחוק מסלול המשויך ל-{len(maslul_events)} אירועים. יש למחוק תחילה את האירועים הקשורים.', 'error')
+            return redirect(url_for('maslulim'))
+        
+        # Get maslul name before deletion
+        maslulim = db.get_maslulim()
+        maslul = next((m for m in maslulim if m['maslul_id'] == maslul_id), None)
+        
+        if not maslul:
+            flash('המסלול לא נמצא במערכת', 'error')
+            return redirect(url_for('maslulim'))
+        
+        # Delete the maslul
+        success = db.delete_maslul(maslul_id)
+        if success:
+            flash(f'מסלול "{maslul["name"]}" נמחק בהצלחה', 'success')
+        else:
+            flash('שגיאה במחיקת המסלול', 'error')
+            
+    except Exception as e:
+        flash(f'שגיאה במחיקת המסלול: {str(e)}', 'error')
     
     return redirect(url_for('maslulim'))
 
@@ -216,13 +326,61 @@ def schedule():
 
 @app.route('/api/maslulim/<int:hativa_id>')
 def api_maslulim_by_hativa(hativa_id):
-    """API endpoint to get routes by division"""
-    maslulim_list = db.get_maslulim(hativa_id)
-    return jsonify([{
-        'maslul_id': m['maslul_id'],
-        'name': m['name'],
-        'description': m['description']
-    } for m in maslulim_list])
+    """API endpoint to get routes by division with enhanced data"""
+    try:
+        maslulim_list = db.get_maslulim(hativa_id)
+        return jsonify({
+            'success': True,
+            'data': [{
+                'maslul_id': m['maslul_id'],
+                'name': m['name'],
+                'description': m['description'],
+                'hativa_name': m['hativa_name']
+            } for m in maslulim_list],
+            'count': len(maslulim_list)
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'data': [],
+            'count': 0
+        }), 500
+
+@app.route('/api/maslulim/<int:maslul_id>/details')
+def api_maslul_details(maslul_id):
+    """API endpoint to get specific route details"""
+    try:
+        maslulim = db.get_maslulim()
+        maslul = next((m for m in maslulim if m['maslul_id'] == maslul_id), None)
+        
+        if not maslul:
+            return jsonify({
+                'success': False,
+                'error': 'מסלול לא נמצא'
+            }), 404
+            
+        # Get related events count
+        events = db.get_events()
+        events_count = len([e for e in events if e['maslul_id'] == maslul_id])
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'maslul_id': maslul['maslul_id'],
+                'name': maslul['name'],
+                'description': maslul['description'],
+                'hativa_name': maslul['hativa_name'],
+                'hativa_id': maslul['hativa_id'],
+                'events_count': events_count,
+                'can_delete': events_count == 0
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/api/validate_date/<committee_name>/<date_str>')
 def api_validate_date(committee_name, date_str):

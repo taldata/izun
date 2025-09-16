@@ -2,11 +2,50 @@
 
 {% block title %}ניהול מסלולים - איזון עומסים{% endblock %}
 
+{% block extra_head %}
+<style>
+    .maslul-card {
+        transition: all 0.3s ease;
+        border-left: 4px solid #007bff;
+    }
+    .maslul-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .stats-badge {
+        font-size: 0.9rem;
+        padding: 0.5rem 1rem;
+    }
+    .action-buttons {
+        opacity: 1;
+        transition: opacity 0.3s ease;
+    }
+    .maslul-card:hover .action-buttons {
+        opacity: 1;
+    }
+    .hativa-section {
+        margin-bottom: 2rem;
+    }
+    .hativa-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem;
+        border-radius: 10px 10px 0 0;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row">
+<!-- Header with Statistics -->
+<div class="row mb-4">
     <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2><i class="bi bi-arrow-right-circle me-2"></i>ניהול מסלולים</h2>
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2><i class="bi bi-arrow-right-circle me-2"></i>ניהול מסלולים</h2>
+                <p class="text-muted mb-0">
+                    סה"כ {{ stats.total_maslulim or 0 }} מסלולים ב-{{ stats.total_hativot or 0 }} חטיבות
+                </p>
+            </div>
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMaslulModal">
                 <i class="bi bi-plus me-1"></i>הוסף מסלול
             </button>
@@ -14,66 +53,94 @@
     </div>
 </div>
 
-<!-- Maslulim List -->
-<div class="row">
-    <div class="col-12">
-        {% if maslulim %}
-            <div class="card">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>מזהה</th>
-                                    <th>חטיבה</th>
-                                    <th>שם המסלול</th>
-                                    <th>תיאור</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% set current_hativa = '' %}
-                                {% for maslul in maslulim %}
-                                    {% if current_hativa != maslul.hativa_name %}
-                                        {% set current_hativa = maslul.hativa_name %}
-                                        <tr class="table-info">
-                                            <td colspan="4">
-                                                <strong><i class="bi bi-diagram-3 me-2"></i>{{ maslul.hativa_name }}</strong>
-                                            </td>
-                                        </tr>
-                                    {% endif %}
-                                    <tr>
-                                        <td><span class="badge bg-secondary">{{ maslul.maslul_id }}</span></td>
-                                        <td>{{ maslul.hativa_name }}</td>
-                                        <td><strong>{{ maslul.name }}</strong></td>
-                                        <td>{{ maslul.description or '-' }}</td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+<!-- Statistics Cards -->
+{% if stats.maslulim_per_hativa %}
+<div class="row mb-4">
+    {% for hativa_name, count in stats.maslulim_per_hativa.items() %}
+    <div class="col-md-3 mb-2">
+        <div class="card stats-badge bg-light">
+            <div class="card-body text-center py-2">
+                <strong>{{ hativa_name }}</strong>
+                <span class="badge bg-primary ms-2">{{ count }}</span>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Maslulim by Hativa -->
+{% if maslulim_by_hativa %}
+    {% for hativa_name, hativa_maslulim in maslulim_by_hativa.items() %}
+    <div class="hativa-section">
+        <div class="hativa-header">
+            <h4 class="mb-0">
+                <i class="bi bi-diagram-3 me-2"></i>{{ hativa_name }}
+                <span class="badge bg-light text-dark ms-2">{{ hativa_maslulim|length }} מסלולים</span>
+            </h4>
+        </div>
+        
+        <div class="row">
+            {% for maslul in hativa_maslulim %}
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="card maslul-card h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="card-title mb-0">{{ maslul.name }}</h5>
+                            <span class="badge bg-secondary">#{{ maslul.maslul_id }}</span>
+                        </div>
+                        
+                        {% if maslul.description %}
+                        <p class="card-text text-muted small">{{ maslul.description }}</p>
+                        {% else %}
+                        <p class="card-text text-muted small fst-italic">אין תיאור</p>
+                        {% endif %}
+                        
+                        <div class="action-buttons mt-3">
+                            <div class="btn-group w-100">
+                                <button class="btn btn-outline-primary btn-sm edit-btn" 
+                                        data-maslul-id="{{ maslul.maslul_id }}" 
+                                        data-name="{{ maslul.name }}" 
+                                        data-description="{{ maslul.description or '' }}">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm delete-btn" 
+                                        data-maslul-id="{{ maslul.maslul_id }}" 
+                                        data-name="{{ maslul.name }}">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                                <button class="btn btn-outline-info btn-sm details-btn" 
+                                        data-maslul-id="{{ maslul.maslul_id }}">
+                                    <i class="bi bi-info-circle"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-        {% else %}
-            <div class="card">
-                <div class="card-body text-center py-5">
-                    <i class="bi bi-arrow-right-circle text-muted" style="font-size: 4rem;"></i>
-                    <h4 class="mt-3 text-muted">אין מסלולים במערכת</h4>
-                    <p class="text-muted">התחל בהוספת המסלול הראשון</p>
-                    {% if hativot %}
-                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMaslulModal">
-                            <i class="bi bi-plus me-1"></i>הוסף מסלול ראשון
-                        </button>
-                    {% else %}
-                        <p class="text-warning">יש להוסיף חטיבה תחילה</p>
-                        <a href="{{ url_for('hativot') }}" class="btn btn-warning">
-                            <i class="bi bi-diagram-3 me-1"></i>נהל חטיבות
-                        </a>
-                    {% endif %}
-                </div>
-            </div>
-        {% endif %}
+            {% endfor %}
+        </div>
     </div>
-</div>
+    {% endfor %}
+{% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-arrow-right-circle text-muted" style="font-size: 4rem;"></i>
+            <h4 class="mt-3 text-muted">אין מסלולים במערכת</h4>
+            <p class="text-muted">התחל בהוספת המסלול הראשון</p>
+            {% if hativot %}
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMaslulModal">
+                    <i class="bi bi-plus me-1"></i>הוסף מסלול ראשון
+                </button>
+            {% else %}
+                <p class="text-warning">יש להוסיף חטיבה תחילה</p>
+                <a href="{{ url_for('hativot') }}" class="btn btn-warning">
+                    <i class="bi bi-diagram-3 me-1"></i>נהל חטיבות
+                </a>
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
 
 <!-- Add Maslul Modal -->
 <div class="modal fade" id="addMaslulModal" tabindex="-1">
@@ -85,7 +152,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('add_maslul') }}">
+            <form method="POST" action="{{ url_for('add_maslul') }}" id="addMaslulForm">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="hativa_id" class="form-label">חטיבה <span class="text-danger">*</span></label>
@@ -95,14 +162,16 @@
                                 <option value="{{ hativa.hativa_id }}">{{ hativa.name }}</option>
                             {% endfor %}
                         </select>
+                        <div class="invalid-feedback">יש לבחור חטיבה</div>
                     </div>
                     <div class="mb-3">
                         <label for="name" class="form-label">שם המסלול <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="name" name="name" required>
+                        <input type="text" class="form-control" id="name" name="name" required minlength="2">
+                        <div class="invalid-feedback">שם המסלול חייב להכיל לפחות 2 תווים</div>
                     </div>
                     <div class="mb-3">
                         <label for="description" class="form-label">תיאור המסלול</label>
-                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                        <textarea class="form-control" id="description" name="description" rows="3" placeholder="תיאור אופציונלי למסלול"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -115,4 +184,181 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Maslul Modal -->
+<div class="modal fade" id="editMaslulModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-pencil me-2"></i>עריכת מסלול
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="editMaslulForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_name" class="form-label">שם המסלול <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="edit_name" name="name" required minlength="2">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_description" class="form-label">תיאור המסלול</label>
+                        <textarea class="form-control" id="edit_description" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>עדכן
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteMaslulModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>אישור מחיקה
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>האם אתה בטוח שברצונך למחוק את המסלול <strong id="deleteTargetName"></strong>?</p>
+                <p class="text-muted small">פעולה זו אינה ניתנת לביטול.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                <form method="POST" id="deleteMaslulForm" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-1"></i>מחק
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Details Modal -->
+<div class="modal fade" id="detailsMaslulModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-info-circle me-2"></i>פרטי מסלול
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="maslulDetailsContent">
+                <!-- Content loaded via JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">סגור</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Edit button handlers
+    document.querySelectorAll('.edit-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const maslulId = this.dataset.maslulId;
+            const name = this.dataset.name;
+            const description = this.dataset.description || '';
+            
+            document.getElementById('edit_name').value = name;
+            document.getElementById('edit_description').value = description;
+            document.getElementById('editMaslulForm').action = `/maslulim/edit/${maslulId}`;
+            new bootstrap.Modal(document.getElementById('editMaslulModal')).show();
+        });
+    });
+
+    // Delete button handlers
+    document.querySelectorAll('.delete-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const maslulId = this.dataset.maslulId;
+            const name = this.dataset.name;
+            
+            document.getElementById('deleteTargetName').textContent = name;
+            document.getElementById('deleteMaslulForm').action = `/maslulim/delete/${maslulId}`;
+            new bootstrap.Modal(document.getElementById('deleteMaslulModal')).show();
+        });
+    });
+
+    // Details button handlers
+    document.querySelectorAll('.details-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const maslulId = this.dataset.maslulId;
+            const content = document.getElementById('maslulDetailsContent');
+            content.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
+            
+            fetch(`/api/maslulim/${maslulId}/details`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const maslul = data.data;
+                        content.innerHTML = `
+                            <div class="row">
+                                <div class="col-sm-4"><strong>מזהה:</strong></div>
+                                <div class="col-sm-8">#${maslul.maslul_id}</div>
+                            </div>
+                            <hr>
+                            <div class="row">
+                                <div class="col-sm-4"><strong>שם:</strong></div>
+                                <div class="col-sm-8">${maslul.name}</div>
+                            </div>
+                            <hr>
+                            <div class="row">
+                                <div class="col-sm-4"><strong>חטיבה:</strong></div>
+                                <div class="col-sm-8">${maslul.hativa_name}</div>
+                            </div>
+                            <hr>
+                            <div class="row">
+                                <div class="col-sm-4"><strong>תיאור:</strong></div>
+                                <div class="col-sm-8">${maslul.description || 'אין תיאור'}</div>
+                            </div>
+                            <hr>
+                            <div class="row">
+                                <div class="col-sm-4"><strong>אירועים קשורים:</strong></div>
+                                <div class="col-sm-8">
+                                    <span class="badge ${maslul.events_count > 0 ? 'bg-warning' : 'bg-success'}">
+                                        ${maslul.events_count} אירועים
+                                    </span>
+                                </div>
+                            </div>
+                            ${!maslul.can_delete ? '<div class="alert alert-warning mt-3"><small>לא ניתן למחוק מסלול המשויך לאירועים</small></div>' : ''}
+                        `;
+                    } else {
+                        content.innerHTML = `<div class="alert alert-danger">שגיאה: ${data.error}</div>`;
+                    }
+                })
+                .catch(error => {
+                    content.innerHTML = `<div class="alert alert-danger">שגיאה בטעינת הנתונים</div>`;
+                });
+            
+            new bootstrap.Modal(document.getElementById('detailsMaslulModal')).show();
+        });
+    });
+
+    // Form validation
+    const forms = document.getElementsByClassName('needs-validation');
+    Array.prototype.filter.call(forms, function(form) {
+        form.addEventListener('submit', function(event) {
+            if (form.checkValidity() === false) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        }, false);
+    });
+});
+</script>
 {% endblock %}
