@@ -292,6 +292,41 @@ class DatabaseManager:
                 'scheduled_day_name': days[row[2]], 'frequency': row[3], 
                 'week_of_month': row[4], 'description': row[5]} for row in rows]
     
+    def update_committee_type(self, committee_type_id: int, name: str, scheduled_day: int, 
+                             frequency: str = 'weekly', week_of_month: Optional[int] = None, 
+                             description: str = "") -> bool:
+        """Update an existing committee type"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE committee_types 
+            SET name = ?, scheduled_day = ?, frequency = ?, week_of_month = ?, description = ?
+            WHERE committee_type_id = ?
+        ''', (name, scheduled_day, frequency, week_of_month, description, committee_type_id))
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
+    
+    def delete_committee_type(self, committee_type_id: int) -> bool:
+        """Delete a committee type"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Check if there are any vaadot using this committee type
+        cursor.execute('SELECT COUNT(*) FROM vaadot WHERE committee_type_id = ?', (committee_type_id,))
+        vaadot_count = cursor.fetchone()[0]
+        
+        if vaadot_count > 0:
+            conn.close()
+            return False  # Cannot delete committee type with existing meetings
+        
+        cursor.execute('DELETE FROM committee_types WHERE committee_type_id = ?', (committee_type_id,))
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
+    
     # Vaadot operations (specific meeting instances)
     def add_vaada(self, committee_type_id: int, hativa_id: int, vaada_date: date, 
                   status: str = 'planned', exception_date_id: Optional[int] = None, 

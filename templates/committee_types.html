@@ -1,0 +1,370 @@
+{% extends "base.html" %}
+
+{% block title %}ניהול סוגי ועדות{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-users-cog"></i> ניהול סוגי ועדות</h2>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCommitteeTypeModal">
+                    <i class="fas fa-plus"></i> הוסף סוג ועדה חדש
+                </button>
+            </div>
+
+            <!-- Statistics Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4>{{ committee_types|length }}</h4>
+                                    <p class="mb-0">סוגי ועדות</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-users-cog fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4>{{ weekly_count }}</h4>
+                                    <p class="mb-0">ועדות שבועיות</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-calendar-week fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4>{{ monthly_count }}</h4>
+                                    <p class="mb-0">ועדות חודשיות</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-calendar-alt fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4>{{ active_meetings_count }}</h4>
+                                    <p class="mb-0">פגישות פעילות</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-handshake fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Committee Types Table -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-list"></i> רשימת סוגי ועדות</h5>
+                </div>
+                <div class="card-body">
+                    {% if committee_types %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>שם הועדה</th>
+                                    <th>יום בשבוע</th>
+                                    <th>תדירות</th>
+                                    <th>שבוע בחודש</th>
+                                    <th>תיאור</th>
+                                    <th>פעולות</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for committee_type in committee_types %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ committee_type.name }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ committee_type.scheduled_day_name }}</span>
+                                    </td>
+                                    <td>
+                                        {% if committee_type.frequency == 'weekly' %}
+                                            <span class="badge bg-success">שבועית</span>
+                                        {% else %}
+                                            <span class="badge bg-primary">חודשית</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if committee_type.week_of_month %}
+                                            <span class="badge bg-secondary">שבוע {{ committee_type.week_of_month }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ committee_type.description or 'אין תיאור' }}</small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                    onclick="editCommitteeType({{ committee_type.committee_type_id }}, '{{ committee_type.name }}', {{ committee_type.scheduled_day }}, '{{ committee_type.frequency }}', {{ committee_type.week_of_month or 'null' }}, '{{ committee_type.description or '' }}')"
+                                                    data-bs-toggle="modal" data-bs-target="#editCommitteeTypeModal">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                    onclick="confirmDelete({{ committee_type.committee_type_id }}, '{{ committee_type.name }}')"
+                                                    data-bs-toggle="modal" data-bs-target="#deleteCommitteeTypeModal">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-users-cog fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">אין סוגי ועדות במערכת</h5>
+                        <p class="text-muted">התחל על ידי הוספת סוג ועדה חדש</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Committee Type Modal -->
+<div class="modal fade" id="addCommitteeTypeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">הוסף סוג ועדה חדש</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_committee_type') }}" id="addCommitteeTypeForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">שם הועדה <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                        <div class="form-text">לדוגמה: ועדת הזנק, ועדת תשתיות</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="scheduled_day" class="form-label">יום בשבוע <span class="text-danger">*</span></label>
+                        <select class="form-select" id="scheduled_day" name="scheduled_day" required>
+                            <option value="">בחר יום</option>
+                            <option value="0">יום שני</option>
+                            <option value="1">יום שלישי</option>
+                            <option value="2">יום רביעי</option>
+                            <option value="3">יום חמישי</option>
+                            <option value="4">יום שישי</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="frequency" class="form-label">תדירות <span class="text-danger">*</span></label>
+                        <select class="form-select" id="frequency" name="frequency" required onchange="toggleWeekOfMonth()">
+                            <option value="">בחר תדירות</option>
+                            <option value="weekly">שבועית</option>
+                            <option value="monthly">חודשית</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3" id="weekOfMonthDiv" style="display: none;">
+                        <label for="week_of_month" class="form-label">שבוע בחודש</label>
+                        <select class="form-select" id="week_of_month" name="week_of_month">
+                            <option value="">בחר שבוע</option>
+                            <option value="1">שבוע ראשון</option>
+                            <option value="2">שבוע שני</option>
+                            <option value="3">שבוע שלישי</option>
+                            <option value="4">שבוע רביעי</option>
+                        </select>
+                        <div class="form-text">רלוונטי רק לועדות חודשיות</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">תיאור</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> שמור
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Committee Type Modal -->
+<div class="modal fade" id="editCommitteeTypeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">עריכת סוג ועדה</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('update_committee_type') }}" id="editCommitteeTypeForm">
+                <input type="hidden" id="edit_committee_type_id" name="committee_type_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_name" class="form-label">שם הועדה <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="edit_name" name="name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_scheduled_day" class="form-label">יום בשבוע <span class="text-danger">*</span></label>
+                        <select class="form-select" id="edit_scheduled_day" name="scheduled_day" required>
+                            <option value="0">יום שני</option>
+                            <option value="1">יום שלישי</option>
+                            <option value="2">יום רביעי</option>
+                            <option value="3">יום חמישי</option>
+                            <option value="4">יום שישי</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_frequency" class="form-label">תדירות <span class="text-danger">*</span></label>
+                        <select class="form-select" id="edit_frequency" name="frequency" required onchange="toggleEditWeekOfMonth()">
+                            <option value="weekly">שבועית</option>
+                            <option value="monthly">חודשית</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3" id="editWeekOfMonthDiv">
+                        <label for="edit_week_of_month" class="form-label">שבוע בחודש</label>
+                        <select class="form-select" id="edit_week_of_month" name="week_of_month">
+                            <option value="">בחר שבוע</option>
+                            <option value="1">שבוע ראשון</option>
+                            <option value="2">שבוע שני</option>
+                            <option value="3">שבוע שלישי</option>
+                            <option value="4">שבוע רביעי</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_description" class="form-label">תיאור</label>
+                        <textarea class="form-control" id="edit_description" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> עדכן
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Committee Type Modal -->
+<div class="modal fade" id="deleteCommitteeTypeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">מחיקת סוג ועדה</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>אזהרה!</strong> פעולה זו תמחק את סוג הועדה לצמיתות.
+                </div>
+                <p>האם אתה בטוח שברצונך למחוק את סוג הועדה <strong id="deleteCommitteeTypeName"></strong>?</p>
+                <p class="text-muted small">שים לב: מחיקת סוג ועדה עלולה להשפיע על פגישות קיימות במערכת.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                <form method="POST" action="{{ url_for('delete_committee_type') }}" style="display: inline;">
+                    <input type="hidden" id="delete_committee_type_id" name="committee_type_id">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> מחק
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleWeekOfMonth() {
+    const frequency = document.getElementById('frequency').value;
+    const weekOfMonthDiv = document.getElementById('weekOfMonthDiv');
+    const weekOfMonthSelect = document.getElementById('week_of_month');
+    
+    if (frequency === 'monthly') {
+        weekOfMonthDiv.style.display = 'block';
+        weekOfMonthSelect.required = true;
+    } else {
+        weekOfMonthDiv.style.display = 'none';
+        weekOfMonthSelect.required = false;
+        weekOfMonthSelect.value = '';
+    }
+}
+
+function toggleEditWeekOfMonth() {
+    const frequency = document.getElementById('edit_frequency').value;
+    const weekOfMonthDiv = document.getElementById('editWeekOfMonthDiv');
+    const weekOfMonthSelect = document.getElementById('edit_week_of_month');
+    
+    if (frequency === 'monthly') {
+        weekOfMonthDiv.style.display = 'block';
+    } else {
+        weekOfMonthDiv.style.display = 'none';
+        weekOfMonthSelect.value = '';
+    }
+}
+
+function editCommitteeType(id, name, scheduledDay, frequency, weekOfMonth, description) {
+    document.getElementById('edit_committee_type_id').value = id;
+    document.getElementById('edit_name').value = name;
+    document.getElementById('edit_scheduled_day').value = scheduledDay;
+    document.getElementById('edit_frequency').value = frequency;
+    document.getElementById('edit_week_of_month').value = weekOfMonth || '';
+    document.getElementById('edit_description').value = description;
+    
+    toggleEditWeekOfMonth();
+}
+
+function confirmDelete(id, name) {
+    document.getElementById('delete_committee_type_id').value = id;
+    document.getElementById('deleteCommitteeTypeName').textContent = name;
+}
+
+// Form validation
+document.getElementById('addCommitteeTypeForm').addEventListener('submit', function(e) {
+    const frequency = document.getElementById('frequency').value;
+    const weekOfMonth = document.getElementById('week_of_month').value;
+    
+    if (frequency === 'monthly' && !weekOfMonth) {
+        e.preventDefault();
+        alert('יש לבחור שבוע בחודש עבור ועדות חודשיות');
+        return false;
+    }
+});
+</script>
+{% endblock %}
