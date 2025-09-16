@@ -7,6 +7,8 @@ import json
 from database import DatabaseManager
 from scheduler import CommitteeScheduler
 from auto_scheduler import AutoMeetingScheduler
+# from services.auto_schedule_service import AutoScheduleService  # Commented out - service not found
+from services.committee_types_service import CommitteeTypesService, CommitteeTypeRequest
 
 app = Flask(__name__)
 app.secret_key = 'committee_management_secret_key_2025'
@@ -15,6 +17,7 @@ app.secret_key = 'committee_management_secret_key_2025'
 db = DatabaseManager()
 scheduler = CommitteeScheduler(db)
 auto_scheduler = AutoMeetingScheduler(db)
+committee_types_service = CommitteeTypesService(db)
 
 @app.route('/')
 def index():
@@ -617,126 +620,69 @@ def validate_monthly_schedule(year: int, month: int):
 @app.route('/committee_types')
 def committee_types():
     """Manage committee types"""
-    try:
-        committee_types_list = db.get_committee_types()
-        vaadot_list = db.get_vaadot()
-        
-        # Calculate statistics
-        weekly_count = len([ct for ct in committee_types_list if ct['frequency'] == 'weekly'])
-        monthly_count = len([ct for ct in committee_types_list if ct['frequency'] == 'monthly'])
-        active_meetings_count = len([v for v in vaadot_list if v['status'] in ['planned', 'scheduled']])
-        
-        return render_template('committee_types.html', 
-                             committee_types=committee_types_list,
-                             weekly_count=weekly_count,
-                             monthly_count=monthly_count,
-                             active_meetings_count=active_meetings_count)
-    except Exception as e:
-        flash(f'שגיאה בטעינת נתוני סוגי הועדות: {str(e)}', 'error')
-        return render_template('committee_types.html', 
-                             committee_types=[], 
-                             weekly_count=0, 
-                             monthly_count=0, 
-                             active_meetings_count=0)
+    response = committee_types_service.get_committee_types_with_statistics()
+    
+    if not response.success:
+        flash(response.message, 'error')
+    
+    return render_template('committee_types.html', 
+                         committee_types=response.committee_types,
+                         weekly_count=response.statistics['weekly_count'],
+                         monthly_count=response.statistics['monthly_count'],
+                         active_meetings_count=response.statistics['active_meetings_count'])
 
 @app.route('/committee_types/add', methods=['POST'])
 def add_committee_type():
     """Add new committee type"""
-    try:
-        name = request.form.get('name', '').strip()
-        scheduled_day = request.form.get('scheduled_day', type=int)
-        frequency = request.form.get('frequency', '').strip()
-        week_of_month = request.form.get('week_of_month', type=int) if request.form.get('week_of_month') else None
-        description = request.form.get('description', '').strip()
-        
-        # Validation
-        if not name:
-            flash('שם הועדה הוא שדה חובה', 'error')
-            return redirect(url_for('committee_types'))
-        
-        if scheduled_day is None or scheduled_day < 0 or scheduled_day > 6:
-            flash('יש לבחור יום תקין בשבוע', 'error')
-            return redirect(url_for('committee_types'))
-        
-        if frequency not in ['weekly', 'monthly']:
-            flash('יש לבחור תדירות תקינה', 'error')
-            return redirect(url_for('committee_types'))
-        
-        if frequency == 'monthly' and (not week_of_month or week_of_month < 1 or week_of_month > 4):
-            flash('עבור ועדות חודשיות יש לבחור שבוע תקין בחודש', 'error')
-            return redirect(url_for('committee_types'))
-        
-        committee_type_id = db.add_committee_type(name, scheduled_day, frequency, week_of_month, description)
-        flash(f'סוג ועדה "{name}" נוסף בהצלחה', 'success')
-        
-    except Exception as e:
-        flash(f'שגיאה בהוספת סוג הועדה: {str(e)}', 'error')
+    # Create request object from form data
+    committee_type_request = CommitteeTypeRequest(
+        name=request.form.get('name', '').strip(),
+        scheduled_day=request.form.get('scheduled_day', type=int),
+        frequency=request.form.get('frequency', '').strip(),
+        week_of_month=request.form.get('week_of_month', type=int) if request.form.get('week_of_month') else None,
+        description=request.form.get('description', '').strip()
+    )
+    
+    # Use service to create committee type
+    response = committee_types_service.create_committee_type(committee_type_request)
+    
+    # Flash appropriate message
+    flash(response.message, 'success' if response.success else 'error')
     
     return redirect(url_for('committee_types'))
 
 @app.route('/committee_types/update', methods=['POST'])
 def update_committee_type():
     """Update existing committee type"""
-    try:
-        committee_type_id = request.form.get('committee_type_id', type=int)
-        name = request.form.get('name', '').strip()
-        scheduled_day = request.form.get('scheduled_day', type=int)
-        frequency = request.form.get('frequency', '').strip()
-        week_of_month = request.form.get('week_of_month', type=int) if request.form.get('week_of_month') else None
-        description = request.form.get('description', '').strip()
-        
-        # Validation
-        if not committee_type_id:
-            flash('מזהה סוג ועדה חסר', 'error')
-            return redirect(url_for('committee_types'))
-        
-        if not name:
-            flash('שם הועדה הוא שדה חובה', 'error')
-            return redirect(url_for('committee_types'))
-        
-        if scheduled_day is None or scheduled_day < 0 or scheduled_day > 6:
-            flash('יש לבחור יום תקין בשבוע', 'error')
-            return redirect(url_for('committee_types'))
-        
-        if frequency not in ['weekly', 'monthly']:
-            flash('יש לבחור תדירות תקינה', 'error')
-            return redirect(url_for('committee_types'))
-        
-        if frequency == 'monthly' and (not week_of_month or week_of_month < 1 or week_of_month > 4):
-            flash('עבור ועדות חודשיות יש לבחור שבוע תקין בחודש', 'error')
-            return redirect(url_for('committee_types'))
-        
-        success = db.update_committee_type(committee_type_id, name, scheduled_day, frequency, week_of_month, description)
-        
-        if success:
-            flash(f'סוג ועדה "{name}" עודכן בהצלחה', 'success')
-        else:
-            flash('סוג הועדה לא נמצא או לא ניתן לעדכן', 'error')
-        
-    except Exception as e:
-        flash(f'שגיאה בעדכון סוג הועדה: {str(e)}', 'error')
+    committee_type_id = request.form.get('committee_type_id', type=int)
+    
+    # Create request object from form data
+    committee_type_request = CommitteeTypeRequest(
+        name=request.form.get('name', '').strip(),
+        scheduled_day=request.form.get('scheduled_day', type=int),
+        frequency=request.form.get('frequency', '').strip(),
+        week_of_month=request.form.get('week_of_month', type=int) if request.form.get('week_of_month') else None,
+        description=request.form.get('description', '').strip()
+    )
+    
+    # Use service to update committee type
+    response = committee_types_service.update_committee_type(committee_type_id, committee_type_request)
+    
+    # Flash appropriate message
+    flash(response.message, 'success' if response.success else 'error')
     
     return redirect(url_for('committee_types'))
 
 @app.route('/committee_types/delete', methods=['POST'])
 def delete_committee_type():
     """Delete committee type"""
-    try:
-        committee_type_id = request.form.get('committee_type_id', type=int)
-        
-        if not committee_type_id:
-            flash('מזהה סוג ועדה חסר', 'error')
-            return redirect(url_for('committee_types'))
-        
-        success = db.delete_committee_type(committee_type_id)
-        
-        if success:
-            flash('סוג הועדה נמחק בהצלחה', 'success')
-        else:
-            flash('לא ניתן למחוק סוג ועדה זה - קיימות פגישות המשויכות אליו', 'error')
-        
-    except Exception as e:
-        flash(f'שגיאה במחיקת סוג הועדה: {str(e)}', 'error')
+    committee_type_id = request.form.get('committee_type_id', type=int)
+    
+    # Use service to delete committee type
+    response = committee_types_service.delete_committee_type(committee_type_id)
+    
+    # Flash appropriate message
+    flash(response.message, 'success' if response.success else 'error')
     
     return redirect(url_for('committee_types'))
 
