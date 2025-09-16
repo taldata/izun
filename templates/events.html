@@ -100,7 +100,7 @@
                                 <select class="form-select" id="vaadot_id" name="vaadot_id" required>
                                     <option value="">בחר ישיבת ועדה</option>
                                     {% for committee in committees %}
-                                        <option value="{{ committee.vaadot_id }}">
+                                        <option value="{{ committee.vaadot_id }}" data-hativa-id="{{ committee.hativa_id }}">
                                             {{ committee.committee_name }} - {{ committee.hativa_name }}
                                             {% if committee.vaada_date %}
                                                 ({{ committee.vaada_date }})
@@ -130,7 +130,7 @@
                         <select class="form-select" id="maslul_id" name="maslul_id" required>
                             <option value="">בחר מסלול</option>
                             {% for maslul in maslulim %}
-                                <option value="{{ maslul.maslul_id }}" data-hativa="{{ maslul.hativa_name }}">
+                                <option value="{{ maslul.maslul_id }}" data-hativa="{{ maslul.hativa_name }}" data-hativa-id="{{ maslul.hativa_id }}">
                                     {{ maslul.name }} ({{ maslul.hativa_name }})
                                 </option>
                             {% endfor %}
@@ -200,5 +200,34 @@ document.getElementById('hativa_select').addEventListener('change', function() {
         maslulSelect.value = '';
     }
 });
+
+// Validate that committee and route are from the same division
+function validateDivisionMatch() {
+    const vaadotSelect = document.getElementById('vaadot_id');
+    const maslulSelect = document.getElementById('maslul_id');
+    const submitButton = document.querySelector('#eventForm button[type="submit"]');
+    
+    if (!vaadotSelect.value || !maslulSelect.value) {
+        submitButton.disabled = false;
+        return;
+    }
+    
+    const selectedVaada = vaadotSelect.options[vaadotSelect.selectedIndex];
+    const selectedMaslul = maslulSelect.options[maslulSelect.selectedIndex];
+    
+    const vaadaHativaId = selectedVaada.getAttribute('data-hativa-id');
+    const maslulHativaId = selectedMaslul.getAttribute('data-hativa-id');
+    
+    if (vaadaHativaId !== maslulHativaId) {
+        alert('שגיאה: המסלול והועדה חייבים להיות מאותה חטיבה');
+        maslulSelect.value = '';
+        submitButton.disabled = true;
+    } else {
+        submitButton.disabled = false;
+    }
+}
+
+document.getElementById('vaadot_id').addEventListener('change', validateDivisionMatch);
+document.getElementById('maslul_id').addEventListener('change', validateDivisionMatch);
 </script>
 {% endblock %}

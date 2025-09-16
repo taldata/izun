@@ -292,6 +292,27 @@ def add_event():
     try:
         expected_requests = int(expected_requests) if expected_requests else 0
         
+        # Validate that committee and route are from the same division
+        vaada = db.get_vaadot()[0] if db.get_vaadot() else None
+        for v in db.get_vaadot():
+            if v['vaadot_id'] == int(vaadot_id):
+                vaada = v
+                break
+        
+        maslul = None
+        for m in db.get_maslulim():
+            if m['maslul_id'] == int(maslul_id):
+                maslul = m
+                break
+        
+        if not vaada or not maslul:
+            flash('ועדה או מסלול לא נמצאו במערכת', 'error')
+            return redirect(url_for('events'))
+        
+        if vaada['hativa_id'] != maslul['hativa_id']:
+            flash(f'שגיאה: המסלול "{maslul["name"]}" מחטיבת "{maslul["hativa_name"]}" אינו יכול להיות משויך לועדה מחטיבת "{vaada["hativa_name"]}"', 'error')
+            return redirect(url_for('events'))
+        
         # Validate event data
         event_data = {
             'vaadot_id': int(vaadot_id),
