@@ -38,7 +38,12 @@
                                 <tr>
                                     <td><span class="badge bg-secondary">{{ event.event_id }}</span></td>
                                     <td><strong>{{ event.name }}</strong></td>
-                                    <td>{{ event.vaadot_name }}</td>
+                                    <td>
+                                        {{ event.committee_name }} - {{ event.vaada_hativa_name }}
+                                        {% if event.vaada_date %}
+                                            <small class="text-muted d-block">{{ event.vaada_date }}</small>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         {{ event.maslul_name }}
                                         <small class="text-muted d-block">{{ event.hativa_name }}</small>
@@ -93,10 +98,15 @@
                             <div class="mb-3">
                                 <label for="vaadot_id" class="form-label">ועדה <span class="text-danger">*</span></label>
                                 <select class="form-select" id="vaadot_id" name="vaadot_id" required>
-                                    <option value="">בחר ועדה</option>
+                                    <option value="">בחר ישיבת ועדה</option>
                                     {% for committee in committees %}
                                         <option value="{{ committee.vaadot_id }}">
-                                            {{ committee.name }} ({{ committee.scheduled_day_name }})
+                                            {{ committee.committee_name }} - {{ committee.hativa_name }}
+                                            {% if committee.vaada_date %}
+                                                ({{ committee.vaada_date }})
+                                            {% else %}
+                                                (ללא תאריך)
+                                            {% endif %}
                                         </option>
                                     {% endfor %}
                                 </select>
