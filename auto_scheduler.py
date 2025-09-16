@@ -13,22 +13,6 @@ class AutoMeetingScheduler:
     
     def __init__(self, db: DatabaseManager):
         self.db = db
-        
-        # הגדרת ימי הועדות הקבועים
-        self.committee_days = {
-            'ועדת הזנק': 0,      # יום שני (Monday = 0)
-            'ועדת תשתיות': 2,    # יום רביעי (Wednesday = 2)  
-            'ועדת צמיחה': 3,     # יום חמישי (Thursday = 3)
-            'ייצור מתקדם': 1     # יום שלישי (Tuesday = 1) - חודשי
-        }
-        
-        # הגדרת תדירות הועדות
-        self.committee_frequency = {
-            'ועדת הזנק': 'weekly',
-            'ועדת תשתיות': 'weekly',
-            'ועדת צמיחה': 'weekly',
-            'ייצור מתקדם': 'monthly'  # שבוע שלישי בחודש
-        }
     
     def is_business_day(self, check_date: date) -> bool:
         """
@@ -99,7 +83,7 @@ class AutoMeetingScheduler:
         )
         return third_week_start <= check_date <= third_week_end
     
-    def can_schedule_meeting(self, committee_type: str, target_date: date, hativa_id: int) -> Tuple[bool, str]:
+    def can_schedule_meeting(self, committee_type_id: int, target_date: date, hativa_id: int) -> Tuple[bool, str]:
         """
         בדיקה האם ניתן לתזמן ישיבה בתאריך נתון
         """
@@ -107,13 +91,20 @@ class AutoMeetingScheduler:
         if not self.is_business_day(target_date):
             return False, "התאריך אינו יום עסקים (שבת/חג/יום שבתון)"
         
-        # בדיקת יום השבוע הנכון לועדה
-        expected_weekday = self.committee_days.get(committee_type)
-        if expected_weekday is None:
-            return False, f"סוג ועדה לא מוכר: {committee_type}"
+        # קבלת פרטי סוג הועדה מהמסד נתונים
+        committee_types = self.db.get_committee_types(hativa_id)
+        committee_type_data = next((ct for ct in committee_types if ct['committee_type_id'] == committee_type_id), None)
+        
+        if not committee_type_data:
+            return False, f"סוג ועדה לא נמצא: {committee_type_id}"
+        
+        expected_weekday = committee_type_data['scheduled_day']
+        committee_name = committee_type_data['name']
+        frequency = committee_type_data['frequency']
+        week_of_month = committee_type_data.get('week_of_month')
             
         if target_date.weekday() != expected_weekday:
-            weekday_names = ['שני', 'שלישי', 'רביעי', 'חמישי', 'חמישי', 'שישי', 'ראשון']
+            weekday_names = ['שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת', 'ראשון']
             expected_day_name = weekday_names[expected_weekday]
             return False, f"ועדה זו מתקיימת רק בימי {expected_day_name}"
         
@@ -136,57 +127,71 @@ class AutoMeetingScheduler:
         if week_meetings >= max_weekly_meetings:
             return False, f"הושג מספר הישיבות המקסימלי השבועי ({max_weekly_meetings})"
         
-        # בדיקה מיוחדת לייצור מתקדם - רק בשבוע השלישי
-        if committee_type == 'ייצור מתקדם' and not is_third_week:
-            return False, "ועדת ייצור מתקדם מתקיימת רק בשבוע השלישי של החודש"
+        # בדיקה מיוחדת לועדות חודשיות - רק בשבוע המתאים
+        if frequency == 'monthly':
+            if week_of_month:
+                # בדיקה שהתאריך נמצא בשבוע הנכון של החודש
+                week_num = (target_date.day - 1) // 7 + 1
+                if week_num != week_of_month:
+                    return False, f"ועדה חודשית זו מתקיימת רק בשבוע {week_of_month} של החודש"
         
         # בדיקה שאין כפילות לאותה ועדה ואותה חטיבה
         for meeting in existing_meetings:
-            if (meeting.get('committee_name') == committee_type and 
+            if (meeting.get('committee_type_id') == committee_type_id and 
                 meeting.get('hativa_id') == hativa_id and 
                 meeting.get('vaada_date')):
                 try:
                     meeting_date = datetime.strptime(meeting['vaada_date'], '%Y-%m-%d').date()
                     # בדיקה שלא עברו פחות מ-7 ימים (למניעת כפילות שבועיות)
-                    if abs((meeting_date - target_date).days) < 7:
+                    if frequency == 'weekly' and abs((meeting_date - target_date).days) < 7:
                         return False, "קיימת כבר ישיבה דומה לאותה חטיבה השבוע"
+                    elif frequency == 'monthly' and meeting_date.month == target_date.month and meeting_date.year == target_date.year:
+                        return False, "קיימת כבר ישיבה דומה לאותה חטיבה החודש"
                 except (ValueError, TypeError):
                     continue
         
         return True, "ניתן לתזמן ישיבה"
     
-    def find_next_available_date(self, committee_type: str, hativa_id: int, 
+    def find_next_available_date(self, committee_type_id: int, hativa_id: int, 
                                 start_date: date = None, max_days: int = 90) -> Optional[date]:
         """
         מציאת התאריך הזמין הבא לועדה
         """
         if start_date is None:
             start_date = date.today()
-            
-        expected_weekday = self.committee_days.get(committee_type)
-        if expected_weekday is None:
+        
+        # קבלת פרטי סוג הועדה מהמסד נתונים
+        committee_types = self.db.get_committee_types(hativa_id)
+        committee_type_data = next((ct for ct in committee_types if ct['committee_type_id'] == committee_type_id), None)
+        
+        if not committee_type_data:
             return None
+        
+        expected_weekday = committee_type_data['scheduled_day']
+        frequency = committee_type_data['frequency']
+        week_of_month = committee_type_data.get('week_of_month')
         
         current_date = start_date
         days_checked = 0
         
         while days_checked < max_days:
-            # דילוג לתאריך הבא עם היום הנכון בשבוע
-            if current_date.weekday() != expected_weekday:
-                days_to_add = (expected_weekday - current_date.weekday()) % 7
-                if days_to_add == 0:
-                    days_to_add = 7  # השבוע הבא
-                current_date += timedelta(days=days_to_add)
+            # בדיקה שהיום הוא היום הנכון בשבוע
+            if current_date.weekday() == expected_weekday:
+                # בדיקה נוספת לועדות חודשיות - שהן בשבוע הנכון
+                if frequency == 'monthly' and week_of_month:
+                    week_num = (current_date.day - 1) // 7 + 1
+                    if week_num != week_of_month:
+                        current_date += timedelta(days=1)
+                        days_checked += 1
+                        continue
+                
+                can_schedule, _ = self.can_schedule_meeting(committee_type_id, current_date, hativa_id)
+                if can_schedule:
+                    return current_date
             
-            # בדיקה האם ניתן לתזמן
-            can_schedule, reason = self.can_schedule_meeting(committee_type, current_date, hativa_id)
-            if can_schedule:
-                return current_date
-            
-            # מעבר לשבוע הבא
-            current_date += timedelta(days=7)
-            days_checked += 7
-            
+            current_date += timedelta(days=1)
+            days_checked += 1
+        
         return None
     
     def generate_monthly_schedule(self, year: int, month: int, 
@@ -208,24 +213,28 @@ class AutoMeetingScheduler:
             end_date = date(year, month + 1, 1) - timedelta(days=1)
         
         suggested_meetings = []
-        committee_types = self.db.get_committee_types()
         
-        for committee_type_data in committee_types:
-            committee_name = committee_type_data['name']
-            frequency = self.committee_frequency.get(committee_name, 'weekly')
+        for hativa_id in hativot_ids:
+            # קבלת סוגי הועדות הספציפיים לחטיבה זו
+            committee_types = self.db.get_committee_types(hativa_id)
             
-            for hativa_id in hativot_ids:
+            for committee_type_data in committee_types:
+                committee_type_id = committee_type_data['committee_type_id']
+                committee_name = committee_type_data['name']
+                frequency = committee_type_data['frequency']
+                week_of_month = committee_type_data.get('week_of_month')
+                
                 if frequency == 'weekly':
                     # ישיבות שבועיות
                     current_date = start_date
                     while current_date <= end_date:
                         suggested_date = self.find_next_available_date(
-                            committee_name, hativa_id, current_date, 7
+                            committee_type_id, hativa_id, current_date, 7
                         )
                         if suggested_date and suggested_date <= end_date:
                             suggested_meetings.append({
                                 'committee_type': committee_name,
-                                'committee_type_id': committee_type_data['committee_type_id'],
+                                'committee_type_id': committee_type_id,
                                 'hativa_id': hativa_id,
                                 'date': suggested_date.strftime('%Y-%m-%d'),
                                 'suggested_date': suggested_date,
@@ -236,20 +245,25 @@ class AutoMeetingScheduler:
                             break
                             
                 elif frequency == 'monthly':
-                    # ישיבה חודשית - רק בשבוע השלישי
-                    third_week_start, third_week_end = self.get_third_week_of_month(year, month)
-                    suggested_date = self.find_next_available_date(
-                        committee_name, hativa_id, third_week_start, 7
-                    )
-                    if suggested_date and third_week_start <= suggested_date <= third_week_end:
-                        suggested_meetings.append({
-                            'committee_type': committee_name,
-                            'committee_type_id': committee_type_data['committee_type_id'],
-                            'hativa_id': hativa_id,
-                            'date': suggested_date.strftime('%Y-%m-%d'),
-                            'suggested_date': suggested_date,
-                            'frequency': frequency
-                        })
+                    # ישיבה חודשית - בשבוע המתאים
+                    if week_of_month:
+                        # חישוב תאריך התחלה של השבוע המתאים
+                        first_day = date(year, month, 1)
+                        days_to_target_week = (week_of_month - 1) * 7
+                        week_start = first_day + timedelta(days=days_to_target_week)
+                        
+                        suggested_date = self.find_next_available_date(
+                            committee_type_id, hativa_id, week_start, 7
+                        )
+                        if suggested_date and suggested_date.month == month:
+                            suggested_meetings.append({
+                                'committee_type': committee_name,
+                                'committee_type_id': committee_type_id,
+                                'hativa_id': hativa_id,
+                                'date': suggested_date.strftime('%Y-%m-%d'),
+                                'suggested_date': suggested_date,
+                                'frequency': frequency
+                            })
         
         return {
             'year': year,
@@ -270,7 +284,7 @@ class AutoMeetingScheduler:
             try:
                 # בדיקה נוספת לפני יצירה
                 can_create, reason = self.can_schedule_meeting(
-                    suggestion['committee_type'],
+                    suggestion['committee_type_id'],
                     suggestion['suggested_date'],
                     suggestion['hativa_id']
                 )

@@ -45,36 +45,21 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="bi bi-calendar-week me-2"></i>לוח זמנים קבוע לועדות
+                    <i class="bi bi-calendar-week me-2"></i>סוגי ועדות לפי חטיבות
                 </h5>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3">
-                        <div class="text-center p-3 border rounded">
-                            <h6 class="text-primary">ועדת הזנק</h6>
-                            <p class="mb-0">יום שני - שבועי</p>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="text-center p-3 border rounded">
-                            <h6 class="text-success">ועדת תשתיות</h6>
-                            <p class="mb-0">יום רביעי - שבועי</p>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="text-center p-3 border rounded">
-                            <h6 class="text-warning">ועדת צמיחה</h6>
-                            <p class="mb-0">יום חמישי - שבועי</p>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="text-center p-3 border rounded">
-                            <h6 class="text-danger">ייצור מתקדם</h6>
-                            <p class="mb-0">יום שלישי - חודשי<br><small>(שבוע שלישי)</small></p>
-                        </div>
-                    </div>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>הערה:</strong> כל חטיבה יכולה להגדיר סוגי ועדות משלה עם ימים ותדירות מותאמים.
+                    התזמון האוטומטי יתבסס על ההגדרות הספציפיות לכל חטיבה.
                 </div>
+                <p class="text-muted mb-0">
+                    לצפייה ועריכה של סוגי הועדות לכל חטיבה, עבור ל
+                    <a href="{{ url_for('committee_types') }}" class="text-decoration-none">
+                        <i class="bi bi-gear me-1"></i>ניהול סוגי ועדות
+                    </a>
+                </p>
             </div>
         </div>
     </div>

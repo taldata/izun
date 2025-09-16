@@ -7,7 +7,7 @@ import json
 from database import DatabaseManager
 from scheduler import CommitteeScheduler
 from auto_scheduler import AutoMeetingScheduler
-# from services.auto_schedule_service import AutoScheduleService  # Commented out - service not found
+from services.auto_schedule_service import AutoScheduleService
 from services.committee_types_service import CommitteeTypesService, CommitteeTypeRequest
 
 app = Flask(__name__)
@@ -17,6 +17,7 @@ app.secret_key = 'committee_management_secret_key_2025'
 db = DatabaseManager()
 scheduler = CommitteeScheduler(db)
 auto_scheduler = AutoMeetingScheduler(db)
+auto_schedule_service = AutoScheduleService(db)
 committee_types_service = CommitteeTypesService(db)
 
 @app.route('/')
@@ -420,61 +421,52 @@ def auto_schedule():
 @app.route('/auto_schedule/generate', methods=['POST'])
 def generate_auto_schedule():
     try:
-        # Validate input parameters
-        try:
-            year = int(request.form['year'])
-            month = int(request.form['month'])
-        except (ValueError, KeyError):
-            flash('שנה או חודש לא תקינים', 'error')
-            return redirect(url_for('auto_schedule'))
-        
-        # Validate year and month ranges
-        if year < 2020 or year > 2030:
-            flash('השנה חייבת להיות בין 2020 ל-2030', 'error')
-            return redirect(url_for('auto_schedule'))
-        
-        if month < 1 or month > 12:
-            flash('החודש חייב להיות בין 1 ל-12', 'error')
-            return redirect(url_for('auto_schedule'))
-        
+        # Get form data
+        year = request.form.get('year', type=int)
+        month = request.form.get('month', type=int)
         selected_hativot = request.form.getlist('hativot_ids')
         
-        if not selected_hativot:
+        # Determine hativa_id - if only one selected, use it; otherwise None for all
+        hativa_id = None
+        if len(selected_hativot) == 1:
+            hativa_id = int(selected_hativot[0])
+        elif len(selected_hativot) > 1:
+            # Multiple hativot selected - will process all
+            pass
+        else:
             flash('יש לבחור לפחות חטיבה אחת', 'warning')
             return redirect(url_for('auto_schedule'))
         
-        # Validate division IDs
-        try:
-            hativot_ids = [int(h_id) for h_id in selected_hativot]
-            # Verify divisions exist in database
-            existing_hativot = db.get_hativot()
-            existing_ids = [div['hativa_id'] for div in existing_hativot]
-            invalid_hativot = [h_id for h_id in hativot_ids if h_id not in existing_ids]
-            
-            if invalid_hativot:
-                flash(f'חטיבות לא תקינות: {invalid_hativot}', 'error')
-                return redirect(url_for('auto_schedule'))
-                
-        except ValueError:
-            flash('מזהי חטיבות לא תקינים', 'error')
+        # Create schedule request
+        from services.auto_schedule_service import ScheduleRequest
+        schedule_request = ScheduleRequest(
+            year=year,
+            month=month,
+            hativa_id=hativa_id,
+            auto_approve=False
+        )
+        
+        # Generate schedule using service
+        result = auto_schedule_service.generate_schedule(schedule_request)
+        
+        if not result.success:
+            flash(result.message, 'error')
             return redirect(url_for('auto_schedule'))
         
-        # Generate schedule
-        schedule_result = auto_scheduler.generate_monthly_schedule(year, month, hativot_ids)
-        
-        if not schedule_result or not schedule_result.get('suggested_meetings'):
+        if not result.suggested_meetings:
             flash('לא ניתן ליצור תזמון עבור התקופה והחטיבות שנבחרו', 'warning')
             return redirect(url_for('auto_schedule'))
         
         # Store in session for review
         from flask import session
         session['pending_schedule'] = {
-            'year': year,
-            'month': month,
-            'suggestions': schedule_result['suggested_meetings']
+            'year': result.year,
+            'month': result.month,
+            'suggestions': result.suggested_meetings,
+            'selected_hativot': selected_hativot
         }
         
-        flash(f'נוצרו {schedule_result["total_suggestions"]} הצעות ישיבות לחודש {month}/{year}', 'success')
+        flash(result.message, 'success')
         return redirect(url_for('review_auto_schedule'))
         
     except Exception as e:
@@ -533,72 +525,42 @@ def approve_auto_schedule():
         return redirect(url_for('review_auto_schedule'))
     
     try:
-        # Convert to integers and validate
-        try:
-            selected_indices = [int(idx) for idx in selected_suggestions]
-        except ValueError:
-            flash('מזהי הצעות לא תקינים', 'error')
-            return redirect(url_for('review_auto_schedule'))
-        
+        # Convert to integers and get selected suggestions
+        selected_indices = [int(idx) for idx in selected_suggestions]
         suggestions = pending_schedule.get('suggestions', [])
-        if not suggestions:
-            flash('אין הצעות זמינות', 'error')
-            return redirect(url_for('auto_schedule'))
         
-        created_count = 0
-        failed_count = 0
-        
+        # Filter selected suggestions
+        selected_meeting_suggestions = []
         for idx in selected_indices:
             if 0 <= idx < len(suggestions):
-                suggestion = suggestions[idx]
-                try:
-                    # Validate suggestion data
-                    required_fields = ['committee_type_id', 'hativa_id', 'date']
-                    if not all(field in suggestion for field in required_fields):
-                        failed_count += 1
-                        continue
-                    
-                    # Check if meeting already exists
-                    existing_meetings = db.get_vaadot_by_date_and_hativa(
-                        suggestion['date'], 
-                        suggestion['hativa_id']
-                    )
-                    
-                    if existing_meetings:
-                        app.logger.warning(f"Meeting already exists for {suggestion['date']} and hativa {suggestion['hativa_id']}")
-                        failed_count += 1
-                        continue
-                    
-                    # Create the meeting
-                    vaadot_id = db.create_vaada(
-                        committee_type_id=suggestion['committee_type_id'],
-                        hativa_id=suggestion['hativa_id'],
-                        vaada_date=suggestion['date']
-                    )
-                    
-                    if vaadot_id:
-                        created_count += 1
-                    else:
-                        failed_count += 1
-                        
-                except Exception as e:
-                    app.logger.error(f"Failed to create meeting: {str(e)}")
-                    failed_count += 1
-            else:
-                failed_count += 1
+                selected_meeting_suggestions.append(suggestions[idx])
         
-        # Clear the pending schedule
+        if not selected_meeting_suggestions:
+            flash('לא נמצאו הצעות תקינות לאישור', 'error')
+            return redirect(url_for('review_auto_schedule'))
+        
+        # Create approval request
+        from services.auto_schedule_service import ApprovalRequest
+        approval_request = ApprovalRequest(
+            suggestions=selected_meeting_suggestions,
+            auto_approve=True
+        )
+        
+        # Approve meetings using service
+        result = auto_schedule_service.approve_meetings(approval_request)
+        
+        # Clear session
         session.pop('pending_schedule', None)
         
-        # Provide detailed feedback
-        if created_count > 0 and failed_count == 0:
-            flash(f'נוצרו {created_count} ישיבות בהצלחה', 'success')
-        elif created_count > 0 and failed_count > 0:
-            flash(f'נוצרו {created_count} ישיבות בהצלחה, {failed_count} נכשלו', 'warning')
-        else:
-            flash('לא ניתן היה ליצור אף ישיבה', 'error')
-            
-        return redirect(url_for('committees'))
+        # Show results
+        if result.success_count > 0:
+            flash(f'נוצרו בהצלחה {result.success_count} ישיבות', 'success')
+        
+        if result.failure_count > 0:
+            failed_reasons = [f"{m['committee_type']}: {m['reason']}" for m in result.failed_meetings[:3]]
+            flash(f'נכשלו {result.failure_count} ישיבות: {"; ".join(failed_reasons)}', 'warning')
+        
+        return redirect(url_for('vaadot'))
         
     except Exception as e:
         app.logger.error(f'Error approving auto schedule: {str(e)}')
@@ -609,13 +571,15 @@ def approve_auto_schedule():
 def validate_monthly_schedule(year: int, month: int):
     """API endpoint to validate monthly schedule constraints"""
     try:
-        validation_result = auto_scheduler.validate_schedule_constraints(year, month)
+        validation_result = auto_schedule_service.get_schedule_validation(year, month)
         return jsonify(validation_result)
     except Exception as e:
         return jsonify({
             'valid': False,
-            'error': str(e)
-        }), 500
+            'violations': [f'שגיאה באימות: {str(e)}'],
+            'warnings': [],
+            'total_meetings': 0
+        })
 
 @app.route('/committee_types')
 def committee_types():
