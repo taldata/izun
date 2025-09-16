@@ -93,53 +93,71 @@
             </div>
             <form method="POST" action="{{ url_for('add_event') }}" id="eventForm">
                 <div class="modal-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="vaadot_id" class="form-label">ועדה <span class="text-danger">*</span></label>
-                                <select class="form-select" id="vaadot_id" name="vaadot_id" required>
-                                    <option value="">בחר ישיבת ועדה</option>
-                                    {% for committee in committees %}
-                                        <option value="{{ committee.vaadot_id }}" data-hativa-id="{{ committee.hativa_id }}">
-                                            {{ committee.committee_name }} - {{ committee.hativa_name }}
-                                            {% if committee.vaada_date %}
-                                                ({{ committee.vaada_date }})
-                                            {% else %}
-                                                (ללא תאריך)
-                                            {% endif %}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="hativa_select" class="form-label">חטיבה</label>
-                                <select class="form-select" id="hativa_select">
-                                    <option value="">בחר חטיבה</option>
-                                    {% for hativa in (maslulim | map(attribute='hativa_name') | unique | list) %}
-                                        <option value="{{ hativa }}">{{ hativa }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
+                    <!-- Step 1: Select Division -->
+                    <div class="mb-4">
+                        <label for="hativa_select" class="form-label">
+                            <i class="bi bi-building me-2"></i>שלב 1: בחר חטיבה <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="hativa_select" required>
+                            <option value="">בחר חטיבה</option>
+                            {% for hativa in hativot %}
+                                <option value="{{ hativa.hativa_id }}" data-name="{{ hativa.name }}">{{ hativa.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">בחר את החטיבה שאליה שייך האירוע</div>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="maslul_id" class="form-label">מסלול <span class="text-danger">*</span></label>
-                        <select class="form-select" id="maslul_id" name="maslul_id" required>
-                            <option value="">בחר מסלול</option>
-                            {% for maslul in maslulim %}
-                                <option value="{{ maslul.maslul_id }}" data-hativa="{{ maslul.hativa_name }}" data-hativa-id="{{ maslul.hativa_id }}">
-                                    {{ maslul.name }} ({{ maslul.hativa_name }})
+
+                    <!-- Step 2: Select Committee -->
+                    <div class="mb-4">
+                        <label for="vaadot_id" class="form-label">
+                            <i class="bi bi-people me-2"></i>שלב 2: בחר ישיבת ועדה <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="vaadot_id" name="vaadot_id" required disabled>
+                            <option value="">תחילה בחר חטיבה</option>
+                            {% for committee in committees %}
+                                <option value="{{ committee.vaadot_id }}" 
+                                        data-hativa-id="{{ committee.hativa_id }}"
+                                        data-hativa-name="{{ committee.hativa_name }}"
+                                        style="display: none;">
+                                    {{ committee.committee_name }}
+                                    {% if committee.vaada_date %}
+                                        - {{ committee.vaada_date }}
+                                    {% else %}
+                                        - ללא תאריך
+                                    {% endif %}
                                 </option>
                             {% endfor %}
                         </select>
+                        <div class="form-text">בחר את ישיבת הועדה הספציפית לאירוע</div>
                     </div>
+
+                    <!-- Step 3: Select Route -->
+                    <div class="mb-4">
+                        <label for="maslul_id" class="form-label">
+                            <i class="bi bi-signpost me-2"></i>שלב 3: בחר מסלול <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="maslul_id" name="maslul_id" required disabled>
+                            <option value="">תחילה בחר חטיבה</option>
+                            {% for maslul in maslulim %}
+                                <option value="{{ maslul.maslul_id }}" 
+                                        data-hativa-id="{{ maslul.hativa_id }}"
+                                        data-hativa-name="{{ maslul.hativa_name }}"
+                                        style="display: none;">
+                                    {{ maslul.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">בחר את המסלול הרלוונטי לאירוע</div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Event Details -->
+                    <h6 class="mb-3"><i class="bi bi-card-text me-2"></i>פרטי האירוע</h6>
                     
                     <div class="mb-3">
                         <label for="name" class="form-label">שם האירוע <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="name" name="name" required>
+                        <input type="text" class="form-control" id="name" name="name" required placeholder="הכנס שם האירוע">
                     </div>
                     
                     <div class="row">
@@ -156,7 +174,7 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="expected_requests" class="form-label">היקף בקשות צפוי</label>
-                                <input type="number" class="form-control" id="expected_requests" name="expected_requests" min="0" value="0">
+                                <input type="number" class="form-control" id="expected_requests" name="expected_requests" min="0" value="0" placeholder="0">
                             </div>
                         </div>
                     </div>
@@ -175,59 +193,85 @@
 
 {% block extra_scripts %}
 <script>
-// Filter routes by division
-document.getElementById('hativa_select').addEventListener('change', function() {
-    const selectedHativa = this.value;
+// Step-by-step event creation flow
+document.addEventListener('DOMContentLoaded', function() {
+    const hativaSelect = document.getElementById('hativa_select');
+    const vaadotSelect = document.getElementById('vaadot_id');
     const maslulSelect = document.getElementById('maslul_id');
-    const options = maslulSelect.querySelectorAll('option');
     
-    options.forEach(option => {
-        if (option.value === '') {
-            option.style.display = 'block';
+    // Step 1: Division selection
+    hativaSelect.addEventListener('change', function() {
+        const selectedHativaId = this.value;
+        
+        // Reset and enable/disable committee selection
+        vaadotSelect.value = '';
+        maslulSelect.value = '';
+        maslulSelect.disabled = true;
+        
+        if (!selectedHativaId) {
+            vaadotSelect.disabled = true;
+            vaadotSelect.innerHTML = '<option value="">תחילה בחר חטיבה</option>';
+            maslulSelect.innerHTML = '<option value="">תחילה בחר חטיבה</option>';
             return;
         }
         
-        const hativa = option.getAttribute('data-hativa');
-        if (selectedHativa === '' || hativa === selectedHativa) {
-            option.style.display = 'block';
-        } else {
-            option.style.display = 'none';
-        }
+        // Enable committee selection and filter options
+        vaadotSelect.disabled = false;
+        vaadotSelect.innerHTML = '<option value="">בחר ישיבת ועדה</option>';
+        
+        // Show only committees from selected division
+        const hiddenCommittees = document.querySelectorAll('#vaadot_id option[data-hativa-id]');
+        hiddenCommittees.forEach(option => {
+            if (option.getAttribute('data-hativa-id') === selectedHativaId) {
+                const newOption = option.cloneNode(true);
+                newOption.style.display = 'block';
+                vaadotSelect.appendChild(newOption);
+            }
+        });
+        
+        // Update route selection placeholder
+        maslulSelect.innerHTML = '<option value="">תחילה בחר ועדה</option>';
     });
     
-    // Reset selection if current selection is not visible
-    if (maslulSelect.value && maslulSelect.querySelector(`option[value="${maslulSelect.value}"]`).style.display === 'none') {
+    // Step 2: Committee selection
+    vaadotSelect.addEventListener('change', function() {
+        const selectedCommittee = this.value;
+        
+        // Reset route selection
         maslulSelect.value = '';
-    }
+        
+        if (!selectedCommittee) {
+            maslulSelect.disabled = true;
+            maslulSelect.innerHTML = '<option value="">תחילה בחר ועדה</option>';
+            return;
+        }
+        
+        // Get selected committee's division
+        const selectedOption = this.options[this.selectedIndex];
+        const committeeHativaId = selectedOption.getAttribute('data-hativa-id');
+        
+        // Enable route selection and filter by same division
+        maslulSelect.disabled = false;
+        maslulSelect.innerHTML = '<option value="">בחר מסלול</option>';
+        
+        // Show only routes from the same division as the committee
+        const hiddenRoutes = document.querySelectorAll('#maslul_id option[data-hativa-id]');
+        hiddenRoutes.forEach(option => {
+            if (option.getAttribute('data-hativa-id') === committeeHativaId) {
+                const newOption = option.cloneNode(true);
+                newOption.style.display = 'block';
+                maslulSelect.appendChild(newOption);
+            }
+        });
+    });
+    
+    // Form validation
+    document.getElementById('eventForm').addEventListener('submit', function(e) {
+        if (!hativaSelect.value || !vaadotSelect.value || !maslulSelect.value) {
+            e.preventDefault();
+            alert('יש למלא את כל השלבים: חטיבה, ועדה ומסלול');
+        }
+    });
 });
-
-// Validate that committee and route are from the same division
-function validateDivisionMatch() {
-    const vaadotSelect = document.getElementById('vaadot_id');
-    const maslulSelect = document.getElementById('maslul_id');
-    const submitButton = document.querySelector('#eventForm button[type="submit"]');
-    
-    if (!vaadotSelect.value || !maslulSelect.value) {
-        submitButton.disabled = false;
-        return;
-    }
-    
-    const selectedVaada = vaadotSelect.options[vaadotSelect.selectedIndex];
-    const selectedMaslul = maslulSelect.options[maslulSelect.selectedIndex];
-    
-    const vaadaHativaId = selectedVaada.getAttribute('data-hativa-id');
-    const maslulHativaId = selectedMaslul.getAttribute('data-hativa-id');
-    
-    if (vaadaHativaId !== maslulHativaId) {
-        alert('שגיאה: המסלול והועדה חייבים להיות מאותה חטיבה');
-        maslulSelect.value = '';
-        submitButton.disabled = true;
-    } else {
-        submitButton.disabled = false;
-    }
-}
-
-document.getElementById('vaadot_id').addEventListener('change', validateDivisionMatch);
-document.getElementById('maslul_id').addEventListener('change', validateDivisionMatch);
 </script>
 {% endblock %}

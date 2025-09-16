@@ -274,7 +274,8 @@ def events():
     committees_list = db.get_vaadot()
     committee_types = db.get_committee_types()
     maslulim_list = db.get_maslulim()
-    return render_template('events.html', events=events_list, committees=committees_list, committee_types=committee_types, maslulim=maslulim_list)
+    hativot_list = db.get_hativot()
+    return render_template('events.html', events=events_list, committees=committees_list, committee_types=committee_types, maslulim=maslulim_list, hativot=hativot_list)
 
 @app.route('/events/add', methods=['POST'])
 def add_event():
