@@ -107,11 +107,6 @@
                             <i class="bi bi-robot me-1"></i>תזמון אוטומטי
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link rounded-pill px-3 mx-1" href="{{ url_for('schedule') }}">
-                            <i class="bi bi-calendar3 me-1"></i>לוח זמנים
-                        </a>
-                    </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle rounded-pill px-3 mx-1" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-gear me-1"></i>הגדרות
@@ -130,8 +125,6 @@
                                 <i class="bi bi-calendar-x me-2 text-danger"></i>תאריכי חריגים
                             </a></li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('schedule') }}">לוח זמנים</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('calendar_view') }}">יומן אירועים</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('auto_schedule') }}">
                                 <i class="bi bi-robot me-2 text-success"></i>תזמון אוטומטי
                             </a></li>

@@ -17,8 +17,8 @@
                         <a href="{{ url_for('committees') }}" class="btn btn-light btn-lg rounded-pill px-4">
                             <i class="bi bi-plus-circle me-2"></i>צור ישיבה חדשה
                         </a>
-                        <a href="{{ url_for('schedule') }}" class="btn btn-outline-light btn-lg rounded-pill px-4">
-                            <i class="bi bi-calendar3 me-2"></i>צפה בלוח זמנים
+                        <a href="{{ url_for('auto_schedule') }}" class="btn btn-outline-light btn-lg rounded-pill px-4">
+                            <i class="bi bi-robot me-2"></i>תזמון אוטומטי
                         </a>
                     </div>
                 </div>
@@ -128,20 +128,6 @@
         </div>
     </div>
     
-    <div class="col-lg-3 col-md-6 mb-4">
-        <div class="quick-action-card card">
-            <div class="card-body text-center">
-                <div class="mb-3">
-                    <i class="bi bi-calendar3 text-info" style="font-size: 3.5rem;"></i>
-                </div>
-                <h5 class="card-title fw-bold">לוח זמנים</h5>
-                <p class="card-text text-muted">צפה בלוח הזמנים החודשי</p>
-                <a href="{{ url_for('schedule') }}" class="btn btn-info btn-lg">
-                    <i class="bi bi-eye me-2"></i>צפה בלוח
-                </a>
-            </div>
-        </div>
-    </div>
     
     <div class="col-md-6 col-lg-3 mb-3">
         <div class="card action-card h-100 border-0 shadow-sm">
