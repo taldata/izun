@@ -419,8 +419,11 @@ function renderCalendar() {
                 
                 // Make cell clickable for adding items
                 cell.style.cursor = 'pointer';
-                cell.onclick = function() {
-                    document.getElementById('modalDate').value = currentDateStr;
+                cell.onclick = function(e) {
+                    // Only trigger if clicking on empty space (not on existing items)
+                    if (e.target === cell || e.target === dayDiv) {
+                        showDayMenu(currentDateStr, e);
+                    }
                 };
                 
                 date++;
@@ -522,6 +525,115 @@ function deleteEvent() {
         form.submit();
     }
 }
+
+// Day menu functionality
+function showDayMenu(dateStr, event) {
+    // Remove existing menu if any
+    const existingMenu = document.getElementById('dayMenu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+    
+    // Create menu
+    const menu = document.createElement('div');
+    menu.id = 'dayMenu';
+    menu.className = 'day-menu';
+    menu.style.cssText = `
+        position: fixed;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 1000;
+        min-width: 200px;
+        padding: 8px 0;
+    `;
+    
+    // Position menu near click
+    const rect = event.target.getBoundingClientRect();
+    menu.style.left = (rect.left + window.scrollX) + 'px';
+    menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+    
+    // Create menu items
+    const menuItems = [
+        {
+            text: '➕ הוסף ועדה',
+            icon: 'bi-people',
+            action: () => {
+                document.getElementById('modalDate').value = dateStr;
+                const modal = new bootstrap.Modal(document.getElementById('addCommitteeModal'));
+                modal.show();
+                menu.remove();
+            }
+        },
+        {
+            text: '📅 הוסף אירוע',
+            icon: 'bi-calendar-event',
+            action: () => {
+                const modal = new bootstrap.Modal(document.getElementById('addEventModal'));
+                modal.show();
+                menu.remove();
+            }
+        }
+    ];
+    
+    menuItems.forEach(item => {
+        const menuItem = document.createElement('div');
+        menuItem.className = 'day-menu-item';
+        menuItem.style.cssText = `
+            padding: 12px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.2s;
+        `;
+        
+        menuItem.innerHTML = `
+            <i class="bi ${item.icon}"></i>
+            <span>${item.text}</span>
+        `;
+        
+        menuItem.onmouseover = () => menuItem.style.backgroundColor = '#f8f9fa';
+        menuItem.onmouseout = () => menuItem.style.backgroundColor = 'transparent';
+        menuItem.onclick = item.action;
+        
+        menu.appendChild(menuItem);
+    });
+    
+    // Add date header
+    const dateHeader = document.createElement('div');
+    dateHeader.style.cssText = `
+        padding: 8px 16px;
+        font-weight: bold;
+        color: #6c757d;
+        border-bottom: 1px solid #eee;
+        margin-bottom: 4px;
+        font-size: 0.9rem;
+    `;
+    dateHeader.textContent = formatDateHebrew(dateStr);
+    menu.insertBefore(dateHeader, menu.firstChild);
+    
+    document.body.appendChild(menu);
+    
+    // Close menu when clicking outside
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu(e) {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        });
+    }, 100);
+}
+
+function formatDateHebrew(dateStr) {
+    const date = new Date(dateStr);
+    const day = date.getDate();
+    const month = monthNames[date.getMonth()];
+    const year = date.getFullYear();
+    return `${day} ${month} ${year}`;
+}
 </script>
 
 <style>
@@ -542,6 +654,19 @@ function deleteEvent() {
 #calendarTable th {
     background-color: #f8f9fa;
     font-weight: 600;
+}
+
+.day-menu {
+    font-family: inherit;
+    direction: rtl;
+}
+
+.day-menu-item:hover {
+    background-color: #e3f2fd !important;
+}
+
+.day-menu-item:active {
+    background-color: #bbdefb !important;
 }
 </style>
 {% endblock %}
