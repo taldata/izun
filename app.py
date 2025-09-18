@@ -241,13 +241,6 @@ def add_exception_date():
     
     return redirect(url_for('exception_dates'))
 
-@app.route('/committees')
-def committees():
-    """View committees"""
-    committee_types = db.get_committee_types()
-    committees_list = db.get_vaadot()
-    hativot = db.get_hativot()
-    return render_template('committees.html', committee_types=committee_types, committees=committees_list, hativot=hativot)
 
 @app.route('/committees/add', methods=['POST'])
 def add_committee_meeting():
@@ -260,7 +253,7 @@ def add_committee_meeting():
     
     if not all([committee_type_id, hativa_id, vaada_date]):
         flash('סוג ועדה, חטיבה ותאריך הם שדות חובה', 'error')
-        return redirect(url_for('committees'))
+        return redirect(url_for('index'))
     
     try:
         meeting_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
@@ -271,7 +264,7 @@ def add_committee_meeting():
     except Exception as e:
         flash(f'שגיאה בהוספת הישיבה: {str(e)}', 'error')
     
-    return redirect(url_for('committees'))
+    return redirect(url_for('index'))
 
 @app.route('/committees/edit/<int:vaadot_id>', methods=['POST'])
 def edit_committee_meeting(vaadot_id):
@@ -321,15 +314,6 @@ def delete_committee_meeting(vaadot_id):
     
     return redirect(url_for('index'))
 
-@app.route('/events')
-def events():
-    """Manage events"""
-    events_list = db.get_events()
-    committees_list = db.get_vaadot()
-    committee_types = db.get_committee_types()
-    maslulim_list = db.get_maslulim()
-    hativot_list = db.get_hativot()
-    return render_template('events.html', events=events_list, committees=committees_list, committee_types=committee_types, maslulim=maslulim_list, hativot=hativot_list)
 
 @app.route('/events/add', methods=['POST'])
 def add_event():
@@ -342,7 +326,7 @@ def add_event():
     
     if not all([vaadot_id, maslul_id, name, event_type]):
         flash('כל השדות הם שדות חובה', 'error')
-        return redirect(url_for('events'))
+        return redirect(url_for('index'))
     
     try:
         expected_requests = int(expected_requests) if expected_requests else 0
@@ -362,11 +346,11 @@ def add_event():
         
         if not vaada or not maslul:
             flash('ועדה או מסלול לא נמצאו במערכת', 'error')
-            return redirect(url_for('events'))
+            return redirect(url_for('index'))
         
         if vaada['hativa_id'] != maslul['hativa_id']:
             flash(f'שגיאה: המסלול "{maslul["name"]}" מחטיבת "{maslul["hativa_name"]}" אינו יכול להיות משויך לועדה מחטיבת "{vaada["hativa_name"]}"', 'error')
-            return redirect(url_for('events'))
+            return redirect(url_for('index'))
         
         # Validate event data
         event_data = {
@@ -380,7 +364,7 @@ def add_event():
         is_valid, message = scheduler.validate_event_scheduling(event_data)
         if not is_valid:
             flash(f'שגיאה באימות האירוע: {message}', 'error')
-            return redirect(url_for('events'))
+            return redirect(url_for('index'))
         
         event_id = db.add_event(int(vaadot_id), int(maslul_id), name, event_type, expected_requests)
         flash(f'אירוע "{name}" נוצר בהצלחה', 'success')
@@ -388,7 +372,7 @@ def add_event():
     except Exception as e:
         flash(f'שגיאה ביצירת האירוע: {str(e)}', 'error')
     
-    return redirect(url_for('events'))
+    return redirect(url_for('index'))
 
 @app.route('/events/edit/<int:event_id>', methods=['POST'])
 def edit_event(event_id):

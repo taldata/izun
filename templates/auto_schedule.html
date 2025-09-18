@@ -2,6 +2,7 @@
 
 {% block title %}תזמון אוטומטי - איזון עומסים{% endblock %}
 
+
 {% block content %}
 <div class="row">
     <div class="col-12">
@@ -193,21 +194,23 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectAllCheckbox = document.getElementById('select_all_hativot');
     const hativaCheckboxes = document.querySelectorAll('.hativa-checkbox');
     
-    selectAllCheckbox.addEventListener('change', function() {
+    if (selectAllCheckbox && hativaCheckboxes.length > 0) {
+        selectAllCheckbox.addEventListener('change', function() {
+            hativaCheckboxes.forEach(checkbox => {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+        });
+        
         hativaCheckboxes.forEach(checkbox => {
-            checkbox.checked = selectAllCheckbox.checked;
+            checkbox.addEventListener('change', function() {
+                const allChecked = Array.from(hativaCheckboxes).every(cb => cb.checked);
+                const noneChecked = Array.from(hativaCheckboxes).every(cb => !cb.checked);
+                
+                selectAllCheckbox.checked = allChecked;
+                selectAllCheckbox.indeterminate = !allChecked && !noneChecked;
+            });
         });
-    });
-    
-    hativaCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            const allChecked = Array.from(hativaCheckboxes).every(cb => cb.checked);
-            const noneChecked = Array.from(hativaCheckboxes).every(cb => !cb.checked);
-            
-            selectAllCheckbox.checked = allChecked;
-            selectAllCheckbox.indeterminate = !allChecked && !noneChecked;
-        });
-    });
+    }
 });
 </script>
 
