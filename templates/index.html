@@ -159,101 +159,355 @@
     </div>
 </div>
 
-<!-- Recent Activity -->
+<!-- Calendar Section -->
 <div class="row">
     <div class="col-12">
-        <h2 class="section-title">
-            <i class="bi bi-clock-history me-2"></i>פעילות אחרונה
-        </h2>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="section-title">
+                <i class="bi bi-calendar3 me-2"></i>יומן ועדות ואירועים
+            </h2>
+            <div class="btn-group" role="group">
+                <button class="btn btn-outline-primary" onclick="previousMonth()">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+                <button class="btn btn-outline-primary" onclick="goToToday()">היום</button>
+                <button class="btn btn-outline-primary" onclick="nextMonth()">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
 <div class="row">
-    <div class="col-lg-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">
-                    <i class="bi bi-people me-2"></i>ישיבות מתוכננות
-                </h5>
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-gradient text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0" id="currentMonthYear"></h5>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#addCommitteeModal">
+                            <i class="bi bi-plus me-1"></i>ועדה
+                        </button>
+                        <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#addEventModal">
+                            <i class="bi bi-calendar-event me-1"></i>אירוע
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                {% if committees %}
-                    {% for committee in committees[:5] %}
-                    <div class="d-flex align-items-center mb-3 pb-3 {% if not loop.last %}border-bottom{% endif %}">
-                        <div class="flex-shrink-0">
-                            <div class="bg-primary bg-opacity-10 rounded-circle p-2">
-                                <i class="bi bi-calendar-check text-primary"></i>
-                            </div>
-                        </div>
-                        <div class="flex-grow-1 ms-3">
-                            <h6 class="mb-1">{{ committee.committee_name }}</h6>
-                            <p class="mb-1 text-muted small">{{ committee.hativa_name }}</p>
-                            <small class="text-muted">
-                                <i class="bi bi-calendar me-1"></i>{{ committee.vaada_date }}
-                            </small>
-                        </div>
-                        <div class="flex-shrink-0">
-                            <span class="badge bg-{{ 'success' if committee.status == 'completed' else 'warning' if committee.status == 'scheduled' else 'secondary' }}">{{ committee.status }}</span>
-                        </div>
-                    </div>
-                    {% endfor %}
-                    {% if committees|length > 5 %}
-                    <div class="text-center">
-                        <a href="{{ url_for('committees') }}" class="btn btn-outline-primary btn-sm">
-                            צפה בכל הישיבות <i class="bi bi-arrow-left ms-1"></i>
-                        </a>
-                    </div>
-                    {% endif %}
-                {% else %}
-                    <div class="text-center py-4">
-                        <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
-                        <p class="text-muted mt-3">אין ישיבות מתוכננות</p>
-                        <a href="{{ url_for('committees') }}" class="btn btn-primary">
-                            <i class="bi bi-plus me-2"></i>צור ישיבה ראשונה
-                        </a>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-lg-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header bg-success text-white">
-                <h5 class="mb-0">
-                    <i class="bi bi-list-check me-2"></i>סוגי ועדות
-                </h5>
-            </div>
-            <div class="card-body">
-                {% if committee_types %}
-                    {% for committee_type in committee_types %}
-                    <div class="d-flex align-items-center mb-3 pb-3 {% if not loop.last %}border-bottom{% endif %}">
-                        <div class="flex-shrink-0">
-                            <div class="bg-success bg-opacity-10 rounded-circle p-2">
-                                <i class="bi bi-people text-success"></i>
-                            </div>
-                        </div>
-                        <div class="flex-grow-1 ms-3">
-                            <h6 class="mb-1">{{ committee_type.name }}</h6>
-                            <small class="text-muted">
-                                <i class="bi bi-calendar me-1"></i>{{ committee_type.scheduled_day_name }}
-                                {% if committee_type.frequency == 'monthly' %}
-                                    - חודשי
-                                {% else %}
-                                    - שבועי
-                                {% endif %}
-                            </small>
-                        </div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="text-center py-4">
-                        <i class="bi bi-people text-muted" style="font-size: 3rem;"></i>
-                        <p class="text-muted mt-3">אין סוגי ועדות מוגדרים</p>
-                    </div>
-                {% endif %}
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered mb-0" id="calendarTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-center py-3">ראשון</th>
+                                <th class="text-center py-3">שני</th>
+                                <th class="text-center py-3">שלישי</th>
+                                <th class="text-center py-3">רביעי</th>
+                                <th class="text-center py-3">חמישי</th>
+                                <th class="text-center py-3">שישי</th>
+                                <th class="text-center py-3">שבת</th>
+                            </tr>
+                        </thead>
+                        <tbody id="calendarBody">
+                            <!-- Calendar days will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Quick Add Committee Modal -->
+<div class="modal fade" id="addCommitteeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-people me-2"></i>הוספת ישיבת ועדה
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_committee_meeting') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="committee_type_id" class="form-label">סוג ועדה</label>
+                        <select class="form-select" name="committee_type_id" required>
+                            <option value="">בחר סוג ועדה</option>
+                            {% for committee_type in committee_types %}
+                                <option value="{{ committee_type.committee_type_id }}">{{ committee_type.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="hativa_id" class="form-label">חטיבה</label>
+                        <select class="form-select" name="hativa_id" required>
+                            <option value="">בחר חטיבה</option>
+                            {% for hativa in hativot %}
+                                <option value="{{ hativa.hativa_id }}">{{ hativa.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="vaada_date" class="form-label">תאריך הישיבה</label>
+                        <input type="date" class="form-control" name="vaada_date" id="modalDate" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">הערות</label>
+                        <textarea class="form-control" name="notes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>צור ישיבה
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Add Event Modal -->
+<div class="modal fade" id="addEventModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-calendar-event me-2"></i>הוספת אירוע
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_event') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="event_vaadot_id" class="form-label">ישיבת ועדה</label>
+                        <select class="form-select" name="vaadot_id" id="event_vaadot_id" required>
+                            <option value="">בחר ישיבת ועדה</option>
+                            {% for committee in committees %}
+                                <option value="{{ committee.vaadot_id }}">
+                                    {{ committee.committee_name }} - {{ committee.hativa_name }}
+                                    {% if committee.vaada_date %} ({{ committee.vaada_date }}){% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="event_maslul_id" class="form-label">מסלול</label>
+                        <select class="form-select" name="maslul_id" id="event_maslul_id" required>
+                            <option value="">בחר מסלול</option>
+                            {% for maslul in maslulim %}
+                                <option value="{{ maslul.maslul_id }}" data-hativa-id="{{ maslul.hativa_id }}">
+                                    {{ maslul.name }} ({{ maslul.hativa_name }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="event_name" class="form-label">שם האירוע</label>
+                        <input type="text" class="form-control" name="name" id="event_name" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="event_type" class="form-label">סוג האירוע</label>
+                                <select class="form-select" name="event_type" required>
+                                    <option value="">בחר סוג</option>
+                                    <option value="kokok">קו"ק</option>
+                                    <option value="shotef">שוטף</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="expected_requests" class="form-label">בקשות צפויות</label>
+                                <input type="number" class="form-control" name="expected_requests" min="0" value="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>צור אירוع
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Calendar functionality
+let currentDate = new Date();
+const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+                   'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+
+// Calendar data from server - using script tags to avoid Jinja2 conflicts
+</script>
+<script type="application/json" id="committees-data">{{ committees|tojson|safe }}</script>
+<script type="application/json" id="events-data">{{ events|tojson|safe }}</script>
+<script>
+// Parse data from JSON scripts
+const committeesData = JSON.parse(document.getElementById('committees-data').textContent);
+const eventsData = JSON.parse(document.getElementById('events-data').textContent);
+
+function renderCalendar() {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    
+    // Update header
+    document.getElementById('currentMonthYear').textContent = `${monthNames[month]} ${year}`;
+    
+    // Get first day of month and number of days
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    // Clear calendar body
+    const calendarBody = document.getElementById('calendarBody');
+    calendarBody.innerHTML = '';
+    
+    let date = 1;
+    
+    // Create calendar rows
+    for (let week = 0; week < 6; week++) {
+        const row = document.createElement('tr');
+        
+        for (let day = 0; day < 7; day++) {
+            const cell = document.createElement('td');
+            cell.className = 'calendar-cell position-relative p-2';
+            cell.style.height = '120px';
+            cell.style.verticalAlign = 'top';
+            
+            if (week === 0 && day < startingDayOfWeek) {
+                // Empty cells before first day
+                cell.className += ' text-muted';
+            } else if (date > daysInMonth) {
+                // Empty cells after last day
+                cell.className += ' text-muted';
+            } else {
+                // Regular day
+                const dayDiv = document.createElement('div');
+                dayDiv.className = 'fw-bold mb-1';
+                dayDiv.textContent = date;
+                
+                // Check if today
+                const today = new Date();
+                if (year === today.getFullYear() && month === today.getMonth() && date === today.getDate()) {
+                    dayDiv.className += ' text-primary';
+                    cell.style.backgroundColor = '#e3f2fd';
+                }
+                
+                cell.appendChild(dayDiv);
+                
+                // Add committees and events for this date
+                const currentDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+                
+                // Add committees
+                committeesData.forEach(committee => {
+                    if (committee.vaada_date === currentDateStr) {
+                        const committeeDiv = document.createElement('div');
+                        committeeDiv.className = 'badge bg-primary text-white mb-1 d-block text-truncate';
+                        committeeDiv.style.fontSize = '0.7rem';
+                        committeeDiv.textContent = committee.committee_name;
+                        committeeDiv.title = `${committee.committee_name} - ${committee.hativa_name}`;
+                        cell.appendChild(committeeDiv);
+                    }
+                });
+                
+                // Add events (grouped by committee)
+                const dayEvents = eventsData.filter(event => {
+                    const eventCommittee = committeesData.find(c => c.vaadot_id === event.vaadot_id);
+                    return eventCommittee && eventCommittee.vaada_date === currentDateStr;
+                });
+                
+                dayEvents.forEach(event => {
+                    const eventDiv = document.createElement('div');
+                    eventDiv.className = 'badge bg-success text-white mb-1 d-block text-truncate';
+                    eventDiv.style.fontSize = '0.65rem';
+                    eventDiv.textContent = event.name;
+                    eventDiv.title = `${event.name} - ${event.maslul_name}`;
+                    cell.appendChild(eventDiv);
+                });
+                
+                // Make cell clickable for adding items
+                cell.style.cursor = 'pointer';
+                cell.onclick = function() {
+                    document.getElementById('modalDate').value = currentDateStr;
+                };
+                
+                date++;
+            }
+            
+            row.appendChild(cell);
+        }
+        
+        calendarBody.appendChild(row);
+        
+        // Stop if we've filled all days
+        if (date > daysInMonth) break;
+    }
+}
+
+function previousMonth() {
+    currentDate.setMonth(currentDate.getMonth() - 1);
+    renderCalendar();
+}
+
+function nextMonth() {
+    currentDate.setMonth(currentDate.getMonth() + 1);
+    renderCalendar();
+}
+
+function goToToday() {
+    currentDate = new Date();
+    renderCalendar();
+}
+
+// Initialize calendar when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    renderCalendar();
+    
+    // Add click handler for calendar cells to set date in modals
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('calendar-cell') || e.target.closest('.calendar-cell')) {
+            const cell = e.target.classList.contains('calendar-cell') ? e.target : e.target.closest('.calendar-cell');
+            const dayElement = cell.querySelector('.fw-bold');
+            if (dayElement) {
+                const day = dayElement.textContent;
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth() + 1;
+                const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                document.getElementById('modalDate').value = dateStr;
+            }
+        }
+    });
+});
+</script>
+
+<style>
+.calendar-cell {
+    min-height: 120px;
+    border: 1px solid #dee2e6 !important;
+}
+
+.calendar-cell:hover {
+    background-color: #f8f9fa !important;
+}
+
+.badge {
+    font-size: 0.7rem;
+    margin-bottom: 2px;
+}
+
+#calendarTable th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+</style>
 {% endblock %}

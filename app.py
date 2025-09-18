@@ -45,7 +45,13 @@ def index():
         'business_days_this_month': len(monthly_schedule['business_days'])
     }
     
-    return render_template('index.html', stats=stats, committee_types=committee_types, committees=committees)
+    return render_template('index.html', 
+                         stats=stats, 
+                         committee_types=committee_types, 
+                         committees=committees,
+                         events=events,
+                         hativot=hativot,
+                         maslulim=maslulim)
 
 @app.route('/hativot')
 def hativot():
