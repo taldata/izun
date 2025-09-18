@@ -1,163 +1,8 @@
 {% extends "base.html" %}
 
-{% block title %}דף הבית - איזון עומסים{% endblock %}
+{% block title %}יומן ועדות ואירועים - איזון עומסים{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="jumbotron text-white rounded p-5 mb-4">
-            <div class="row align-items-center">
-                <div class="col-md-8">
-                    <h1 class="display-4 fw-bold mb-3">
-                        <img src="https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg" alt="לוגו" style="height: 60px; margin-left: 15px;">
-                        איזון עומסים
-                    </h1>
-                    <p class="lead mb-4">פלטפורמה מתקדמת לניהול ישיבות וועדות, תזמון אירועים וארגון חטיבות</p>
-                    <div class="d-flex gap-3">
-                        <a href="{{ url_for('committees') }}" class="btn btn-light btn-lg rounded-pill px-4">
-                            <i class="bi bi-plus-circle me-2"></i>צור ישיבה חדשה
-                        </a>
-                        <a href="{{ url_for('auto_schedule') }}" class="btn btn-outline-light btn-lg rounded-pill px-4">
-                            <i class="bi bi-robot me-2"></i>תזמון אוטומטי
-                        </a>
-                    </div>
-                </div>
-                <div class="col-md-4 text-center">
-                    <i class="bi bi-calendar-week" style="font-size: 8rem; opacity: 0.3;"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Statistics Cards -->
-<div class="row mb-5">
-    <div class="col-lg-2 col-md-4 col-6 mb-3">
-        <div class="stats-card card text-center h-100" style="border-left-color: #3498db;">
-            <div class="card-body py-4">
-                <i class="bi bi-diagram-3 text-primary mb-2" style="font-size: 2.5rem;"></i>
-                <h3 class="fw-bold mb-1">{{ stats.hativot_count }}</h3>
-                <p class="card-text text-muted small mb-0">חטיבות</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-2 col-md-4 col-6 mb-3">
-        <div class="stats-card card text-center h-100" style="border-left-color: #17a2b8;">
-            <div class="card-body py-4">
-                <i class="bi bi-arrow-right-circle text-info mb-2" style="font-size: 2.5rem;"></i>
-                <h3 class="fw-bold mb-1">{{ stats.maslulim_count }}</h3>
-                <p class="card-text text-muted small mb-0">מסלולים</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-2 col-md-4 col-6 mb-3">
-        <div class="stats-card card text-center h-100" style="border-left-color: #28a745;">
-            <div class="card-body py-4">
-                <i class="bi bi-people text-success mb-2" style="font-size: 2.5rem;"></i>
-                <h3 class="fw-bold mb-1">{{ stats.committees_count }}</h3>
-                <p class="card-text text-muted small mb-0">ישיבות מתוכננות</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-2 col-md-4 col-6 mb-3">
-        <div class="stats-card card text-center h-100" style="border-left-color: #ffc107;">
-            <div class="card-body py-4">
-                <i class="bi bi-calendar-event text-warning mb-2" style="font-size: 2.5rem;"></i>
-                <h3 class="fw-bold mb-1">{{ stats.events_count }}</h3>
-                <p class="card-text text-muted small mb-0">אירועים</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-2 col-md-4 col-6 mb-3">
-        <div class="stats-card card text-center h-100" style="border-left-color: #dc3545;">
-            <div class="card-body py-4">
-                <i class="bi bi-calendar-x text-danger mb-2" style="font-size: 2.5rem;"></i>
-                <h3 class="fw-bold mb-1">{{ stats.exception_dates_count }}</h3>
-                <p class="card-text text-muted small mb-0">תאריכי חריגים</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-2 col-md-4 col-6 mb-3">
-        <div class="stats-card card text-center h-100" style="border-left-color: #6c757d;">
-            <div class="card-body py-4">
-                <i class="bi bi-calendar3 text-secondary mb-2" style="font-size: 2.5rem;"></i>
-                <h3 class="fw-bold mb-1">{{ stats.business_days_this_month }}</h3>
-                <p class="card-text text-muted small mb-0">ימי עסקים החודש</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Quick Actions -->
-<div class="row mb-4">
-    <div class="col-12">
-        <h2 class="section-title">
-            <i class="bi bi-lightning me-2"></i>פעולות מהירות
-        </h2>
-    </div>
-</div>
-
-<div class="row mb-5">
-    <div class="col-lg-3 col-md-6 mb-4">
-        <div class="quick-action-card card">
-            <div class="card-body text-center">
-                <div class="mb-3">
-                    <i class="bi bi-people-fill text-primary" style="font-size: 3.5rem;"></i>
-                </div>
-                <h5 class="card-title fw-bold">ישיבת ועדה חדשה</h5>
-                <p class="card-text text-muted">תזמן ישיבה חדשה לחטיבה מסוימת</p>
-                <a href="{{ url_for('committees') }}" class="btn btn-primary btn-lg">
-                    <i class="bi bi-plus me-2"></i>צור ישיבה
-                </a>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-lg-3 col-md-6 mb-4">
-        <div class="quick-action-card card">
-            <div class="card-body text-center">
-                <div class="mb-3">
-                    <i class="bi bi-calendar-event-fill text-success" style="font-size: 3.5rem;"></i>
-                </div>
-                <h5 class="card-title fw-bold">אירוע חדש</h5>
-                <p class="card-text text-muted">הוסף אירוע לישיבה קיימת</p>
-                <a href="{{ url_for('events') }}" class="btn btn-success btn-lg">
-                    <i class="bi bi-plus me-2"></i>צור אירוע
-                </a>
-            </div>
-        </div>
-    </div>
-    
-    
-    <div class="col-md-6 col-lg-3 mb-3">
-        <div class="card action-card h-100 border-0 shadow-sm">
-            <div class="card-body text-center">
-                <div class="action-icon bg-info bg-opacity-10 text-info mb-3">
-                    <i class="bi bi-robot"></i>
-                </div>
-                <h5 class="card-title">תזמון אוטומטי</h5>
-                <p class="card-text text-muted">יצירה אוטומטית של לוח זמנים חודשי</p>
-                <a href="{{ url_for('auto_schedule') }}" class="btn btn-outline-info">
-                    <i class="bi bi-arrow-left me-2"></i>כניסה
-                </a>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-lg-3 mb-3">
-        <div class="card action-card h-100 border-0 shadow-sm">
-            <div class="card-body text-center">
-                <div class="action-icon bg-warning bg-opacity-10 text-warning mb-3">
-                    <i class="bi bi-gear-fill"></i>
-                </div>
-                <h5 class="card-title">הגדרות</h5>
-                <p class="card-text text-muted">ניהול חטיבות, מסלולים ותאריכי חריגים</p>
-                <a href="{{ url_for('hativot') }}" class="btn btn-outline-warning">
-                    <i class="bi bi-arrow-left me-2"></i>כניסה
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Calendar Section -->
 <div class="row">
@@ -187,10 +32,10 @@
                     <h5 class="mb-0" id="currentMonthYear"></h5>
                     <div class="btn-group btn-group-sm">
                         <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#addCommitteeModal">
-                            <i class="bi bi-plus me-1"></i>ועדה
+                            <i class="bi bi-plus me-1"></i>הוסף ועדה
                         </button>
                         <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#addEventModal">
-                            <i class="bi bi-calendar-event me-1"></i>אירוע
+                            <i class="bi bi-calendar-event me-1"></i>הוסף אירוע
                         </button>
                     </div>
                 </div>
@@ -337,6 +182,133 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Committee Modal -->
+<div class="modal fade" id="editCommitteeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-pencil me-2"></i>עריכת ישיבת ועדה
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="#" id="editCommitteeForm">
+                <input type="hidden" name="vaadot_id" id="edit_vaadot_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_committee_type_id" class="form-label">סוג ועדה</label>
+                        <select class="form-select" name="committee_type_id" id="edit_committee_type_id" required>
+                            <option value="">בחר סוג ועדה</option>
+                            {% for committee_type in committee_types %}
+                                <option value="{{ committee_type.committee_type_id }}">{{ committee_type.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_hativa_id" class="form-label">חטיבה</label>
+                        <select class="form-select" name="hativa_id" id="edit_hativa_id" required>
+                            <option value="">בחר חטיבה</option>
+                            {% for hativa in hativot %}
+                                <option value="{{ hativa.hativa_id }}">{{ hativa.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_vaada_date" class="form-label">תאריך הישיבה</label>
+                        <input type="date" class="form-control" name="vaada_date" id="edit_vaada_date" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_notes" class="form-label">הערות</label>
+                        <textarea class="form-control" name="notes" id="edit_notes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                    <button type="button" class="btn btn-danger" onclick="deleteCommittee()">
+                        <i class="bi bi-trash me-1"></i>מחק
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>שמור שינויים
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Event Modal -->
+<div class="modal fade" id="editEventModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-pencil me-2"></i>עריכת אירוע
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="#" id="editEventForm">
+                <input type="hidden" name="event_id" id="edit_event_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_event_vaadot_id" class="form-label">ישיבת ועדה</label>
+                        <select class="form-select" name="vaadot_id" id="edit_event_vaadot_id" required>
+                            <option value="">בחר ישיבת ועדה</option>
+                            {% for committee in committees %}
+                                <option value="{{ committee.vaadot_id }}">
+                                    {{ committee.committee_name }} - {{ committee.hativa_name }}
+                                    {% if committee.vaada_date %} ({{ committee.vaada_date }}){% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_event_maslul_id" class="form-label">מסלול</label>
+                        <select class="form-select" name="maslul_id" id="edit_event_maslul_id" required>
+                            <option value="">בחר מסלול</option>
+                            {% for maslul in maslulim %}
+                                <option value="{{ maslul.maslul_id }}" data-hativa-id="{{ maslul.hativa_id }}">
+                                    {{ maslul.name }} ({{ maslul.hativa_name }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_event_name" class="form-label">שם האירוע</label>
+                        <input type="text" class="form-control" name="name" id="edit_event_name" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_event_type" class="form-label">סוג האירוע</label>
+                                <select class="form-select" name="event_type" id="edit_event_type" required>
+                                    <option value="">בחר סוג</option>
+                                    <option value="kokok">קו"ק</option>
+                                    <option value="shotef">שוטף</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_expected_requests" class="form-label">בקשות צפויות</label>
+                                <input type="number" class="form-control" name="expected_requests" id="edit_expected_requests" min="0" value="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                    <button type="button" class="btn btn-danger" onclick="deleteEvent()">
+                        <i class="bi bi-trash me-1"></i>מחק
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>שמור שינויים
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -412,10 +384,15 @@ function renderCalendar() {
                 committeesData.forEach(committee => {
                     if (committee.vaada_date === currentDateStr) {
                         const committeeDiv = document.createElement('div');
-                        committeeDiv.className = 'badge bg-primary text-white mb-1 d-block text-truncate';
+                        committeeDiv.className = 'badge bg-primary text-white mb-1 d-block text-truncate position-relative';
                         committeeDiv.style.fontSize = '0.7rem';
+                        committeeDiv.style.cursor = 'pointer';
                         committeeDiv.textContent = committee.committee_name;
-                        committeeDiv.title = `${committee.committee_name} - ${committee.hativa_name}`;
+                        committeeDiv.title = `${committee.committee_name} - ${committee.hativa_name} (לחץ לעריכה)`;
+                        committeeDiv.onclick = function(e) {
+                            e.stopPropagation();
+                            editCommittee(committee);
+                        };
                         cell.appendChild(committeeDiv);
                     }
                 });
@@ -430,8 +407,13 @@ function renderCalendar() {
                     const eventDiv = document.createElement('div');
                     eventDiv.className = 'badge bg-success text-white mb-1 d-block text-truncate';
                     eventDiv.style.fontSize = '0.65rem';
+                    eventDiv.style.cursor = 'pointer';
                     eventDiv.textContent = event.name;
-                    eventDiv.title = `${event.name} - ${event.maslul_name}`;
+                    eventDiv.title = `${event.name} - ${event.maslul_name} (לחץ לעריכה)`;
+                    eventDiv.onclick = function(e) {
+                        e.stopPropagation();
+                        editEvent(event);
+                    };
                     cell.appendChild(eventDiv);
                 });
                 
@@ -488,6 +470,58 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+// Edit functions
+function editCommittee(committee) {
+    document.getElementById('edit_vaadot_id').value = committee.vaadot_id;
+    document.getElementById('edit_committee_type_id').value = committee.committee_type_id;
+    document.getElementById('edit_hativa_id').value = committee.hativa_id;
+    document.getElementById('edit_vaada_date').value = committee.vaada_date;
+    document.getElementById('edit_notes').value = committee.notes || '';
+    
+    // Set form action with the committee ID
+    document.getElementById('editCommitteeForm').action = '/committees/edit/' + committee.vaadot_id;
+    
+    const modal = new bootstrap.Modal(document.getElementById('editCommitteeModal'));
+    modal.show();
+}
+
+function editEvent(event) {
+    document.getElementById('edit_event_id').value = event.event_id;
+    document.getElementById('edit_event_vaadot_id').value = event.vaadot_id;
+    document.getElementById('edit_event_maslul_id').value = event.maslul_id;
+    document.getElementById('edit_event_name').value = event.name;
+    document.getElementById('edit_event_type').value = event.event_type;
+    document.getElementById('edit_expected_requests').value = event.expected_requests;
+    
+    // Set form action with the event ID
+    document.getElementById('editEventForm').action = '/events/edit/' + event.event_id;
+    
+    const modal = new bootstrap.Modal(document.getElementById('editEventModal'));
+    modal.show();
+}
+
+function deleteCommittee() {
+    if (confirm('האם אתה בטוח שברצונך למחוק את ישיבת הועדה? פעולה זו תמחק גם את כל האירועים הקשורים אליה.')) {
+        const vaadotId = document.getElementById('edit_vaadot_id').value;
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/committees/delete/' + vaadotId;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function deleteEvent() {
+    if (confirm('האם אתה בטוח שברצונך למחוק את האירוע?')) {
+        const eventId = document.getElementById('edit_event_id').value;
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/events/delete/' + eventId;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
 </script>
 
 <style>

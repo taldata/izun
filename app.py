@@ -273,6 +273,54 @@ def add_committee_meeting():
     
     return redirect(url_for('committees'))
 
+@app.route('/committees/edit/<int:vaadot_id>', methods=['POST'])
+def edit_committee_meeting(vaadot_id):
+    """Edit existing committee meeting"""
+    committee_type_id = request.form.get('committee_type_id')
+    hativa_id = request.form.get('hativa_id')
+    vaada_date = request.form.get('vaada_date')
+    notes = request.form.get('notes', '').strip()
+    
+    if not all([committee_type_id, hativa_id, vaada_date]):
+        flash('סוג ועדה, חטיבה ותאריך הם שדות חובה', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        meeting_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+        success = db.update_vaada(vaadot_id, int(committee_type_id), int(hativa_id), meeting_date, notes=notes)
+        if success:
+            flash('ישיבת הועדה עודכנה בהצלחה', 'success')
+        else:
+            flash('שגיאה בעדכון הישיבה', 'error')
+    except ValueError:
+        flash('פורמט תאריך לא תקין', 'error')
+    except Exception as e:
+        flash(f'שגיאה בעדכון הישיבה: {str(e)}', 'error')
+    
+    return redirect(url_for('index'))
+
+@app.route('/committees/delete/<int:vaadot_id>', methods=['POST'])
+def delete_committee_meeting(vaadot_id):
+    """Delete committee meeting and its events"""
+    try:
+        # First delete all related events
+        events = db.get_events()
+        related_events = [e for e in events if e['vaadot_id'] == vaadot_id]
+        
+        for event in related_events:
+            db.delete_event(event['event_id'])
+        
+        # Then delete the committee meeting
+        success = db.delete_vaada(vaadot_id)
+        if success:
+            flash(f'ישיבת הועדה ו-{len(related_events)} אירועים נמחקו בהצלחה', 'success')
+        else:
+            flash('שגיאה במחיקת הישיבה', 'error')
+    except Exception as e:
+        flash(f'שגיאה במחיקת הישיבה: {str(e)}', 'error')
+    
+    return redirect(url_for('index'))
+
 @app.route('/events')
 def events():
     """Manage events"""
@@ -341,6 +389,53 @@ def add_event():
         flash(f'שגיאה ביצירת האירוע: {str(e)}', 'error')
     
     return redirect(url_for('events'))
+
+@app.route('/events/edit/<int:event_id>', methods=['POST'])
+def edit_event(event_id):
+    """Edit existing event"""
+    vaadot_id = request.form.get('vaadot_id')
+    maslul_id = request.form.get('maslul_id')
+    name = request.form.get('name', '').strip()
+    event_type = request.form.get('event_type')
+    expected_requests = request.form.get('expected_requests', '0')
+    
+    if not all([vaadot_id, maslul_id, name, event_type]):
+        flash('כל השדות הם שדות חובה', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        expected_requests = int(expected_requests) if expected_requests else 0
+        success = db.update_event(event_id, int(vaadot_id), int(maslul_id), name, event_type, expected_requests)
+        if success:
+            flash(f'אירוע "{name}" עודכן בהצלחה', 'success')
+        else:
+            flash('שגיאה בעדכון האירוע', 'error')
+    except Exception as e:
+        flash(f'שגיאה בעדכון האירוע: {str(e)}', 'error')
+    
+    return redirect(url_for('index'))
+
+@app.route('/events/delete/<int:event_id>', methods=['POST'])
+def delete_event_route(event_id):
+    """Delete event"""
+    try:
+        # Get event name before deletion
+        events = db.get_events()
+        event = next((e for e in events if e['event_id'] == event_id), None)
+        
+        if not event:
+            flash('האירוע לא נמצא במערכת', 'error')
+            return redirect(url_for('index'))
+        
+        success = db.delete_event(event_id)
+        if success:
+            flash(f'אירוע "{event["name"]}" נמחק בהצלחה', 'success')
+        else:
+            flash('שגיאה במחיקת האירוע', 'error')
+    except Exception as e:
+        flash(f'שגיאה במחיקת האירוע: {str(e)}', 'error')
+    
+    return redirect(url_for('index'))
 
 
 
