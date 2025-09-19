@@ -529,8 +529,12 @@ def add_committee_meeting():
         meeting_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
         vaadot_id = db.add_vaada(int(committee_type_id), int(hativa_id), meeting_date, status, notes=notes)
         flash('ישיבת ועדה נוספה בהצלחה', 'success')
-    except ValueError:
-        flash('פורמט תאריך לא תקין', 'error')
+    except ValueError as e:
+        # Check if it's a date format error or our constraint error
+        if "כבר קיימת ועדה בתאריך" in str(e):
+            flash(str(e), 'error')
+        else:
+            flash('פורמט תאריך לא תקין', 'error')
     except Exception as e:
         flash(f'שגיאה בהוספת הישיבה: {str(e)}', 'error')
     

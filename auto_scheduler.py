@@ -109,15 +109,8 @@ class AutoMeetingScheduler:
             return False, f"ועדה זו מתקיימת רק בימי {expected_day_name}"
         
         # בדיקת ועדה אחת ביום
-        existing_meetings = self.db.get_vaadot()
-        for meeting in existing_meetings:
-            if meeting.get('vaada_date'):
-                try:
-                    meeting_date = datetime.strptime(meeting['vaada_date'], '%Y-%m-%d').date()
-                    if meeting_date == target_date:
-                        return False, "קיימת כבר ישיבה אחרת באותו תאריך"
-                except (ValueError, TypeError):
-                    continue
+        if not self.db.is_date_available_for_meeting(target_date):
+            return False, "קיימת כבר ישיבה אחרת באותו תאריך"
         
         # בדיקת מגבלות שבועיות
         week_meetings = self.count_meetings_in_week(target_date)

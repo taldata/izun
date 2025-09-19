@@ -435,6 +435,17 @@ class DatabaseManager:
         """Add a specific committee meeting instance"""
         conn = self.get_connection()
         cursor = conn.cursor()
+        
+        # Check if there's already a committee meeting on this date
+        cursor.execute('''
+            SELECT COUNT(*) FROM vaadot WHERE vaada_date = ?
+        ''', (vaada_date,))
+        existing_count = cursor.fetchone()[0]
+        
+        if existing_count > 0:
+            conn.close()
+            raise ValueError(f"כבר קיימת ועדה בתאריך {vaada_date}. לא ניתן לקבוע יותר מועדה אחת ביום.")
+        
         cursor.execute('''
             INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, status, exception_date_id, notes)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -443,6 +454,15 @@ class DatabaseManager:
         conn.commit()
         conn.close()
         return vaadot_id
+    
+    def is_date_available_for_meeting(self, vaada_date: date) -> bool:
+        """Check if a date is available for a committee meeting (no existing meetings)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM vaadot WHERE vaada_date = ?', (vaada_date,))
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count == 0
     
     def get_vaadot(self, hativa_id: Optional[int] = None, start_date: Optional[date] = None, 
                    end_date: Optional[date] = None) -> List[Dict]:
