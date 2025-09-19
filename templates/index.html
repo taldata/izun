@@ -652,6 +652,9 @@ function showDayMenu(dateStr, event) {
         existingMenu.remove();
     }
     
+    // Check if there's already a committee meeting on this date
+    const existingCommittee = committeesData.find(committee => committee.vaada_date === dateStr);
+    
     // Create menu
     const menu = document.createElement('div');
     menu.id = 'dayMenu';
@@ -663,7 +666,7 @@ function showDayMenu(dateStr, event) {
         border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         z-index: 1000;
-        min-width: 200px;
+        min-width: 250px;
         padding: 8px 0;
     `;
     
@@ -672,28 +675,65 @@ function showDayMenu(dateStr, event) {
     menu.style.left = (rect.left + window.scrollX) + 'px';
     menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
     
-    // Create menu items
-    const menuItems = [
-        {
-            text: '➕ הוסף ועדה',
-            icon: 'bi-people',
-            action: () => {
-                document.getElementById('modalDate').value = dateStr;
-                const modal = new bootstrap.Modal(document.getElementById('addCommitteeModal'));
-                modal.show();
-                menu.remove();
+    // Create menu items based on whether there's already a committee
+    let menuItems = [];
+    
+    if (existingCommittee) {
+        // If there's already a committee, only show option to add event to it
+        menuItems = [
+            {
+                text: `📅 הוסף אירוע לועדה`,
+                subtitle: `${existingCommittee.committee_name} - ${existingCommittee.hativa_name}`,
+                icon: 'bi-calendar-plus',
+                action: () => {
+                    // Pre-select the existing committee in the event modal
+                    document.getElementById('event_vaadot_id').value = existingCommittee.vaadot_id;
+                    
+                    // Trigger change event to filter routes by division
+                    const event = new Event('change');
+                    document.getElementById('event_vaadot_id').dispatchEvent(event);
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('addEventModal'));
+                    modal.show();
+                    menu.remove();
+                }
+            },
+            {
+                text: '✏️ ערוך ועדה',
+                subtitle: 'עריכת פרטי הועדה הקיימת',
+                icon: 'bi-pencil',
+                action: () => {
+                    editCommittee(existingCommittee);
+                    menu.remove();
+                }
             }
-        },
-        {
-            text: '📅 הוסף אירוע',
-            icon: 'bi-calendar-event',
-            action: () => {
-                const modal = new bootstrap.Modal(document.getElementById('addEventModal'));
-                modal.show();
-                menu.remove();
+        ];
+    } else {
+        // If no committee exists, show option to add committee or event
+        menuItems = [
+            {
+                text: '➕ הוסף ועדה',
+                subtitle: 'יצירת ישיבת ועדה חדשה',
+                icon: 'bi-people',
+                action: () => {
+                    document.getElementById('modalDate').value = dateStr;
+                    const modal = new bootstrap.Modal(document.getElementById('addCommitteeModal'));
+                    modal.show();
+                    menu.remove();
+                }
+            },
+            {
+                text: '📅 הוסף אירוע',
+                subtitle: 'הוספת אירוע לועדה קיימת',
+                icon: 'bi-calendar-event',
+                action: () => {
+                    const modal = new bootstrap.Modal(document.getElementById('addEventModal'));
+                    modal.show();
+                    menu.remove();
+                }
             }
-        }
-    ];
+        ];
+    }
     
     menuItems.forEach(item => {
         const menuItem = document.createElement('div');
@@ -707,10 +747,16 @@ function showDayMenu(dateStr, event) {
             transition: background-color 0.2s;
         `;
         
-        menuItem.innerHTML = `
+        // Create content with subtitle support
+        const content = `
             <i class="bi ${item.icon}"></i>
-            <span>${item.text}</span>
+            <div style="flex: 1;">
+                <div style="font-weight: 500;">${item.text}</div>
+                ${item.subtitle ? `<div style="font-size: 0.8rem; color: #6c757d; margin-top: 2px;">${item.subtitle}</div>` : ''}
+            </div>
         `;
+        
+        menuItem.innerHTML = content;
         
         menuItem.onmouseover = () => menuItem.style.backgroundColor = '#f8f9fa';
         menuItem.onmouseout = () => menuItem.style.backgroundColor = 'transparent';
@@ -933,6 +979,114 @@ function showSLAInfo(vaadotId) {
             `;
         });
 }
+
+// Format date in Hebrew
+function formatDateHebrew(dateStr) {
+    const date = new Date(dateStr);
+    const day = date.getDate();
+    const month = date.getMonth();
+    const year = date.getFullYear();
+    
+    const monthNamesHebrew = [
+        'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+        'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'
+    ];
+    
+    return `${day} ב${monthNamesHebrew[month]} ${year}`;
+}
+
+// Filter routes by committee's division
+function filterRoutesByCommittee() {
+    const committeeSelect = document.getElementById('event_vaadot_id');
+    const routeSelect = document.getElementById('event_maslul_id');
+    
+    if (!committeeSelect || !routeSelect) return;
+    
+    const selectedCommitteeId = committeeSelect.value;
+    
+    // Find the selected committee
+    const selectedCommittee = committeesData.find(c => c.vaadot_id == selectedCommitteeId);
+    
+    // Get all route options
+    const allRouteOptions = Array.from(routeSelect.querySelectorAll('option'));
+    
+    if (!selectedCommittee) {
+        // If no committee selected, show all routes
+        allRouteOptions.forEach(option => {
+            if (option.value) option.style.display = '';
+        });
+        return;
+    }
+    
+    // Filter routes to show only those from the same division
+    allRouteOptions.forEach(option => {
+        if (!option.value) {
+            option.style.display = ''; // Always show the empty option
+            return;
+        }
+        
+        const routeHativaId = option.getAttribute('data-hativa-id');
+        if (routeHativaId == selectedCommittee.hativa_id) {
+            option.style.display = '';
+        } else {
+            option.style.display = 'none';
+        }
+    });
+    
+    // Reset route selection if current selection is not valid for the new committee
+    const currentRouteHativaId = routeSelect.selectedOptions[0]?.getAttribute('data-hativa-id');
+    if (currentRouteHativaId && currentRouteHativaId != selectedCommittee.hativa_id) {
+        routeSelect.value = '';
+    }
+}
+
+// Add event listeners when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    // Add change listener to committee select in add event modal
+    const committeeSelect = document.getElementById('event_vaadot_id');
+    if (committeeSelect) {
+        committeeSelect.addEventListener('change', filterRoutesByCommittee);
+    }
+    
+    // Add change listener to committee select in edit event modal
+    const editCommitteeSelect = document.getElementById('edit_event_vaadot_id');
+    if (editCommitteeSelect) {
+        editCommitteeSelect.addEventListener('change', function() {
+            // Similar filtering for edit modal
+            const routeSelect = document.getElementById('edit_event_maslul_id');
+            const selectedCommitteeId = this.value;
+            const selectedCommittee = committeesData.find(c => c.vaadot_id == selectedCommitteeId);
+            
+            const allRouteOptions = Array.from(routeSelect.querySelectorAll('option'));
+            
+            if (!selectedCommittee) {
+                allRouteOptions.forEach(option => {
+                    if (option.value) option.style.display = '';
+                });
+                return;
+            }
+            
+            allRouteOptions.forEach(option => {
+                if (!option.value) {
+                    option.style.display = '';
+                    return;
+                }
+                
+                const routeHativaId = option.getAttribute('data-hativa-id');
+                if (routeHativaId == selectedCommittee.hativa_id) {
+                    option.style.display = '';
+                } else {
+                    option.style.display = 'none';
+                }
+            });
+            
+            const currentRouteHativaId = routeSelect.selectedOptions[0]?.getAttribute('data-hativa-id');
+            if (currentRouteHativaId && currentRouteHativaId != selectedCommittee.hativa_id) {
+                routeSelect.value = '';
+            }
+        });
+    }
+});
 </script>
 
 <style>
