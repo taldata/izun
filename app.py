@@ -956,6 +956,9 @@ def generate_auto_schedule():
             'selected_hativot': selected_hativot
         }
         
+        app.logger.info(f"Stored in session: {len(result.suggested_meetings)} suggestions for {result.year}/{result.month}")
+        app.logger.info(f"First suggestion in session: {result.suggested_meetings[0] if result.suggested_meetings else 'None'}")
+        
         flash(result.message, 'success')
         return redirect(url_for('review_auto_schedule'))
         
@@ -1004,19 +1007,19 @@ def approve_auto_schedule():
     """Approve and create selected meetings from the generated schedule"""
     from flask import session
     
-    pending_schedule = session.get('pending_schedule')
-    if not pending_schedule:
-        flash('אין לוח זמנים ממתין לאישור', 'warning')
-        return redirect(url_for('auto_schedule'))
-    
-    selected_suggestions = request.form.getlist('selected_suggestions')
-    if not selected_suggestions:
-        flash('יש לבחור לפחות הצעה אחת', 'warning')
-        return redirect(url_for('review_auto_schedule'))
-    
     try:
+        pending_schedule = session.get('pending_schedule')
+        if not pending_schedule:
+            flash('אין לוח זמנים ממתין לאישור', 'warning')
+            return redirect(url_for('auto_schedule'))
+        
+        selected_meetings = request.form.getlist('selected_meetings')
+        if not selected_meetings:
+            flash('יש לבחור לפחות הצעה אחת', 'warning')
+            return redirect(url_for('review_auto_schedule'))
+        
         # Convert to integers and get selected suggestions
-        selected_indices = [int(idx) for idx in selected_suggestions]
+        selected_indices = [int(idx) for idx in selected_meetings]
         suggestions = pending_schedule.get('suggestions', [])
         
         # Filter selected suggestions
@@ -1050,10 +1053,12 @@ def approve_auto_schedule():
             failed_reasons = [f"{m['committee_type']}: {m['reason']}" for m in result.failed_meetings[:3]]
             flash(f'נכשלו {result.failure_count} ישיבות: {"; ".join(failed_reasons)}', 'warning')
         
-        return redirect(url_for('vaadot'))
+        return redirect(url_for('index'))
         
     except Exception as e:
+        import traceback
         app.logger.error(f'Error approving auto schedule: {str(e)}')
+        app.logger.error(f'Traceback: {traceback.format_exc()}')
         flash('שגיאה פנימית באישור התזמון. אנא נסה שוב מאוחר יותר.', 'error')
         return redirect(url_for('review_auto_schedule'))
 

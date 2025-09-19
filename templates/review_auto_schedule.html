@@ -259,6 +259,55 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial state
     const allChecked = Array.from(meetingCheckboxes).every(cb => cb.checked);
     selectAllCheckbox.checked = allChecked;
+    
+    // Add debugging for form submission
+    const form = document.querySelector('form[action="{{ url_for("approve_auto_schedule") }}"]');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            console.log('=== FORM SUBMISSION DEBUG ===');
+            
+            // Check selected meetings
+            const selectedMeetings = document.querySelectorAll('input[name="selected_meetings"]:checked');
+            console.log('Selected meetings count:', selectedMeetings.length);
+            
+            const selectedValues = [];
+            selectedMeetings.forEach((checkbox, index) => {
+                console.log(`Selected meeting ${index + 1}: value=${checkbox.value}, name=${checkbox.name}`);
+                selectedValues.push(checkbox.value);
+            });
+            
+            console.log('Selected values array:', selectedValues);
+            
+            if (selectedValues.length === 0) {
+                console.log('❌ No meetings selected - form should show error');
+                alert('DEBUG: No meetings selected!');
+            } else {
+                console.log('✅ Meetings selected - form should submit');
+            }
+            
+            // Check auto_approve checkbox
+            const autoApprove = document.querySelector('input[name="auto_approve"]');
+            if (autoApprove) {
+                console.log('Auto approve checked:', autoApprove.checked);
+            }
+            
+            console.log('Form action:', form.action);
+            console.log('Form method:', form.method);
+            
+            // Let form submit normally
+            console.log('Allowing form submission...');
+        });
+    }
+    
+    // Add debugging for checkbox changes
+    meetingCheckboxes.forEach((checkbox, index) => {
+        checkbox.addEventListener('change', function() {
+            console.log(`Checkbox ${index} changed: value=${this.value}, checked=${this.checked}`);
+            
+            const totalSelected = document.querySelectorAll('input[name="selected_meetings"]:checked').length;
+            console.log(`Total selected meetings: ${totalSelected}`);
+        });
+    });
 });
 </script>
 {% endblock %}

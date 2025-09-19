@@ -28,7 +28,10 @@
         <div class="card">
             <div class="card-header bg-gradient text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                 <div>
-                    <h5 class="mb-1" id="currentMonthYear">יומן חודשי</h5>
+                    <h4 class="mb-0" id="currentMonthYear" style="color: #000000; font-weight: bold; text-shadow: 1px 1px 2px rgba(255,255,255,0.8);">
+                        <span id="monthName" style="color: #000000;">ספטמבר</span> 
+                        <span id="yearNumber" style="color: #000000;">2025</span>
+                    </h4>
                     <small class="opacity-75">לחץ על יום להוספה, על פריט לעריכה</small>
                 </div>
                 <div class="d-flex gap-2">
@@ -377,30 +380,28 @@ const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מא�
 <script type="application/json" id="hativot-data">{{ hativot|tojson|safe }}</script>
 <script>
 // Parse data from JSON scripts
-console.log('Loading committees data...');
 const committeesDataElement = document.getElementById('committees-data');
-console.log('Committees data element:', committeesDataElement);
 const committeesData = committeesDataElement ? JSON.parse(committeesDataElement.textContent) : [];
-console.log('Committees data:', committeesData);
 
-console.log('Loading events data...');
 const eventsDataElement = document.getElementById('events-data');
-console.log('Events data element:', eventsDataElement);
 const eventsData = eventsDataElement ? JSON.parse(eventsDataElement.textContent) : [];
-console.log('Events data:', eventsData);
 
-console.log('Loading hativot data...');
 const hativotDataElement = document.getElementById('hativot-data');
 const hativotData = hativotDataElement ? JSON.parse(hativotDataElement.textContent) : [];
-console.log('Hativot data:', hativotData);
 window.hativotData = hativotData; // Make it globally available
 
 function renderCalendar() {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     
-    // Update header
-    document.getElementById('currentMonthYear').textContent = `${monthNames[month]} ${year}`;
+    // Update header elements
+    const monthElement = document.getElementById('monthName');
+    const yearElement = document.getElementById('yearNumber');
+    
+    if (monthElement && yearElement) {
+        monthElement.textContent = monthNames[month];
+        yearElement.textContent = year;
+    }
     
     // Get first day of month and number of days
     const firstDay = new Date(year, month, 1);
@@ -543,13 +544,23 @@ function goToToday() {
     renderCalendar();
 }
 
+
 // Initialize calendar when page loads
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, initializing calendar...');
     currentDate = new Date();
-    console.log('Current date:', currentDate);
+    
+    // Update header elements immediately
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const monthElement = document.getElementById('monthName');
+    const yearElement = document.getElementById('yearNumber');
+    
+    if (monthElement && yearElement) {
+        monthElement.textContent = monthNames[month];
+        yearElement.textContent = year;
+    }
+    
     renderCalendar();
-    console.log('Calendar generation completed');
     
     // Add click handler for calendar cells to set date in modals
     document.addEventListener('click', function(e) {

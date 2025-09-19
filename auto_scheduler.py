@@ -129,6 +129,7 @@ class AutoMeetingScheduler:
                     return False, f"ועדה חודשית זו מתקיימת רק בשבוע {week_of_month} של החודש"
         
         # בדיקה שאין כפילות לאותה ועדה ואותה חטיבה
+        existing_meetings = self.db.get_vaadot()
         for meeting in existing_meetings:
             if (meeting.get('committee_type_id') == committee_type_id and 
                 meeting.get('hativa_id') == hativa_id and 
@@ -275,10 +276,15 @@ class AutoMeetingScheduler:
         
         for suggestion in suggestions:
             try:
+                # המרת תאריך לאובייקט date אם נדרש
+                suggested_date = suggestion['suggested_date']
+                if isinstance(suggested_date, str):
+                    suggested_date = datetime.strptime(suggested_date, '%Y-%m-%d').date()
+                
                 # בדיקה נוספת לפני יצירה
                 can_create, reason = self.can_schedule_meeting(
                     suggestion['committee_type_id'],
-                    suggestion['suggested_date'],
+                    suggested_date,
                     suggestion['hativa_id']
                 )
                 
@@ -287,7 +293,7 @@ class AutoMeetingScheduler:
                     meeting_id = self.db.add_vaada(
                         committee_type_id=suggestion['committee_type_id'],
                         hativa_id=suggestion['hativa_id'],
-                        vaada_date=suggestion['suggested_date'],
+                        vaada_date=suggested_date,
                         status=status,
                         notes=f"נוצר אוטומטית - {suggestion['frequency']}"
                     )
@@ -295,20 +301,20 @@ class AutoMeetingScheduler:
                     created_meetings.append({
                         'meeting_id': meeting_id,
                         'committee_type': suggestion['committee_type'],
-                        'date': suggestion['suggested_date'],
+                        'date': suggested_date,
                         'status': status
                     })
                 else:
                     failed_meetings.append({
                         'committee_type': suggestion['committee_type'],
-                        'date': suggestion['suggested_date'],
+                        'date': suggested_date,
                         'reason': reason
                     })
                     
             except Exception as e:
                 failed_meetings.append({
-                    'committee_type': suggestion['committee_type'],
-                    'date': suggestion['suggested_date'],
+                    'committee_type': suggestion.get('committee_type', 'לא ידוע'),
+                    'date': suggestion.get('suggested_date', 'לא ידוע'),
                     'reason': f"שגיאה ביצירה: {str(e)}"
                 })
         

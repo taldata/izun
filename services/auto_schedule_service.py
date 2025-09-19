@@ -139,22 +139,28 @@ class AutoScheduleService:
         
         # אימות כל הצעה
         for i, suggestion in enumerate(request.suggestions):
-            if 'committee_type_id' not in suggestion:
-                raise ValidationError(f"הצעה {i+1}: חסר מזהה סוג ועדה")
+            required_fields = ['committee_type_id', 'hativa_id', 'suggested_date']
+            for field in required_fields:
+                if field not in suggestion:
+                    raise ValidationError(f"הצעה {i+1}: חסר שדה {field}")
             
-            if 'hativa_id' not in suggestion:
-                raise ValidationError(f"הצעה {i+1}: חסר מזהה חטיבה")
-            
-            if 'suggested_date' not in suggestion:
-                raise ValidationError(f"הצעה {i+1}: חסר תאריך מוצע")
-            
-            # אימות תאריך
+            # Validate and normalize date format
             try:
-                if isinstance(suggestion['suggested_date'], str):
-                    datetime.strptime(suggestion['suggested_date'], '%Y-%m-%d')
+                suggested_date = suggestion['suggested_date']
+                if isinstance(suggested_date, str):
+                    # Try different date formats
+                    if 'GMT' in suggested_date:
+                        # Handle GMT format: 'Mon, 03 Nov 2025 00:00:00 GMT'
+                        from datetime import datetime
+                        parsed_date = datetime.strptime(suggested_date, '%a, %d %b %Y %H:%M:%S %Z')
+                        suggestion['suggested_date'] = parsed_date.date()
+                    else:
+                        # Handle YYYY-MM-DD format
+                        datetime.strptime(suggested_date, '%Y-%m-%d')
                 elif not isinstance(suggestion['suggested_date'], date):
                     raise ValueError("Invalid date format")
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
+                logger.error(f"Date validation error for suggestion {i+1}: {e}, date: {suggestion.get('suggested_date')}")
                 raise ValidationError(f"הצעה {i+1}: תאריך לא תקין")
         
         logger.debug("Approval request validation passed")
@@ -162,8 +168,6 @@ class AutoScheduleService:
     def approve_meetings(self, request: ApprovalRequest) -> ApprovalResult:
         """אישור ויצירת ישיבות"""
         try:
-            logger.info(f"Approving {len(request.suggestions)} meeting suggestions")
-            
             # אימות הבקשה
             self.validate_approval_request(request)
             
@@ -172,8 +176,6 @@ class AutoScheduleService:
                 request.suggestions,
                 request.auto_approve
             )
-            
-            logger.info(f"Created {result['success_count']} meetings, failed {result['failure_count']}")
             
             return ApprovalResult(
                 created_meetings=result['created_meetings'],
