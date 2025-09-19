@@ -11,33 +11,58 @@
             <h2 class="section-title">
                 <i class="bi bi-calendar3 me-2"></i>יומן ועדות ואירועים
             </h2>
-            <div class="btn-group" role="group">
-                <button class="btn btn-outline-primary" onclick="previousMonth()">
-                    <i class="bi bi-chevron-right"></i>
-                </button>
-                <button class="btn btn-outline-primary" onclick="goToToday()">היום</button>
-                <button class="btn btn-outline-primary" onclick="nextMonth()">
-                    <i class="bi bi-chevron-left"></i>
+            <div class="d-flex gap-2">
+                <div class="btn-group" role="group">
+                    <button class="btn btn-outline-primary" onclick="previousMonth()">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <button class="btn btn-outline-primary" onclick="goToToday()">היום</button>
+                    <button class="btn btn-outline-primary" onclick="nextMonth()">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                </div>
+                <button type="button" class="btn btn-outline-info" onclick="toggleColorLegend()">
+                    <i class="bi bi-palette me-1"></i>מקרא צבעים
                 </button>
             </div>
         </div>
     </div>
-</div>
+        <!-- Color Legend -->
+        <div class="card mb-4" id="colorLegend" style="display: none;">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="bi bi-palette me-2"></i>מקרא צבעים - חטיבות
+                </h6>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleColorLegend()">
+                    <i class="bi bi-eye-slash"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="row" id="legendContent">
+                    <!-- Legend items will be populated by JavaScript -->
+                </div>
+                <div class="mt-3 pt-3 border-top">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>ועדות</strong> מוצגות בצבע מלא | <strong>אירועים</strong> מוצגים בצבע בהיר עם מסגרת
+                    </small>
+                </div>
+            </div>
+        </div>
 
-<div class="row">
-    <div class="col-12">
         <div class="card">
-            <div class="card-header bg-gradient text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0" id="currentMonthYear"></h5>
-                    <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#addCommitteeModal">
-                            <i class="bi bi-plus me-1"></i>הוסף ועדה
-                        </button>
-                        <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#addEventModal">
-                            <i class="bi bi-calendar-event me-1"></i>הוסף אירוע
-                        </button>
-                    </div>
+            <div class="card-header bg-gradient text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <div>
+                    <h5 class="mb-1" id="currentMonthYear">יומן חודשי</h5>
+                    <small class="opacity-75">לחץ על יום להוספה, על פריט לעריכה</small>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addCommitteeModal">
+                        <i class="bi bi-people me-1"></i>הוסף ישיבת ועדה
+                    </button>
+                    <button type="button" class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addEventModal">
+                        <i class="bi bi-calendar-plus me-1"></i>הוסף אירוע חדש
+                    </button>
                 </div>
             </div>
             <div class="card-body p-0">
@@ -120,7 +145,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
-                    <i class="bi bi-calendar-event me-2"></i>הוספת אירוע
+                    <i class="bi bi-calendar-plus me-2"></i>הוספת אירוע חדש
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
@@ -174,8 +199,8 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-save me-1"></i>צור אירוع
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-plus-circle me-1"></i>צור אירוע חדש
                     </button>
                 </div>
             </form>
@@ -324,8 +349,17 @@ const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מא�
 <script type="application/json" id="events-data">{{ events|tojson|safe }}</script>
 <script>
 // Parse data from JSON scripts
-const committeesData = JSON.parse(document.getElementById('committees-data').textContent);
-const eventsData = JSON.parse(document.getElementById('events-data').textContent);
+console.log('Loading committees data...');
+const committeesDataElement = document.getElementById('committees-data');
+console.log('Committees data element:', committeesDataElement);
+const committeesData = committeesDataElement ? JSON.parse(committeesDataElement.textContent) : [];
+console.log('Committees data:', committeesData);
+
+console.log('Loading events data...');
+const eventsDataElement = document.getElementById('events-data');
+console.log('Events data element:', eventsDataElement);
+const eventsData = eventsDataElement ? JSON.parse(eventsDataElement.textContent) : [];
+console.log('Events data:', eventsData);
 
 function renderCalendar() {
     const year = currentDate.getFullYear();
@@ -384,9 +418,13 @@ function renderCalendar() {
                 committeesData.forEach(committee => {
                     if (committee.vaada_date === currentDateStr) {
                         const committeeDiv = document.createElement('div');
-                        committeeDiv.className = 'badge bg-primary text-white mb-1 d-block text-truncate position-relative';
+                        const hativaColor = getHativaColor(committee.hativa_id);
+                        
+                        committeeDiv.className = 'badge text-white mb-1 d-block text-truncate position-relative committee-badge';
                         committeeDiv.style.fontSize = '0.7rem';
                         committeeDiv.style.cursor = 'pointer';
+                        committeeDiv.style.backgroundColor = hativaColor;
+                        committeeDiv.style.borderLeft = `4px solid ${hativaColor}`;
                         committeeDiv.textContent = committee.committee_name;
                         committeeDiv.title = `${committee.committee_name} - ${committee.hativa_name} (לחץ לעריכה)`;
                         committeeDiv.onclick = function(e) {
@@ -404,11 +442,19 @@ function renderCalendar() {
                 });
                 
                 dayEvents.forEach(event => {
+                    const eventCommittee = committeesData.find(c => c.vaadot_id === event.vaadot_id);
                     const eventDiv = document.createElement('div');
-                    eventDiv.className = 'badge bg-success text-white mb-1 d-block text-truncate';
+                    const hativaColor = getHativaColor(eventCommittee.hativa_id);
+                    const hativaColorLight = getHativaColorLight(eventCommittee.hativa_id);
+                    
+                    eventDiv.className = 'badge mb-1 d-block text-truncate event-badge';
                     eventDiv.style.fontSize = '0.65rem';
                     eventDiv.style.cursor = 'pointer';
-                    eventDiv.textContent = event.name;
+                    eventDiv.style.backgroundColor = hativaColorLight;
+                    eventDiv.style.color = hativaColor;
+                    eventDiv.style.border = `1px solid ${hativaColor}`;
+                    eventDiv.style.fontWeight = '500';
+                    eventDiv.textContent = `📅 ${event.name}`;
                     eventDiv.title = `${event.name} - ${event.maslul_name} (לחץ לעריכה)`;
                     eventDiv.onclick = function(e) {
                         e.stopPropagation();
@@ -456,7 +502,11 @@ function goToToday() {
 
 // Initialize calendar when page loads
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing calendar...');
+    currentDate = new Date();
+    console.log('Current date:', currentDate);
     renderCalendar();
+    console.log('Calendar generation completed');
     
     // Add click handler for calendar cells to set date in modals
     document.addEventListener('click', function(e) {
@@ -473,6 +523,39 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+// Color functions for divisions
+function getHativaColor(hativaId) {
+    const colors = [
+        '#007bff', // כחול
+        '#28a745', // ירוק
+        '#dc3545', // אדום
+        '#fd7e14', // כתום
+        '#6f42c1', // סגול
+        '#20c997', // טורקיז
+        '#e83e8c', // ורוד
+        '#6c757d', // אפור
+        '#17a2b8', // כחול בהיר
+        '#ffc107'  // צהוב
+    ];
+    return colors[hativaId % colors.length];
+}
+
+function getHativaColorLight(hativaId) {
+    const lightColors = [
+        '#cce7ff', // כחול בהיר
+        '#d4edda', // ירוק בהיר
+        '#f8d7da', // אדום בהיר
+        '#ffeaa7', // כתום בהיר
+        '#e2d9f3', // סגול בהיר
+        '#c3f4f0', // טורקיז בהיר
+        '#f5c6cb', // ורוד בהיר
+        '#e2e3e5', // אפור בהיר
+        '#bee5eb', // כחול בהיר בהיר
+        '#fff3cd'  // צהוב בהיר
+    ];
+    return lightColors[hativaId % lightColors.length];
+}
 
 // Edit functions
 function editCommittee(committee) {
@@ -633,6 +716,47 @@ function formatDateHebrew(dateStr) {
     const month = monthNames[date.getMonth()];
     const year = date.getFullYear();
     return `${day} ${month} ${year}`;
+}
+
+// Color legend functions
+function toggleColorLegend() {
+    const legend = document.getElementById('colorLegend');
+    const isVisible = legend.style.display !== 'none';
+    
+    if (isVisible) {
+        legend.style.display = 'none';
+    } else {
+        legend.style.display = 'block';
+        populateColorLegend();
+    }
+}
+
+function populateColorLegend() {
+    const legendContent = document.getElementById('legendContent');
+    legendContent.innerHTML = '';
+    
+    // Get unique divisions from committees data
+    const uniqueHativot = [...new Map(committeesData.map(c => [c.hativa_id, c])).values()];
+    
+    uniqueHativot.forEach(hativa => {
+        const col = document.createElement('div');
+        col.className = 'col-md-6 col-lg-4 mb-2';
+        
+        const hativaColor = getHativaColor(hativa.hativa_id);
+        const hativaColorLight = getHativaColorLight(hativa.hativa_id);
+        
+        col.innerHTML = `
+            <div class="d-flex align-items-center">
+                <div class="d-flex me-2">
+                    <div class="badge text-white me-1" style="background-color: ${hativaColor}; min-width: 20px; height: 20px;"></div>
+                    <div class="badge" style="background-color: ${hativaColorLight}; color: ${hativaColor}; border: 1px solid ${hativaColor}; min-width: 20px; height: 20px;"></div>
+                </div>
+                <small class="text-muted">${hativa.hativa_name}</small>
+            </div>
+        `;
+        
+        legendContent.appendChild(col);
+    });
 }
 </script>
 
