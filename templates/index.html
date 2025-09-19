@@ -21,34 +21,9 @@
                         <i class="bi bi-chevron-left"></i>
                     </button>
                 </div>
-                <button type="button" class="btn btn-outline-info" onclick="toggleColorLegend()">
-                    <i class="bi bi-palette me-1"></i>מקרא צבעים
-                </button>
             </div>
         </div>
     </div>
-        <!-- Color Legend -->
-        <div class="card mb-4" id="colorLegend" style="display: none;">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h6 class="mb-0">
-                    <i class="bi bi-palette me-2"></i>מקרא צבעים - חטיבות
-                </h6>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleColorLegend()">
-                    <i class="bi bi-eye-slash"></i>
-                </button>
-            </div>
-            <div class="card-body">
-                <div class="row" id="legendContent">
-                    <!-- Legend items will be populated by JavaScript -->
-                </div>
-                <div class="mt-3 pt-3 border-top">
-                    <small class="text-muted">
-                        <i class="bi bi-info-circle me-1"></i>
-                        <strong>ועדות</strong> מוצגות בצבע מלא | <strong>אירועים</strong> מוצגים בצבע בהיר עם מסגרת
-                    </small>
-                </div>
-            </div>
-        </div>
 
         <div class="card">
             <div class="card-header bg-gradient text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
@@ -360,6 +335,32 @@
     </div>
 </div>
 
+<!-- Division Colors Modal -->
+<div class="modal fade" id="divisionColorsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-palette me-2"></i>עריכת צבעי החטיבות
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">בחר צבע לכל חטיבה. הצבעים יוצגו ביומן ובכל מקום במערכת.</p>
+                <div id="divisionColorsList">
+                    <!-- Division colors will be populated by JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">סגור</button>
+                <button type="button" class="btn btn-primary" onclick="saveDivisionColors()">
+                    <i class="bi bi-save me-1"></i>שמור שינויים
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -373,6 +374,7 @@ const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מא�
 </script>
 <script type="application/json" id="committees-data">{{ committees|tojson|safe }}</script>
 <script type="application/json" id="events-data">{{ events|tojson|safe }}</script>
+<script type="application/json" id="hativot-data">{{ hativot|tojson|safe }}</script>
 <script>
 // Parse data from JSON scripts
 console.log('Loading committees data...');
@@ -386,6 +388,12 @@ const eventsDataElement = document.getElementById('events-data');
 console.log('Events data element:', eventsDataElement);
 const eventsData = eventsDataElement ? JSON.parse(eventsDataElement.textContent) : [];
 console.log('Events data:', eventsData);
+
+console.log('Loading hativot data...');
+const hativotDataElement = document.getElementById('hativot-data');
+const hativotData = hativotDataElement ? JSON.parse(hativotDataElement.textContent) : [];
+console.log('Hativot data:', hativotData);
+window.hativotData = hativotData; // Make it globally available
 
 function renderCalendar() {
     const year = currentDate.getFullYear();
@@ -559,37 +567,39 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Color functions for divisions
+// Color functions for divisions - now using database colors
 function getHativaColor(hativaId) {
+    // Find the hativa in the data passed from server
+    const hativotData = window.hativotData || [];
+    const hativa = hativotData.find(h => h.hativa_id == hativaId);
+    
+    if (hativa && hativa.color) {
+        return hativa.color;
+    }
+    
+    // Fallback to default colors if not found
     const colors = [
-        '#007bff', // כחול
-        '#28a745', // ירוק
-        '#dc3545', // אדום
-        '#fd7e14', // כתום
-        '#6f42c1', // סגול
-        '#20c997', // טורקיז
-        '#e83e8c', // ורוד
-        '#6c757d', // אפור
-        '#17a2b8', // כחול בהיר
-        '#ffc107'  // צהוב
+        '#007bff', '#28a745', '#dc3545', '#fd7e14', '#6f42c1', 
+        '#20c997', '#e83e8c', '#6c757d', '#17a2b8', '#ffc107'
     ];
     return colors[hativaId % colors.length];
 }
 
 function getHativaColorLight(hativaId) {
-    const lightColors = [
-        '#cce7ff', // כחול בהיר
-        '#d4edda', // ירוק בהיר
-        '#f8d7da', // אדום בהיר
-        '#ffeaa7', // כתום בהיר
-        '#e2d9f3', // סגול בהיר
-        '#c3f4f0', // טורקיז בהיר
-        '#f5c6cb', // ורוד בהיר
-        '#e2e3e5', // אפור בהיר
-        '#bee5eb', // כחול בהיר בהיר
-        '#fff3cd'  // צהוב בהיר
-    ];
-    return lightColors[hativaId % lightColors.length];
+    const baseColor = getHativaColor(hativaId);
+    return lightenColor(baseColor, 0.8);
+}
+
+// Function to lighten a hex color
+function lightenColor(color, amount) {
+    const num = parseInt(color.replace("#", ""), 16);
+    const amt = Math.round(2.55 * amount * 100);
+    const R = (num >> 16) + amt;
+    const G = (num >> 8 & 0x00FF) + amt;
+    const B = (num & 0x0000FF) + amt;
+    return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+        (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+        (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
 }
 
 // Edit functions
@@ -799,46 +809,6 @@ function formatDateHebrew(dateStr) {
     return `${day} ${month} ${year}`;
 }
 
-// Color legend functions
-function toggleColorLegend() {
-    const legend = document.getElementById('colorLegend');
-    const isVisible = legend.style.display !== 'none';
-    
-    if (isVisible) {
-        legend.style.display = 'none';
-    } else {
-        legend.style.display = 'block';
-        populateColorLegend();
-    }
-}
-
-function populateColorLegend() {
-    const legendContent = document.getElementById('legendContent');
-    legendContent.innerHTML = '';
-    
-    // Get unique divisions from committees data
-    const uniqueHativot = [...new Map(committeesData.map(c => [c.hativa_id, c])).values()];
-    
-    uniqueHativot.forEach(hativa => {
-        const col = document.createElement('div');
-        col.className = 'col-md-6 col-lg-4 mb-2';
-        
-        const hativaColor = getHativaColor(hativa.hativa_id);
-        const hativaColorLight = getHativaColorLight(hativa.hativa_id);
-        
-        col.innerHTML = `
-            <div class="d-flex align-items-center">
-                <div class="d-flex me-2">
-                    <div class="badge text-white me-1" style="background-color: ${hativaColor}; min-width: 20px; height: 20px;"></div>
-                    <div class="badge" style="background-color: ${hativaColorLight}; color: ${hativaColor}; border: 1px solid ${hativaColor}; min-width: 20px; height: 20px;"></div>
-                </div>
-                <small class="text-muted">${hativa.hativa_name}</small>
-            </div>
-        `;
-        
-        legendContent.appendChild(col);
-    });
-}
 
 // SLA Information functions
 function showSLAInfo(vaadotId) {
@@ -1086,7 +1056,167 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
+    // Add form validation to prevent submission with mismatched divisions
+    const addEventForm = document.querySelector('#addEventModal form');
+    if (addEventForm) {
+        addEventForm.addEventListener('submit', function(e) {
+            if (!validateEventDivisionMatch('event_vaadot_id', 'event_maslul_id')) {
+                e.preventDefault();
+                alert('שגיאה: המסלול חייב להיות מאותה חטיבה של הועדה');
+                return false;
+            }
+        });
+    }
+    
+    const editEventForm = document.querySelector('#editEventModal form');
+    if (editEventForm) {
+        editEventForm.addEventListener('submit', function(e) {
+            if (!validateEventDivisionMatch('edit_event_vaadot_id', 'edit_event_maslul_id')) {
+                e.preventDefault();
+                alert('שגיאה: המסלול חייב להיות מאותה חטיבה של הועדה');
+                return false;
+            }
+        });
+    }
 });
+
+// Validate that selected route belongs to the same division as selected committee
+function validateEventDivisionMatch(committeeSelectId, routeSelectId) {
+    const committeeSelect = document.getElementById(committeeSelectId);
+    const routeSelect = document.getElementById(routeSelectId);
+    
+    if (!committeeSelect || !routeSelect) return true;
+    
+    const selectedCommitteeId = committeeSelect.value;
+    const selectedRouteId = routeSelect.value;
+    
+    if (!selectedCommitteeId || !selectedRouteId) return true;
+    
+    // Find the selected committee
+    const selectedCommittee = committeesData.find(c => c.vaadot_id == selectedCommitteeId);
+    if (!selectedCommittee) return true;
+    
+    // Find the selected route's division
+    const selectedRouteOption = routeSelect.querySelector(`option[value="${selectedRouteId}"]`);
+    if (!selectedRouteOption) return true;
+    
+    const routeHativaId = selectedRouteOption.getAttribute('data-hativa-id');
+    
+    // Check if they match
+    return routeHativaId == selectedCommittee.hativa_id;
+}
+
+// Division colors management
+function showDivisionColorsModal() {
+    const modal = new bootstrap.Modal(document.getElementById('divisionColorsModal'));
+    populateDivisionColorsList();
+    modal.show();
+}
+
+function populateDivisionColorsList() {
+    const container = document.getElementById('divisionColorsList');
+    container.innerHTML = '';
+    
+    hativotData.forEach(hativa => {
+        const colorItem = document.createElement('div');
+        colorItem.className = 'mb-3 p-3 border rounded';
+        colorItem.innerHTML = `
+            <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <div class="color-preview me-3" style="width: 30px; height: 30px; background-color: ${hativa.color}; border-radius: 50%; border: 2px solid #ddd;"></div>
+                    <div>
+                        <h6 class="mb-0">${hativa.name}</h6>
+                        <small class="text-muted">${hativa.description || 'אין תיאור'}</small>
+                    </div>
+                </div>
+                <div>
+                    <input type="color" class="form-control form-control-color" 
+                           value="${hativa.color}" 
+                           data-hativa-id="${hativa.hativa_id}"
+                           onchange="updateColorPreview(this)">
+                </div>
+            </div>
+        `;
+        container.appendChild(colorItem);
+    });
+}
+
+function updateColorPreview(colorInput) {
+    const colorPreview = colorInput.closest('.mb-3').querySelector('.color-preview');
+    colorPreview.style.backgroundColor = colorInput.value;
+}
+
+function saveDivisionColors() {
+    const colorInputs = document.querySelectorAll('#divisionColorsList input[type="color"]');
+    const updates = [];
+    
+    colorInputs.forEach(input => {
+        const hativaId = input.getAttribute('data-hativa-id');
+        const color = input.value;
+        
+        // Update local data
+        const hativa = hativotData.find(h => h.hativa_id == hativaId);
+        if (hativa) {
+            hativa.color = color;
+        }
+        
+        updates.push({ hativa_id: hativaId, color: color });
+    });
+    
+    // Send updates to server
+    Promise.all(updates.map(update => {
+        const formData = new FormData();
+        formData.append('hativa_id', update.hativa_id);
+        formData.append('color', update.color);
+        
+        return fetch('/hativot/update_color', {
+            method: 'POST',
+            body: formData
+        });
+    })).then(responses => {
+        // Check if all requests were successful
+        const allSuccessful = responses.every(response => response.ok);
+        
+        if (allSuccessful) {
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('divisionColorsModal'));
+            modal.hide();
+            
+            // Refresh calendar to show new colors
+            renderCalendar();
+            
+            // Show success message
+            showAlert('צבעי החטיבות עודכנו בהצלחה', 'success');
+        } else {
+            showAlert('שגיאה בעדכון חלק מהצבעים', 'error');
+        }
+    }).catch(error => {
+        console.error('Error updating colors:', error);
+        showAlert('שגיאה בעדכון הצבעים', 'error');
+    });
+}
+
+function showAlert(message, type) {
+    // Create a simple alert
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alertDiv);
+    
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 3000);
+}
 </script>
 
 <style>

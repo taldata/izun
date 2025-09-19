@@ -334,16 +334,41 @@ def add_hativa():
     """Add new division"""
     name = request.form.get('name', '').strip()
     description = request.form.get('description', '').strip()
+    color = request.form.get('color', '#007bff')
     
     if not name:
         flash('שם החטיבה הוא שדה חובה', 'error')
         return redirect(url_for('hativot'))
     
     try:
-        hativa_id = db.add_hativa(name, description)
+        hativa_id = db.add_hativa(name, description, color)
         flash(f'חטיבה "{name}" נוספה בהצלחה', 'success')
     except Exception as e:
         flash(f'שגיאה בהוספת החטיבה: {str(e)}', 'error')
+    
+    return redirect(url_for('hativot'))
+
+@app.route('/hativot/update', methods=['POST'])
+@editing_permission_required
+def update_hativa():
+    """Update existing division"""
+    hativa_id = request.form.get('hativa_id')
+    name = request.form.get('name', '').strip()
+    description = request.form.get('description', '').strip()
+    color = request.form.get('color', '#007bff')
+    
+    if not all([hativa_id, name]):
+        flash('מזהה החטיבה ושם החטיבה הם שדות חובה', 'error')
+        return redirect(url_for('hativot'))
+    
+    try:
+        success = db.update_hativa(int(hativa_id), name, description, color)
+        if success:
+            flash(f'חטיבה "{name}" עודכנה בהצלחה', 'success')
+        else:
+            flash('שגיאה בעדכון החטיבה', 'error')
+    except Exception as e:
+        flash(f'שגיאה בעדכון החטיבה: {str(e)}', 'error')
     
     return redirect(url_for('hativot'))
 
@@ -663,6 +688,28 @@ def edit_event(event_id):
     
     try:
         expected_requests = int(expected_requests) if expected_requests else 0
+        
+        # Validate that committee and route are from the same division
+        vaada = None
+        for v in db.get_vaadot():
+            if v['vaadot_id'] == int(vaadot_id):
+                vaada = v
+                break
+        
+        maslul = None
+        for m in db.get_maslulim():
+            if m['maslul_id'] == int(maslul_id):
+                maslul = m
+                break
+        
+        if not vaada or not maslul:
+            flash('ועדה או מסלול לא נמצאו במערכת', 'error')
+            return redirect(url_for('index'))
+        
+        if vaada['hativa_id'] != maslul['hativa_id']:
+            flash(f'שגיאה: המסלול "{maslul["name"]}" מחטיבת "{maslul["hativa_name"]}" אינו יכול להיות משויך לועדה מחטיבת "{vaada["hativa_name"]}"', 'error')
+            return redirect(url_for('index'))
+        
         success = db.update_event(event_id, int(vaadot_id), int(maslul_id), name, event_type, expected_requests)
         if success:
             flash(f'אירוע "{name}" עודכן בהצלחה', 'success')
@@ -692,6 +739,27 @@ def delete_event_route(event_id):
             flash('שגיאה במחיקת האירוע', 'error')
     except Exception as e:
         flash(f'שגיאה במחיקת האירוע: {str(e)}', 'error')
+    
+    return redirect(url_for('index'))
+
+@app.route('/hativot/update_color', methods=['POST'])
+def update_hativa_color():
+    """Update division color"""
+    hativa_id = request.form.get('hativa_id')
+    color = request.form.get('color')
+    
+    if not all([hativa_id, color]):
+        flash('חטיבה וצבע הם שדות חובה', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        success = db.update_hativa_color(int(hativa_id), color)
+        if success:
+            flash('צבע החטיבה עודכן בהצלחה', 'success')
+        else:
+            flash('שגיאה בעדכון צבע החטיבה', 'error')
+    except Exception as e:
+        flash(f'שגיאה בעדכון צבע החטיבה: {str(e)}', 'error')
     
     return redirect(url_for('index'))
 

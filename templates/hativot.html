@@ -26,6 +26,7 @@
                                 <tr>
                                     <th>מזהה</th>
                                     <th>שם החטיבה</th>
+                                    <th>צבע</th>
                                     <th>תיאור</th>
                                     <th>פעולות</th>
                                 </tr>
@@ -35,11 +36,24 @@
                                 <tr>
                                     <td><span class="badge bg-secondary">{{ hativa.hativa_id }}</span></td>
                                     <td><strong>{{ hativa.name }}</strong></td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="color-preview me-2" 
+                                                 style="width: 20px; height: 20px; background-color: {{ hativa.color }}; border-radius: 50%; border: 1px solid #ddd;">
+                                            </div>
+                                            <small class="text-muted">{{ hativa.color }}</small>
+                                        </div>
+                                    </td>
                                     <td>{{ hativa.description or '-' }}</td>
                                     <td>
+                                        <button class="btn btn-sm btn-outline-primary me-1" 
+                                                onclick="editHativa({{ hativa.hativa_id }}, '{{ hativa.name }}', '{{ hativa.description or '' }}', '{{ hativa.color }}')"
+                                                data-bs-toggle="modal" data-bs-target="#editHativaModal">
+                                            <i class="bi bi-pencil me-1"></i>ערוך
+                                        </button>
                                         <a href="{{ url_for('maslulim') }}?hativa_id={{ hativa.hativa_id }}" 
                                            class="btn btn-sm btn-outline-info">
-                                            <i class="bi bi-arrow-right-circle me-1"></i>צפה במסלולים
+                                            <i class="bi bi-arrow-right-circle me-1"></i>מסלולים
                                         </a>
                                     </td>
                                 </tr>
@@ -84,6 +98,14 @@
                         <label for="description" class="form-label">תיאור החטיבה</label>
                         <textarea class="form-control" id="description" name="description" rows="3"></textarea>
                     </div>
+                    <div class="mb-3">
+                        <label for="color" class="form-label">צבע החטיבה</label>
+                        <div class="d-flex align-items-center">
+                            <input type="color" class="form-control form-control-color me-2" 
+                                   id="color" name="color" value="#007bff" style="width: 50px;">
+                            <small class="text-muted">צבע זה יוצג ביומן ובכל מקום במערכת</small>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
@@ -95,4 +117,54 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Hativa Modal -->
+<div class="modal fade" id="editHativaModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-pencil me-2"></i>עריכת חטיבה
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('update_hativa') }}" id="editHativaForm">
+                <input type="hidden" id="edit_hativa_id" name="hativa_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_name" class="form-label">שם החטיבה <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="edit_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_description" class="form-label">תיאור החטיבה</label>
+                        <textarea class="form-control" id="edit_description" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_color" class="form-label">צבע החטיבה</label>
+                        <div class="d-flex align-items-center">
+                            <input type="color" class="form-control form-control-color me-2" 
+                                   id="edit_color" name="color" style="width: 50px;">
+                            <small class="text-muted">צבע זה יוצג ביומן ובכל מקום במערכת</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>שמור שינויים
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function editHativa(hativaId, name, description, color) {
+    document.getElementById('edit_hativa_id').value = hativaId;
+    document.getElementById('edit_name').value = name;
+    document.getElementById('edit_description').value = description;
+    document.getElementById('edit_color').value = color;
+}
+</script>
 {% endblock %}

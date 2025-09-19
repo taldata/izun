@@ -25,6 +25,7 @@ class DatabaseManager:
                 hativa_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
                 description TEXT,
+                color TEXT DEFAULT '#007bff',
                 is_active INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -196,17 +197,60 @@ class DatabaseManager:
                 
                 # Remove the unique constraint on name and add unique constraint on (hativa_id, name)
                 # Note: SQLite doesn't support dropping constraints directly, so we'll handle this in the application logic
+            
+            # Check if color column exists in hativot table
+            cursor.execute("PRAGMA table_info(hativot)")
+            hativot_columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'color' not in hativot_columns:
+                cursor.execute('ALTER TABLE hativot ADD COLUMN color TEXT DEFAULT "#007bff"')
+                print("Added color column to hativot table")
+                
+                # Set default colors for existing divisions
+                default_colors = ['#007bff', '#28a745', '#dc3545', '#fd7e14', '#6f42c1', '#20c997', '#e83e8c', '#6c757d', '#17a2b8', '#ffc107']
+                cursor.execute("SELECT hativa_id FROM hativot ORDER BY hativa_id")
+                hativot_ids = cursor.fetchall()
+                
+                for i, (hativa_id,) in enumerate(hativot_ids):
+                    color = default_colors[i % len(default_colors)]
+                    cursor.execute('UPDATE hativot SET color = ? WHERE hativa_id = ?', (color, hativa_id))
+                
+                print(f"Set default colors for {len(hativot_ids)} existing divisions")
+            
+            # Check if is_active column exists in hativot table
+            cursor.execute("PRAGMA table_info(hativot)")
+            hativot_columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'is_active' not in hativot_columns:
+                cursor.execute('ALTER TABLE hativot ADD COLUMN is_active INTEGER DEFAULT 1')
+                print("Added is_active column to hativot table")
+            
+            # Check if is_active column exists in maslulim table
+            cursor.execute("PRAGMA table_info(maslulim)")
+            maslulim_columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'is_active' not in maslulim_columns:
+                cursor.execute('ALTER TABLE maslulim ADD COLUMN is_active INTEGER DEFAULT 1')
+                print("Added is_active column to maslulim table")
+            
+            # Check if is_active column exists in committee_types table
+            cursor.execute("PRAGMA table_info(committee_types)")
+            committee_types_columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'is_active' not in committee_types_columns:
+                cursor.execute('ALTER TABLE committee_types ADD COLUMN is_active INTEGER DEFAULT 1')
+                print("Added is_active column to committee_types table")
                 
         except Exception as e:
             print(f"Migration error: {e}")
             # Continue with normal initialization if migration fails
     
     # Hativot operations
-    def add_hativa(self, name: str, description: str = "") -> int:
+    def add_hativa(self, name: str, description: str = "", color: str = "#007bff") -> int:
         """Add a new division"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('INSERT INTO hativot (name, description) VALUES (?, ?)', (name, description))
+        cursor.execute('INSERT INTO hativot (name, description, color) VALUES (?, ?, ?)', (name, description, color))
         hativa_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -216,11 +260,36 @@ class DatabaseManager:
         """Get all divisions"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM hativot ORDER BY name')
+        cursor.execute('SELECT hativa_id, name, description, color, is_active, created_at FROM hativot ORDER BY name')
         rows = cursor.fetchall()
         conn.close()
         
-        return [{'hativa_id': row[0], 'name': row[1], 'description': row[2]} for row in rows]
+        return [{'hativa_id': row[0], 'name': row[1], 'description': row[2], 'color': row[3], 
+                'is_active': row[4], 'created_at': row[5]} for row in rows]
+    
+    def update_hativa_color(self, hativa_id: int, color: str) -> bool:
+        """Update division color"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('UPDATE hativot SET color = ? WHERE hativa_id = ?', (color, hativa_id))
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
+    
+    def update_hativa(self, hativa_id: int, name: str, description: str = "", color: str = "#007bff") -> bool:
+        """Update division details"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE hativot 
+            SET name = ?, description = ?, color = ?
+            WHERE hativa_id = ?
+        ''', (name, description, color, hativa_id))
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
     
     # Maslulim operations
     def add_maslul(self, hativa_id: int, name: str, description: str = "") -> int:
@@ -556,6 +625,31 @@ class DatabaseManager:
         """Add a new event"""
         conn = self.get_connection()
         cursor = conn.cursor()
+        
+        # Validate that the route belongs to the same division as the committee
+        cursor.execute('''
+            SELECT v.hativa_id as vaada_hativa_id, m.hativa_id as maslul_hativa_id,
+                   h1.name as vaada_hativa_name, h2.name as maslul_hativa_name,
+                   ct.name as committee_name, m.name as maslul_name
+            FROM vaadot v
+            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+            JOIN hativot h1 ON v.hativa_id = h1.hativa_id
+            JOIN maslulim m ON m.maslul_id = ?
+            JOIN hativot h2 ON m.hativa_id = h2.hativa_id
+            WHERE v.vaadot_id = ?
+        ''', (maslul_id, vaadot_id))
+        
+        result = cursor.fetchone()
+        if not result:
+            conn.close()
+            raise ValueError("ועדה או מסלול לא נמצאו במערכת")
+        
+        vaada_hativa_id, maslul_hativa_id, vaada_hativa_name, maslul_hativa_name, committee_name, maslul_name = result
+        
+        if vaada_hativa_id != maslul_hativa_id:
+            conn.close()
+            raise ValueError(f'המסלול "{maslul_name}" מחטיבת "{maslul_hativa_name}" אינו יכול להיות משויך לועדה "{committee_name}" מחטיבת "{vaada_hativa_name}"')
+        
         cursor.execute('''
             INSERT INTO events (vaadot_id, maslul_id, name, event_type, expected_requests)
             VALUES (?, ?, ?, ?, ?)
@@ -603,6 +697,56 @@ class DatabaseManager:
                 'event_type': row[4], 'expected_requests': row[5], 'scheduled_date': row[6],
                 'status': row[7], 'committee_name': row[9], 'vaada_date': row[10], 
                 'vaada_hativa_name': row[11], 'maslul_name': row[12], 'hativa_name': row[13]} for row in rows]
+    
+    def update_event(self, event_id: int, vaadot_id: int, maslul_id: int, name: str, event_type: str, expected_requests: int = 0) -> bool:
+        """Update an existing event"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Validate that the route belongs to the same division as the committee
+        cursor.execute('''
+            SELECT v.hativa_id as vaada_hativa_id, m.hativa_id as maslul_hativa_id,
+                   h1.name as vaada_hativa_name, h2.name as maslul_hativa_name,
+                   ct.name as committee_name, m.name as maslul_name
+            FROM vaadot v
+            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+            JOIN hativot h1 ON v.hativa_id = h1.hativa_id
+            JOIN maslulim m ON m.maslul_id = ?
+            JOIN hativot h2 ON m.hativa_id = h2.hativa_id
+            WHERE v.vaadot_id = ?
+        ''', (maslul_id, vaadot_id))
+        
+        result = cursor.fetchone()
+        if not result:
+            conn.close()
+            raise ValueError("ועדה או מסלול לא נמצאו במערכת")
+        
+        vaada_hativa_id, maslul_hativa_id, vaada_hativa_name, maslul_hativa_name, committee_name, maslul_name = result
+        
+        if vaada_hativa_id != maslul_hativa_id:
+            conn.close()
+            raise ValueError(f'המסלול "{maslul_name}" מחטיבת "{maslul_hativa_name}" אינו יכול להיות משויך לועדה "{committee_name}" מחטיבת "{vaada_hativa_name}"')
+        
+        cursor.execute('''
+            UPDATE events 
+            SET vaadot_id = ?, maslul_id = ?, name = ?, event_type = ?, expected_requests = ?
+            WHERE event_id = ?
+        ''', (vaadot_id, maslul_id, name, event_type, expected_requests, event_id))
+        
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
+    
+    def delete_event(self, event_id: int) -> bool:
+        """Delete an event"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM events WHERE event_id = ?', (event_id,))
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
     
     # User Management and Permissions
     def create_user(self, username: str, email: str, password_hash: str, full_name: str, 
@@ -789,11 +933,11 @@ class DatabaseManager:
         """Get only active divisions"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM hativot WHERE is_active = 1 ORDER BY name')
+        cursor.execute('SELECT hativa_id, name, description, color, is_active, created_at FROM hativot WHERE is_active = 1 ORDER BY name')
         rows = cursor.fetchall()
         conn.close()
-        return [{'hativa_id': row[0], 'name': row[1], 'description': row[2], 
-                'is_active': row[3], 'created_at': row[4]} for row in rows]
+        return [{'hativa_id': row[0], 'name': row[1], 'description': row[2], 'color': row[3],
+                'is_active': row[4], 'created_at': row[5]} for row in rows]
     
     def get_maslulim_active_only(self, hativa_id: Optional[int] = None) -> List[Dict]:
         """Get only active routes"""
