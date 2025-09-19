@@ -25,6 +25,7 @@ class DatabaseManager:
                 hativa_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
                 description TEXT,
+                is_active INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -36,8 +37,9 @@ class DatabaseManager:
                 hativa_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 description TEXT,
+                is_active INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id)
+                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id) ON DELETE CASCADE
             )
         ''')
         
@@ -48,11 +50,11 @@ class DatabaseManager:
                 hativa_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 scheduled_day INTEGER NOT NULL, -- 0=Monday, 1=Tuesday, etc.
-                frequency TEXT DEFAULT 'weekly', -- weekly, monthly
-                week_of_month INTEGER DEFAULT NULL, -- for monthly committees (1-4)
-                description TEXT,
+                frequency TEXT NOT NULL DEFAULT 'weekly' CHECK (frequency IN ('weekly', 'monthly')),
+                week_of_month INTEGER DEFAULT NULL, -- For monthly: 1=first week, 2=second, etc.
+                is_active INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id),
+                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id) ON DELETE CASCADE,
                 UNIQUE(hativa_id, name)
             )
         ''')
@@ -93,14 +95,55 @@ class DatabaseManager:
                 vaadot_id INTEGER NOT NULL,
                 maslul_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
-                event_type TEXT NOT NULL, -- 'kokok' or 'shotef'
+                event_type TEXT NOT NULL CHECK (event_type IN ('kokok', 'shotef')),
                 expected_requests INTEGER DEFAULT 0,
-                scheduled_date DATE,
-                status TEXT DEFAULT 'planned', -- planned, scheduled, completed, cancelled
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (vaadot_id) REFERENCES vaadot (vaadot_id),
-                FOREIGN KEY (maslul_id) REFERENCES maslulim (maslul_id)
+                FOREIGN KEY (vaadot_id) REFERENCES vaadot (vaadot_id) ON DELETE CASCADE,
+                FOREIGN KEY (maslul_id) REFERENCES maslulim (maslul_id) ON DELETE CASCADE
             )
+        ''')
+        
+        # Users table for authentication and permissions
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'manager', 'user')),
+                hativa_id INTEGER,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP,
+                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id)
+            )
+        ''')
+        
+        # System settings table for global permissions control
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS system_settings (
+                setting_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setting_key TEXT NOT NULL UNIQUE,
+                setting_value TEXT NOT NULL,
+                description TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_by INTEGER,
+                FOREIGN KEY (updated_by) REFERENCES users (user_id)
+            )
+        ''')
+        
+        # Insert default system settings
+        cursor.execute('''
+            INSERT OR IGNORE INTO system_settings (setting_key, setting_value, description)
+            VALUES 
+                ('editing_period_active', '1', 'Whether general editing is allowed (1=yes, 0=admin only)'),
+                ('academic_year_start', '2024-09-01', 'Start of current academic year'),
+                ('editing_deadline', '2024-10-31', 'Deadline for general user editing'),
+                ('work_days', '0,1,2,3,4', 'Working days (0=Sunday, 1=Monday, etc.)'),
+                ('work_start_time', '08:00', 'Daily work start time'),
+                ('work_end_time', '17:00', 'Daily work end time'),
+                ('sla_days_before', '14', 'Default SLA days before committee meeting')
         ''')
         
         conn.commit()
@@ -568,3 +611,353 @@ class DatabaseManager:
                 'event_type': row[4], 'expected_requests': row[5], 'scheduled_date': row[6],
                 'status': row[7], 'committee_name': row[9], 'vaada_date': row[10], 
                 'vaada_hativa_name': row[11], 'maslul_name': row[12], 'hativa_name': row[13]} for row in rows]
+    
+    # User Management and Permissions
+    def create_user(self, username: str, email: str, password_hash: str, full_name: str, 
+                   role: str = 'user', hativa_id: Optional[int] = None) -> int:
+        """Create a new user"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO users (username, email, password_hash, full_name, role, hativa_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (username, email, password_hash, full_name, role, hativa_id))
+        user_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return user_id
+    
+    def get_user_by_username(self, username: str) -> Optional[Dict]:
+        """Get user by username"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT u.*, h.name as hativa_name
+            FROM users u
+            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
+            WHERE u.username = ? AND u.is_active = 1
+        ''', (username,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return {
+                'user_id': row[0], 'username': row[1], 'email': row[2], 'password_hash': row[3],
+                'full_name': row[4], 'role': row[5], 'hativa_id': row[6], 'is_active': row[7],
+                'created_at': row[8], 'last_login': row[9], 'hativa_name': row[10]
+            }
+        return None
+    
+    def update_last_login(self, user_id: int):
+        """Update user's last login timestamp"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = ?
+        ''', (user_id,))
+        conn.commit()
+        conn.close()
+    
+    def get_system_setting(self, setting_key: str) -> Optional[str]:
+        """Get system setting value"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT setting_value FROM system_settings WHERE setting_key = ?
+        ''', (setting_key,))
+        row = cursor.fetchone()
+        conn.close()
+        return row[0] if row else None
+    
+    def update_system_setting(self, setting_key: str, setting_value: str, user_id: int):
+        """Update system setting"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE system_settings 
+            SET setting_value = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
+            WHERE setting_key = ?
+        ''', (setting_value, user_id, setting_key))
+        conn.commit()
+        conn.close()
+    
+    def is_editing_allowed(self, user_role: str) -> bool:
+        """Check if editing is allowed for user role"""
+        # Admins can always edit
+        if user_role == 'admin':
+            return True
+        
+        # Check if general editing period is active
+        editing_active = self.get_system_setting('editing_period_active')
+        return editing_active == '1'
+    
+    def can_user_edit(self, user_role: str, target_hativa_id: Optional[int] = None, 
+                     user_hativa_id: Optional[int] = None) -> Tuple[bool, str]:
+        """
+        Check if user can edit based on role and editing period
+        Returns (can_edit, reason)
+        """
+        # Admin can always edit everything
+        if user_role == 'admin':
+            return True, "מנהל מערכת"
+        
+        # Check if general editing is allowed
+        if not self.is_editing_allowed(user_role):
+            return False, "תקופת העריכה הכללית הסתיימה. רק מנהלי מערכת יכולים לערוך"
+        
+        # Manager can edit within their division
+        if user_role == 'manager':
+            if target_hativa_id and user_hativa_id and target_hativa_id != user_hativa_id:
+                return False, "מנהל יכול לערוך רק בחטיבה שלו"
+            return True, "מנהל חטיבה"
+        
+        # Regular user can edit within their division during editing period
+        if user_role == 'user':
+            if target_hativa_id and user_hativa_id and target_hativa_id != user_hativa_id:
+                return False, "משתמש יכול לערוך רק בחטיבה שלו"
+            return True, "תקופת עריכה פעילה"
+        
+        return False, "הרשאות לא מספיקות"
+    
+    # Soft Delete Functions (Alternative to hard delete)
+    def deactivate_hativa(self, hativa_id: int) -> bool:
+        """Deactivate division instead of deleting"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('UPDATE hativot SET is_active = 0 WHERE hativa_id = ?', (hativa_id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception:
+            return False
+    
+    def activate_hativa(self, hativa_id: int) -> bool:
+        """Reactivate division"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('UPDATE hativot SET is_active = 1 WHERE hativa_id = ?', (hativa_id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception:
+            return False
+    
+    def deactivate_maslul(self, maslul_id: int) -> bool:
+        """Deactivate route instead of deleting"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('UPDATE maslulim SET is_active = 0 WHERE maslul_id = ?', (maslul_id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception:
+            return False
+    
+    def activate_maslul(self, maslul_id: int) -> bool:
+        """Reactivate route"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('UPDATE maslulim SET is_active = 1 WHERE maslul_id = ?', (maslul_id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception:
+            return False
+    
+    def deactivate_committee_type(self, committee_type_id: int) -> bool:
+        """Deactivate committee type instead of deleting"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('UPDATE committee_types SET is_active = 0 WHERE committee_type_id = ?', (committee_type_id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception:
+            return False
+    
+    def activate_committee_type(self, committee_type_id: int) -> bool:
+        """Reactivate committee type"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('UPDATE committee_types SET is_active = 1 WHERE committee_type_id = ?', (committee_type_id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception:
+            return False
+    
+    # Updated get functions to filter by active status
+    def get_hativot_active_only(self) -> List[Dict]:
+        """Get only active divisions"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM hativot WHERE is_active = 1 ORDER BY name')
+        rows = cursor.fetchall()
+        conn.close()
+        return [{'hativa_id': row[0], 'name': row[1], 'description': row[2], 
+                'is_active': row[3], 'created_at': row[4]} for row in rows]
+    
+    def get_maslulim_active_only(self, hativa_id: Optional[int] = None) -> List[Dict]:
+        """Get only active routes"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        if hativa_id:
+            cursor.execute('''
+                SELECT m.*, h.name as hativa_name 
+                FROM maslulim m 
+                JOIN hativot h ON m.hativa_id = h.hativa_id 
+                WHERE m.hativa_id = ? AND m.is_active = 1 AND h.is_active = 1
+                ORDER BY m.name
+            ''', (hativa_id,))
+        else:
+            cursor.execute('''
+                SELECT m.*, h.name as hativa_name 
+                FROM maslulim m 
+                JOIN hativot h ON m.hativa_id = h.hativa_id 
+                WHERE m.is_active = 1 AND h.is_active = 1
+                ORDER BY h.name, m.name
+            ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        return [{'maslul_id': row[0], 'hativa_id': row[1], 'name': row[2], 
+                'description': row[3], 'is_active': row[4], 'created_at': row[5], 
+                'hativa_name': row[6]} for row in rows]
+    
+    def get_committee_types_active_only(self, hativa_id: Optional[int] = None) -> List[Dict]:
+        """Get only active committee types"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        if hativa_id:
+            cursor.execute('''
+                SELECT ct.*, h.name as hativa_name 
+                FROM committee_types ct 
+                JOIN hativot h ON ct.hativa_id = h.hativa_id 
+                WHERE ct.hativa_id = ? AND ct.is_active = 1 AND h.is_active = 1
+                ORDER BY ct.name
+            ''', (hativa_id,))
+        else:
+            cursor.execute('''
+                SELECT ct.*, h.name as hativa_name 
+                FROM committee_types ct 
+                JOIN hativot h ON ct.hativa_id = h.hativa_id 
+                WHERE ct.is_active = 1 AND h.is_active = 1
+                ORDER BY h.name, ct.name
+            ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        return [{'committee_type_id': row[0], 'hativa_id': row[1], 'name': row[2], 
+                'scheduled_day': row[3], 'frequency': row[4], 'week_of_month': row[5],
+                'is_active': row[6], 'created_at': row[7], 'hativa_name': row[8]} for row in rows]
+    
+    # Enhanced Business Days and SLA Calculations
+    def get_work_days(self) -> List[int]:
+        """Get configured work days"""
+        work_days_str = self.get_system_setting('work_days') or '0,1,2,3,4'
+        return [int(day) for day in work_days_str.split(',')]
+    
+    def is_work_day(self, check_date: date) -> bool:
+        """Check if date is a work day (not weekend, not holiday, configured work days)"""
+        # Check if it's a configured work day
+        work_days = self.get_work_days()
+        if check_date.weekday() not in work_days:
+            return False
+        
+        # Check if it's an exception date (holiday, special sabbath, etc.)
+        return not self.is_exception_date(check_date)
+    
+    def get_business_days_in_range(self, start_date: date, end_date: date) -> List[date]:
+        """Get all business days in a date range"""
+        business_days = []
+        current_date = start_date
+        
+        while current_date <= end_date:
+            if self.is_work_day(current_date):
+                business_days.append(current_date)
+            current_date += timedelta(days=1)
+        
+        return business_days
+    
+    def add_business_days(self, start_date: date, days_to_add: int) -> date:
+        """Add business days to a date (skipping weekends and holidays)"""
+        current_date = start_date
+        days_added = 0
+        
+        while days_added < days_to_add:
+            current_date += timedelta(days=1)
+            if self.is_work_day(current_date):
+                days_added += 1
+        
+        return current_date
+    
+    def subtract_business_days(self, start_date: date, days_to_subtract: int) -> date:
+        """Subtract business days from a date (skipping weekends and holidays)"""
+        current_date = start_date
+        days_subtracted = 0
+        
+        while days_subtracted < days_to_subtract:
+            current_date -= timedelta(days=1)
+            if self.is_work_day(current_date):
+                days_subtracted += 1
+        
+        return current_date
+    
+    def calculate_sla_dates(self, committee_date: date, sla_days: Optional[int] = None) -> Dict:
+        """Calculate SLA dates based on committee meeting date"""
+        if sla_days is None:
+            sla_days = int(self.get_system_setting('sla_days_before') or '14')
+        
+        # Calculate key SLA milestones
+        sla_dates = {
+            'committee_date': committee_date,
+            'sla_days': sla_days,
+            'request_deadline': self.subtract_business_days(committee_date, sla_days),
+            'preparation_start': self.subtract_business_days(committee_date, sla_days + 7),
+            'notification_date': self.subtract_business_days(committee_date, sla_days + 14)
+        }
+        
+        # Add business days count
+        sla_dates['business_days_to_committee'] = len(
+            self.get_business_days_in_range(date.today(), committee_date)
+        )
+        
+        return sla_dates
+    
+    def get_monthly_business_days(self, year: int, month: int) -> Dict:
+        """Get business days analysis for a specific month"""
+        from calendar import monthrange
+        
+        # Get first and last day of month
+        first_day = date(year, month, 1)
+        last_day = date(year, month, monthrange(year, month)[1])
+        
+        # Get all business days in month
+        business_days = self.get_business_days_in_range(first_day, last_day)
+        
+        # Group by week
+        weeks = {}
+        for business_day in business_days:
+            week_num = (business_day.day - 1) // 7 + 1
+            if week_num not in weeks:
+                weeks[week_num] = []
+            weeks[week_num].append(business_day)
+        
+        return {
+            'year': year,
+            'month': month,
+            'total_days': monthrange(year, month)[1],
+            'business_days': business_days,
+            'business_days_count': len(business_days),
+            'weeks': weeks,
+            'first_business_day': business_days[0] if business_days else None,
+            'last_business_day': business_days[-1] if business_days else None
+        }

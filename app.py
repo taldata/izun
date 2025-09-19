@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from datetime import datetime, date, timedelta
 import json
 from database import DatabaseManager
@@ -9,6 +9,7 @@ from scheduler import CommitteeScheduler
 from auto_scheduler import AutoMeetingScheduler
 from services.auto_schedule_service import AutoScheduleService
 from services.committee_types_service import CommitteeTypesService, CommitteeTypeRequest
+from auth import AuthManager, login_required, admin_required, editing_permission_required
 
 app = Flask(__name__)
 app.secret_key = 'committee_management_secret_key_2025'
@@ -19,8 +20,270 @@ scheduler = CommitteeScheduler(db)
 auto_scheduler = AutoMeetingScheduler(db)
 auto_schedule_service = AutoScheduleService(db)
 committee_types_service = CommitteeTypesService(db)
+auth_manager = AuthManager(db)
+
+# Authentication routes
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """User login"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        success, message = auth_manager.login_user(username, password)
+        
+        if success:
+            flash(message, 'success')
+            return redirect(url_for('index'))
+        else:
+            flash(message, 'error')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """User logout"""
+    auth_manager.logout_user()
+    flash('התנתקת מהמערכת בהצלחה', 'success')
+    return redirect(url_for('login'))
+
+# Create demo users if they don't exist
+def create_demo_users():
+    """Create demo users for testing"""
+    try:
+        # Check if admin exists
+        admin = db.get_user_by_username('admin')
+        if not admin:
+            db.create_user(
+                username='admin',
+                email='admin@example.com',
+                password_hash=auth_manager.hash_password('admin123'),
+                full_name='מנהל מערכת',
+                role='admin'
+            )
+        
+        # Check if regular user exists
+        user = db.get_user_by_username('user')
+        if not user:
+            # Get first hativa for demo user
+            hativot = db.get_hativot()
+            hativa_id = hativot[0]['hativa_id'] if hativot else None
+            
+            db.create_user(
+                username='user',
+                email='user@example.com',
+                password_hash=auth_manager.hash_password('user123'),
+                full_name='משתמש רגיל',
+                role='user',
+                hativa_id=hativa_id
+            )
+    except Exception as e:
+        print(f"Error creating demo users: {e}")
+
+# Create demo users on startup
+create_demo_users()
+
+# Admin API endpoints
+@app.route('/api/toggle_editing_period', methods=['POST'])
+@admin_required
+def toggle_editing_period():
+    """Toggle editing period for regular users"""
+    try:
+        current_status = db.get_system_setting('editing_period_active')
+        new_status = '0' if current_status == '1' else '1'
+        
+        user_id = session['user_id']
+        db.update_system_setting('editing_period_active', new_status, user_id)
+        
+        status_text = "פעילה" if new_status == '1' else "סגורה"
+        return jsonify({
+            'success': True,
+            'message': f'תקופת העריכה הכללית עכשיו {status_text}',
+            'editing_active': new_status == '1'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/editing_status')
+@login_required
+def get_editing_status():
+    """Get current editing status for user"""
+    try:
+        user = auth_manager.get_current_user()
+        can_edit, reason = auth_manager.can_edit()
+        editing_period_active = db.get_system_setting('editing_period_active') == '1'
+        
+        return jsonify({
+            'can_edit': can_edit,
+            'reason': reason,
+            'editing_period_active': editing_period_active,
+            'user_role': user['role']
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Soft Delete API endpoints
+@app.route('/api/toggle_committee_type/<int:committee_type_id>', methods=['POST'])
+@editing_permission_required
+def toggle_committee_type(committee_type_id):
+    """Toggle committee type active status"""
+    try:
+        # Check current status
+        committee_types = db.get_committee_types()
+        committee_type = next((ct for ct in committee_types if ct['committee_type_id'] == committee_type_id), None)
+        
+        if not committee_type:
+            return jsonify({'success': False, 'error': 'סוג ועדה לא נמצא'}), 404
+        
+        # Toggle status
+        if committee_type.get('is_active', 1):
+            success = db.deactivate_committee_type(committee_type_id)
+            action = 'הושבת'
+        else:
+            success = db.activate_committee_type(committee_type_id)
+            action = 'הופעל'
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'סוג הועדה "{committee_type["name"]}" {action} בהצלחה',
+                'is_active': not committee_type.get('is_active', 1)
+            })
+        else:
+            return jsonify({'success': False, 'error': 'שגיאה בעדכון סטטוס'}), 500
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/toggle_hativa/<int:hativa_id>', methods=['POST'])
+@admin_required
+def toggle_hativa(hativa_id):
+    """Toggle division active status (admin only)"""
+    try:
+        hativot = db.get_hativot()
+        hativa = next((h for h in hativot if h['hativa_id'] == hativa_id), None)
+        
+        if not hativa:
+            return jsonify({'success': False, 'error': 'חטיבה לא נמצאה'}), 404
+        
+        # Toggle status
+        if hativa.get('is_active', 1):
+            success = db.deactivate_hativa(hativa_id)
+            action = 'הושבתה'
+        else:
+            success = db.activate_hativa(hativa_id)
+            action = 'הופעלה'
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'החטיבה "{hativa["name"]}" {action} בהצלחה',
+                'is_active': not hativa.get('is_active', 1)
+            })
+        else:
+            return jsonify({'success': False, 'error': 'שגיאה בעדכון סטטוס'}), 500
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/toggle_maslul/<int:maslul_id>', methods=['POST'])
+@editing_permission_required
+def toggle_maslul(maslul_id):
+    """Toggle route active status"""
+    try:
+        maslulim = db.get_maslulim()
+        maslul = next((m for m in maslulim if m['maslul_id'] == maslul_id), None)
+        
+        if not maslul:
+            return jsonify({'success': False, 'error': 'מסלול לא נמצא'}), 404
+        
+        # Toggle status
+        if maslul.get('is_active', 1):
+            success = db.deactivate_maslul(maslul_id)
+            action = 'הושבת'
+        else:
+            success = db.activate_maslul(maslul_id)
+            action = 'הופעל'
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'המסלול "{maslul["name"]}" {action} בהצלחה',
+                'is_active': not maslul.get('is_active', 1)
+            })
+        else:
+            return jsonify({'success': False, 'error': 'שגיאה בעדכון סטטוס'}), 500
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# Enhanced SLA and Business Days API
+@app.route('/api/sla_info/<vaadot_id>')
+@login_required
+def get_sla_info(vaadot_id):
+    """Get SLA information for a committee meeting"""
+    try:
+        # Get committee meeting details
+        committees = db.get_vaadot()
+        committee = next((c for c in committees if c['vaadot_id'] == int(vaadot_id)), None)
+        
+        if not committee:
+            return jsonify({'error': 'ישיבת ועדה לא נמצאה'}), 404
+        
+        # Parse committee date
+        committee_date = datetime.strptime(committee['vaada_date'], '%Y-%m-%d').date()
+        
+        # Calculate SLA dates
+        sla_info = db.calculate_sla_dates(committee_date)
+        
+        # Format dates for display
+        formatted_sla = {
+            'committee_date': committee_date.strftime('%d/%m/%Y'),
+            'committee_name': committee['committee_name'],
+            'hativa_name': committee['hativa_name'],
+            'sla_days': sla_info['sla_days'],
+            'request_deadline': sla_info['request_deadline'].strftime('%d/%m/%Y'),
+            'preparation_start': sla_info['preparation_start'].strftime('%d/%m/%Y'),
+            'notification_date': sla_info['notification_date'].strftime('%d/%m/%Y'),
+            'business_days_to_committee': sla_info['business_days_to_committee'],
+            'is_overdue': sla_info['request_deadline'] < date.today(),
+            'days_until_deadline': (sla_info['request_deadline'] - date.today()).days
+        }
+        
+        return jsonify(formatted_sla)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/business_days/<int:year>/<int:month>')
+@login_required
+def get_business_days_info(year, month):
+    """Get business days information for a specific month"""
+    try:
+        business_days_info = db.get_monthly_business_days(year, month)
+        
+        # Format dates for JSON
+        formatted_info = {
+            'year': business_days_info['year'],
+            'month': business_days_info['month'],
+            'total_days': business_days_info['total_days'],
+            'business_days_count': business_days_info['business_days_count'],
+            'business_days': [d.strftime('%Y-%m-%d') for d in business_days_info['business_days']],
+            'first_business_day': business_days_info['first_business_day'].strftime('%d/%m/%Y') if business_days_info['first_business_day'] else None,
+            'last_business_day': business_days_info['last_business_day'].strftime('%d/%m/%Y') if business_days_info['last_business_day'] else None,
+            'weeks': {
+                str(week): [d.strftime('%Y-%m-%d') for d in days] 
+                for week, days in business_days_info['weeks'].items()
+            }
+        }
+        
+        return jsonify(formatted_info)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/')
+@login_required
 def index():
     """Main dashboard"""
     # Get summary statistics
@@ -45,21 +308,28 @@ def index():
         'business_days_this_month': len(monthly_schedule['business_days'])
     }
     
+    # Get current user info
+    current_user = auth_manager.get_current_user()
+    
     return render_template('index.html', 
-                         stats=stats, 
-                         committee_types=committee_types, 
+                         hativot=hativot, 
+                         maslulim=maslulim, 
+                         committee_types=committee_types,
                          committees=committees,
                          events=events,
-                         hativot=hativot,
-                         maslulim=maslulim)
+                         exception_dates=exception_dates,
+                         current_user=current_user)
 
 @app.route('/hativot')
+@login_required
 def hativot():
     """Manage divisions"""
     hativot_list = db.get_hativot()
-    return render_template('hativot.html', hativot=hativot_list)
+    current_user = auth_manager.get_current_user()
+    return render_template('hativot.html', hativot=hativot_list, current_user=current_user)
 
 @app.route('/hativot/add', methods=['POST'])
+@editing_permission_required
 def add_hativa():
     """Add new division"""
     name = request.form.get('name', '').strip()

@@ -425,23 +425,23 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">מחיקת סוג ועדה</h5>
+                <h5 class="modal-title">השבתת סוג ועדה</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-warning">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <strong>אזהרה!</strong> פעולה זו תמחק את סוג הועדה לצמיתות.
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>הודעה:</strong> פעולה זו תשבית את סוג הועדה (לא תמחק לצמיתות).
                 </div>
-                <p>האם אתה בטוח שברצונך למחוק את סוג הועדה <strong id="deleteCommitteeTypeName"></strong>?</p>
-                <p class="text-muted small">שים לב: מחיקת סוג ועדה עלולה להשפיע על פגישות קיימות במערכת.</p>
+                <p>האם אתה בטוח שברצונך להשבית את סוג הועדה <strong id="deleteCommitteeTypeName"></strong>?</p>
+                <p class="text-muted small">שים לב: ניתן יהיה להפעיל מחדש את סוג הועדה בעתיד במידת הצורך.</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
                 <form method="POST" action="{{ url_for('delete_committee_type') }}" style="display: inline;">
                     <input type="hidden" id="delete_committee_type_id" name="committee_type_id">
-                    <button type="submit" class="btn btn-danger">
-                        <i class="fas fa-trash"></i> מחק
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-pause-circle"></i> השבת
                     </button>
                 </form>
             </div>

@@ -334,6 +334,32 @@
         </div>
     </div>
 </div>
+
+<!-- SLA Information Modal -->
+<div class="modal fade" id="slaInfoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-clock-history me-2"></i>מידע SLA - לוחות זמנים
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="slaModalBody">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">טוען...</span>
+                    </div>
+                    <p class="mt-2">טוען מידע SLA...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">סגור</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -425,11 +451,20 @@ function renderCalendar() {
                         committeeDiv.style.cursor = 'pointer';
                         committeeDiv.style.backgroundColor = hativaColor;
                         committeeDiv.style.borderLeft = `4px solid ${hativaColor}`;
-                        committeeDiv.textContent = committee.committee_name;
-                        committeeDiv.title = `${committee.committee_name} - ${committee.hativa_name} (לחץ לעריכה)`;
+                        committeeDiv.innerHTML = `
+                            ${committee.committee_name}
+                            <small class="d-block opacity-75" style="font-size: 0.6rem;">
+                                <i class="bi bi-clock me-1"></i>SLA
+                            </small>
+                        `;
+                        committeeDiv.title = `${committee.committee_name} - ${committee.hativa_name} (לחץ לעריכה, Shift+לחץ למידע SLA)`;
                         committeeDiv.onclick = function(e) {
                             e.stopPropagation();
-                            editCommittee(committee);
+                            if (e.shiftKey) {
+                                showSLAInfo(committee.vaadot_id);
+                            } else {
+                                editCommittee(committee);
+                            }
                         };
                         cell.appendChild(committeeDiv);
                     }
@@ -757,6 +792,146 @@ function populateColorLegend() {
         
         legendContent.appendChild(col);
     });
+}
+
+// SLA Information functions
+function showSLAInfo(vaadotId) {
+    const modal = new bootstrap.Modal(document.getElementById('slaInfoModal'));
+    const modalBody = document.getElementById('slaModalBody');
+    
+    // Show loading state
+    modalBody.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">טוען...</span>
+            </div>
+            <p class="mt-2">טוען מידע SLA...</p>
+        </div>
+    `;
+    
+    modal.show();
+    
+    // Fetch SLA information
+    fetch(`/api/sla_info/${vaadotId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                modalBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        שגיאה: ${data.error}
+                    </div>
+                `;
+                return;
+            }
+            
+            // Create SLA information display
+            const isOverdue = data.is_overdue;
+            const statusClass = isOverdue ? 'danger' : (data.days_until_deadline <= 7 ? 'warning' : 'success');
+            const statusIcon = isOverdue ? 'exclamation-triangle' : (data.days_until_deadline <= 7 ? 'clock' : 'check-circle');
+            
+            modalBody.innerHTML = `
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card border-${statusClass}">
+                            <div class="card-header bg-${statusClass} text-white">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-${statusIcon} me-2"></i>
+                                    ${data.committee_name} - ${data.hativa_name}
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <strong>תאריך ישיבה:</strong><br>
+                                        <span class="text-primary">${data.committee_date}</span>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>ימי עבודה עד הישיבה:</strong><br>
+                                        <span class="badge bg-info">${data.business_days_to_committee} ימים</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="bi bi-bell text-info" style="font-size: 2rem;"></i>
+                                <h6 class="mt-2">הודעה ראשונית</h6>
+                                <p class="text-muted mb-1">${data.notification_date}</p>
+                                <small class="text-muted">21 ימי עבודה לפני</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="bi bi-play-circle text-warning" style="font-size: 2rem;"></i>
+                                <h6 class="mt-2">תחילת הכנות</h6>
+                                <p class="text-muted mb-1">${data.preparation_start}</p>
+                                <small class="text-muted">21 ימי עבודה לפני</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100 border-${statusClass}">
+                            <div class="card-body text-center">
+                                <i class="bi bi-${statusIcon} text-${statusClass}" style="font-size: 2rem;"></i>
+                                <h6 class="mt-2">מועד אחרון לבקשות</h6>
+                                <p class="text-${statusClass} mb-1 fw-bold">${data.request_deadline}</p>
+                                <small class="text-muted">${data.sla_days} ימי עבודה לפני</small>
+                                ${isOverdue ? '<div class="badge bg-danger mt-1">פג תוקף!</div>' : 
+                                  data.days_until_deadline <= 7 ? '<div class="badge bg-warning mt-1">דחוף!</div>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="bi bi-calendar-check text-success" style="font-size: 2rem;"></i>
+                                <h6 class="mt-2">יום הישיבה</h6>
+                                <p class="text-success mb-1 fw-bold">${data.committee_date}</p>
+                                <small class="text-muted">יום הועדה</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                ${isOverdue ? `
+                    <div class="alert alert-danger mt-3">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>שים לב:</strong> המועד האחרון לקבלת בקשות עבר! 
+                        נותרו ${data.business_days_to_committee} ימי עבודה עד הישיבה.
+                    </div>
+                ` : data.days_until_deadline <= 7 ? `
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-clock me-2"></i>
+                        <strong>דחוף:</strong> נותרו רק ${data.days_until_deadline} ימים עד המועד האחרון לבקשות!
+                    </div>
+                ` : `
+                    <div class="alert alert-success mt-3">
+                        <i class="bi bi-check-circle me-2"></i>
+                        <strong>במועד:</strong> נותרו ${data.days_until_deadline} ימים עד המועד האחרון לבקשות.
+                    </div>
+                `}
+            `;
+        })
+        .catch(error => {
+            console.error('Error fetching SLA info:', error);
+            modalBody.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    שגיאה בטעינת מידע SLA
+                </div>
+            `;
+        });
 }
 </script>
 
