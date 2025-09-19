@@ -149,8 +149,8 @@ class DatabaseManager:
         conn.commit()
         conn.close()
         
-        # Insert default committee types and committees
-        self._insert_default_committee_types()
+        # Note: Default committee types are no longer inserted automatically
+        # Users should create committee types manually through the web interface
     
     def _migrate_database(self, cursor):
         """Migrate existing database to add new columns if they don't exist"""
@@ -200,34 +200,6 @@ class DatabaseManager:
         except Exception as e:
             print(f"Migration error: {e}")
             # Continue with normal initialization if migration fails
-    
-    def _insert_default_committee_types(self):
-        """Insert the default committee types with their scheduled days"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Check if we have any hativot
-        cursor.execute("SELECT hativa_id FROM hativot LIMIT 1")
-        hativa_result = cursor.fetchone()
-        
-        if hativa_result:
-            default_hativa_id = hativa_result[0]
-            
-            default_committee_types = [
-                (default_hativa_id, 'ועדת הזנק', 0, 'weekly', None, 'ועדת הזנק שבועית'),
-                (default_hativa_id, 'ועדת תשתיות', 2, 'weekly', None, 'ועדת תשתיות שבועית'),
-                (default_hativa_id, 'ועדת צמיחה', 3, 'weekly', None, 'ועדת צמיחה שבועית'),
-                (default_hativa_id, 'ייצור מתקדם', 1, 'monthly', 3, 'ועדת ייצור מתקדם חודשית')
-            ]
-            
-            for hativa_id, name, day, frequency, week_of_month, description in default_committee_types:
-                cursor.execute('''
-                    INSERT OR IGNORE INTO committee_types (hativa_id, name, scheduled_day, frequency, week_of_month, description)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (hativa_id, name, day, frequency, week_of_month, description))
-        
-        conn.commit()
-        conn.close()
     
     # Hativot operations
     def add_hativa(self, name: str, description: str = "") -> int:
