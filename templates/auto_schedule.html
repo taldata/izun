@@ -1,209 +1,33 @@
 {% extends "base.html" %}
 
-{% block title %}תזמון אוטומטי - איזון עומסים{% endblock %}
+{% block title %}תזמון אוטומטי - מערכת ניהול ועדות{% endblock %}
 
 {% block content %}
-<!-- Hero Section -->
-<div class="hero-section mb-5">
-    <div class="container-fluid">
-        <div class="row align-items-center">
-            <div class="col-lg-8">
-                <div class="hero-content">
-                    <div class="hero-badge mb-3">
-                        <i class="bi bi-robot me-2"></i>
-                        <span>בינה מלאכותית לתזמון</span>
-                    </div>
-                    <h1 class="hero-title mb-3">תזמון אוטומטי של ישיבות</h1>
-                    <p class="hero-subtitle mb-4">
-                        יצירה חכמה ואוטומטית של לוח זמנים מותאם אישית על בסיס אילוצים עסקיים מתקדמים
-                    </p>
-                    <div class="hero-stats">
-                        <div class="stat-item">
-                            <i class="bi bi-lightning-charge text-warning"></i>
-                            <span>חיסכון בזמן</span>
-                        </div>
-                        <div class="stat-item">
-                            <i class="bi bi-shield-check text-success"></i>
-                            <span>אילוצים מובטחים</span>
-                        </div>
-                        <div class="stat-item">
-                            <i class="bi bi-calendar-check text-primary"></i>
-                            <span>תזמון מיטבי</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-4">
-                <div class="hero-visual">
-                    <div class="floating-card">
-                        <i class="bi bi-calendar3 hero-icon"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Smart Constraints Section -->
-<div class="constraints-section mb-5">
-    <div class="row">
-        <div class="col-12 text-center mb-4">
-            <h2 class="section-title">
-                <i class="bi bi-gear-fill me-2 text-primary"></i>
-                אילוצים חכמים
-            </h2>
-            <p class="section-subtitle">המערכת מבטיחה עמידה באילוצים עסקיים מתקדמים</p>
-        </div>
-    </div>
-    
-    <div class="row g-4">
-        <div class="col-lg-4 col-md-6">
-            <div class="constraint-card">
-                <div class="constraint-icon">
-                    <i class="bi bi-calendar-week"></i>
-                </div>
-                <h5>ימי עבודה בלבד</h5>
-                <p>פעילות בימי עסקים בלבד, ללא שבתות וחגים</p>
-                <div class="constraint-badge">
-                    <i class="bi bi-shield-check"></i>
-                    <span>מובטח</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-lg-4 col-md-6">
-            <div class="constraint-card">
-                <div class="constraint-icon">
-                    <i class="bi bi-calendar-check"></i>
-                </div>
-                <h5>ועדה אחת ביום</h5>
-                <p>מקסימום ועדה אחת בכל יום עבודה</p>
-                <div class="constraint-badge">
-                    <i class="bi bi-shield-check"></i>
-                    <span>מובטח</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-lg-4 col-md-6">
-            <div class="constraint-card">
-                <div class="constraint-icon">
-                    <i class="bi bi-graph-up"></i>
-                </div>
-                <h5>איזון שבועי</h5>
-                <p>מקסימום 3-4 ועדות בשבוع, בהתאם לעומס</p>
-                <div class="constraint-badge">
-                    <i class="bi bi-shield-check"></i>
-                    <span>מובטח</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-lg-4 col-md-6">
-            <div class="constraint-card">
-                <div class="constraint-icon">
-                    <i class="bi bi-clock"></i>
-                </div>
-                <h5>ימים קבועים</h5>
-                <p>כל סוג ועדה מתוזמן בימים המתאימים לו</p>
-                <div class="constraint-badge">
-                    <i class="bi bi-shield-check"></i>
-                    <span>מובטח</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-lg-4 col-md-6">
-            <div class="constraint-card">
-                <div class="constraint-icon">
-                    <i class="bi bi-building"></i>
-                </div>
-                <h5>חטיבות נפרדות</h5>
-                <p>תזמון מותאם לכל חטיבה בנפרד</p>
-                <div class="constraint-badge">
-                    <i class="bi bi-shield-check"></i>
-                    <span>מובטח</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-lg-4 col-md-6">
-            <div class="constraint-card">
-                <div class="constraint-icon">
-                    <i class="bi bi-arrow-repeat"></i>
-                </div>
-                <h5>תדירות חכמה</h5>
-                <p>שבועי או חודשי בהתאם להגדרות</p>
-                <div class="constraint-badge">
-                    <i class="bi bi-shield-check"></i>
-                    <span>מובטח</span>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Committee Types Info -->
-<div class="info-section mb-5">
+<!-- Compact Header -->
+<div class="compact-header mb-4">
     <div class="row align-items-center">
-        <div class="col-lg-8">
-            <div class="info-content">
-                <div class="info-badge mb-3">
-                    <i class="bi bi-gear me-2"></i>
-                    <span>הגדרות מתקדמות</span>
-                </div>
-                <h3 class="info-title mb-3">סוגי ועדות לפי חטיבות</h3>
-                <p class="info-description mb-4">
-                    כל חטיבה יכולה להגדיר סוגי ועדות משלה עם ימים ותדירות מותאמים אישית. 
-                    התזמון האוטומטי יתבסס על ההגדרות הספציפיות לכל חטיבה ויבטיח תזמון מיטבי.
-                </p>
-                <a href="{{ url_for('committee_types') }}" class="btn btn-outline-primary btn-lg">
-                    <i class="bi bi-gear me-2"></i>ניהול סוגי ועדות
-                    <i class="bi bi-arrow-left ms-2"></i>
-                </a>
-            </div>
+        <div class="col-md-8">
+            <h1 class="page-title">
+                <i class="bi bi-magic me-2"></i>אילוצים חכמים
+            </h1>
+            <p class="page-subtitle">המערכת מבטיחה עמידה באילוצים עסקיים ויוצרת לוח זמנים מיטבי</p>
         </div>
-        <div class="col-lg-4">
-            <div class="info-visual">
-                <div class="floating-elements">
-                    <div class="element element-1">
-                        <i class="bi bi-calendar-event"></i>
-                    </div>
-                    <div class="element element-2">
-                        <i class="bi bi-building"></i>
-                    </div>
-                    <div class="element element-3">
-                        <i class="bi bi-clock"></i>
-                    </div>
-                </div>
-            </div>
+        <div class="col-md-4 text-end">
+            <a href="{{ url_for('committee_types') }}" class="btn btn-outline-primary">
+                <i class="bi bi-gear me-1"></i>ניהול סוגי ועדות
+            </a>
         </div>
     </div>
 </div>
 
-<!-- Main Form Section -->
-<div class="form-section">
+<!-- Compact Form Section -->
+<div class="compact-form">
     <div class="row">
-        <div class="col-xl-8 col-lg-7">
-            <div class="main-form-card">
-                <div class="form-header">
-                    <div class="form-header-content">
-                        <h2 class="form-title">
-                            <i class="bi bi-sliders me-3"></i>הגדרות התזמון
-                        </h2>
-                        <p class="form-subtitle">
-                            בחר את הפרמטרים לתזמון האוטומטי והמערכת תיצור עבורך לוח זמנים מיטבי
-                        </p>
-                    </div>
-                    <div class="form-progress">
-                        <div class="progress-circle">
-                            <span>1</span>
-                        </div>
-                        <div class="progress-text">הגדרות</div>
-                    </div>
-                </div>
-                
-                <div class="form-content">
+        <div class="col-lg-8">
+            <div class="form-card">
+                <h3 class="form-title mb-3">
+                    <i class="bi bi-sliders me-2"></i>הגדרות התזמון
+                </h3>
                 <form method="POST" action="{{ url_for('generate_auto_schedule') }}">
                     <div class="row g-3">
                         <div class="col-sm-6">
@@ -223,37 +47,25 @@
                     </div>
                     
                     
-                    <!-- Months Selection -->
-                    <div id="months_selection" class="mb-3">
-                        <label class="form-label fw-semibold mb-3">
-                            <i class="bi bi-calendar-range me-2"></i>בחר חודשים
+                    <!-- Compact Months Selection -->
+                    <div class="col-12 mb-3">
+                        <label class="form-label fw-semibold mb-2">
+                            <i class="bi bi-calendar-range me-2"></i>חודשים
                         </label>
-                        <div class="months-selection">
-                            <div class="select-all-wrapper mb-3">
-                                <div class="custom-checkbox">
-                                    <input class="form-check-input" type="checkbox" id="select_all_months">
-                                    <label class="form-check-label" for="select_all_months">
-                                        <i class="bi bi-check-all me-2"></i>בחר את כל החודשים
-                                    </label>
-                                </div>
+                        <div class="compact-months">
+                            <div class="form-check form-check-inline mb-2">
+                                <input class="form-check-input" type="checkbox" id="select_all_months">
+                                <label class="form-check-label fw-bold" for="select_all_months">בחר הכל</label>
                             </div>
-                            <div class="months-grid">
+                            <div class="months-compact-grid">
                                 {% for m in range(1, 13) %}
-                                <div class="month-card">
+                                <div class="form-check form-check-inline">
                                     <input class="form-check-input month-checkbox" type="checkbox" 
                                            name="months" value="{{ m }}" 
                                            id="month_{{ m }}"
                                            {% if m == current_month %}checked{% endif %}>
-                                    <label class="month-label" for="month_{{ m }}">
-                                        <div class="month-icon">
-                                            <i class="bi bi-calendar"></i>
-                                        </div>
-                                        <div class="month-info">
-                                            <h6>{{ ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'][m-1] }}</h6>
-                                        </div>
-                                        <div class="month-check">
-                                            <i class="bi bi-check-circle-fill"></i>
-                                        </div>
+                                    <label class="form-check-label" for="month_{{ m }}">
+                                        {{ ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יונ', 'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'][m-1] }}
                                     </label>
                                 </div>
                                 {% endfor %}
@@ -262,36 +74,24 @@
                     </div>
                     
                     
-                    <div class="mb-4">
-                        <label class="form-label fw-semibold mb-3">
-                            <i class="bi bi-building me-2"></i>חטיבות לתזמון
+                    <!-- Compact Divisions Selection -->
+                    <div class="col-12 mb-3">
+                        <label class="form-label fw-semibold mb-2">
+                            <i class="bi bi-building me-2"></i>חטיבות
                         </label>
-                        <div class="divisions-selection">
-                            <div class="select-all-wrapper mb-3">
-                                <div class="custom-checkbox">
-                                    <input class="form-check-input" type="checkbox" id="select_all_hativot">
-                                    <label class="form-check-label" for="select_all_hativot">
-                                        <i class="bi bi-check-all me-2"></i>בחר את כל החטיבות
-                                    </label>
-                                </div>
+                        <div class="compact-divisions">
+                            <div class="form-check form-check-inline mb-2">
+                                <input class="form-check-input" type="checkbox" id="select_all_hativot">
+                                <label class="form-check-label fw-bold" for="select_all_hativot">בחר הכל</label>
                             </div>
-                            <div class="divisions-grid">
+                            <div class="divisions-compact-grid">
                                 {% for hativa in hativot %}
-                                <div class="division-card">
+                                <div class="form-check form-check-inline">
                                     <input class="form-check-input hativa-checkbox" type="checkbox" 
                                            name="hativot_ids" value="{{ hativa.hativa_id }}" 
                                            id="hativa_{{ hativa.hativa_id }}">
-                                    <label class="division-label" for="hativa_{{ hativa.hativa_id }}">
-                                        <div class="division-icon">
-                                            <i class="bi bi-building"></i>
-                                        </div>
-                                        <div class="division-info">
-                                            <h6>{{ hativa.name }}</h6>
-                                            <p>{{ hativa.description or 'חטיבה ארגונית' }}</p>
-                                        </div>
-                                        <div class="division-check">
-                                            <i class="bi bi-check-circle-fill"></i>
-                                        </div>
+                                    <label class="form-check-label" for="hativa_{{ hativa.hativa_id }}">
+                                        {{ hativa.name }}
                                     </label>
                                 </div>
                                 {% endfor %}
@@ -299,112 +99,41 @@
                         </div>
                     </div>
                     
-                    <div class="info-alert mb-4">
-                        <div class="alert-icon">
-                            <i class="bi bi-lightbulb"></i>
+                    <!-- Compact Submit -->
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            המערכת תיצור הצעות ישיבות חכמות על בסיס האילוצים. תוכל לבדוק ולאשר לפני היצירה הסופית.
                         </div>
-                        <div class="alert-content">
-                            <h6>איך זה עובד?</h6>
-                            <p>המערכת תיצור הצעות ישיבות חכמות על בסיס האילוצים העסקיים. תוכל לבדוק, לערוך ולאשר את ההצעות לפני היצירה הסופית.</p>
-                        </div>
-                    </div>
-                    
-                    <div class="form-actions">
-                        <button type="submit" class="btn-generate">
-                            <div class="btn-content">
-                                <i class="bi bi-magic"></i>
-                                <span>צור לוח זמנים אוטומטי</span>
-                            </div>
-                            <div class="btn-arrow">
-                                <i class="bi bi-arrow-left"></i>
-                            </div>
+                        <button type="submit" class="btn btn-primary btn-lg w-100">
+                            <i class="bi bi-magic me-2"></i>צור לוח זמנים אוטומטי
                         </button>
                     </div>
                 </form>
             </div>
         </div>
-    </div>
-    
-    <div class="col-xl-4 col-lg-5">
-        <div class="sidebar-content">
-            <!-- Process Steps -->
-            <div class="process-card mb-4">
-                <div class="process-header">
-                    <h3>
-                        <i class="bi bi-list-ol me-2"></i>
-                        תהליך התזמון
-                    </h3>
-                    <p>4 שלבים פשוטים לתזמון מושלם</p>
+        
+        <!-- Compact Info Sidebar -->
+        <div class="col-lg-4">
+            <div class="info-sidebar">
+                <div class="info-box mb-3">
+                    <h5><i class="bi bi-shield-check me-2"></i>אילוצים מובטחים</h5>
+                    <ul class="list-unstyled small">
+                        <li>• ימי עסקים בלבד</li>
+                        <li>• ועדה אחת ביום</li>
+                        <li>• איזון שבועי</li>
+                        <li>• ימים קבועים</li>
+                    </ul>
                 </div>
                 
-                <div class="process-steps">
-                    <div class="process-step active">
-                        <div class="step-indicator">
-                            <span>1</span>
-                        </div>
-                        <div class="step-content">
-                            <h5>בחירת פרמטרים</h5>
-                            <p>בחר שנה, חודש/ים וחטיבות לתזמון</p>
-                        </div>
-                    </div>
-                    
-                    <div class="process-step">
-                        <div class="step-indicator">
-                            <span>2</span>
-                        </div>
-                        <div class="step-content">
-                            <h5>יצירת הצעות חכמות</h5>
-                            <p>המערכת תיצור הצעות על בסיס האילוצים</p>
-                        </div>
-                    </div>
-                    
-                    <div class="process-step">
-                        <div class="step-indicator">
-                            <span>3</span>
-                        </div>
-                        <div class="step-content">
-                            <h5>בדיקה ועריכה</h5>
-                            <p>תוכל לבדוק ולערוך את ההצעות</p>
-                        </div>
-                    </div>
-                    
-                    <div class="process-step">
-                        <div class="step-indicator">
-                            <span>4</span>
-                        </div>
-                        <div class="step-content">
-                            <h5>יצירה סופית</h5>
-                            <p>הישיבות ייוצרו במערכת</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Benefits Card -->
-            <div class="benefits-card">
-                <div class="benefits-header">
-                    <h4>
-                        <i class="bi bi-star me-2"></i>
-                        יתרונות התזמון האוטומטי
-                    </h4>
-                </div>
-                <div class="benefits-list">
-                    <div class="benefit-item">
-                        <i class="bi bi-lightning-charge"></i>
-                        <span>חיסכון של שעות עבודה</span>
-                    </div>
-                    <div class="benefit-item">
-                        <i class="bi bi-shield-check"></i>
-                        <span>עמידה מובטחת באילוצים</span>
-                    </div>
-                    <div class="benefit-item">
-                        <i class="bi bi-graph-up"></i>
-                        <span>תזמון מיטבי ויעיל</span>
-                    </div>
-                    <div class="benefit-item">
-                        <i class="bi bi-people"></i>
-                        <span>התאמה לכל החטיבות</span>
-                    </div>
+                <div class="info-box">
+                    <h5><i class="bi bi-lightning-charge me-2"></i>יתרונות</h5>
+                    <ul class="list-unstyled small">
+                        <li>• חיסכון בזמן</li>
+                        <li>• תזמון מיטבי</li>
+                        <li>• התאמה לחטיבות</li>
+                        <li>• עמידה באילוצים</li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -481,794 +210,116 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
-/* Hero Section */
-.hero-section {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 20px;
-    padding: 60px 0;
-    color: white;
-    position: relative;
-    overflow: hidden;
+/* Compact Header */
+.compact-header {
+    padding: 2rem 0 1rem;
+    border-bottom: 1px solid #e9ecef;
 }
 
-.hero-section::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
-    opacity: 0.3;
-}
-
-.hero-content {
-    position: relative;
-    z-index: 2;
-}
-
-.hero-badge {
-    display: inline-flex;
-    align-items: center;
-    background: rgba(255, 255, 255, 0.2);
-    padding: 8px 16px;
-    border-radius: 50px;
-    font-size: 0.9rem;
-    font-weight: 500;
-    backdrop-filter: blur(10px);
-}
-
-.hero-title {
-    font-size: 3rem;
-    font-weight: 700;
-    line-height: 1.2;
-    margin-bottom: 1rem;
-}
-
-.hero-subtitle {
-    font-size: 1.2rem;
-    opacity: 0.9;
-    line-height: 1.6;
-    max-width: 600px;
-}
-
-.hero-stats {
-    display: flex;
-    gap: 2rem;
-    flex-wrap: wrap;
-}
-
-.stat-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-weight: 500;
-}
-
-.stat-item i {
-    font-size: 1.2rem;
-}
-
-.hero-visual {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 300px;
-}
-
-.floating-card {
-    width: 200px;
-    height: 200px;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    animation: float 6s ease-in-out infinite;
-}
-
-.hero-icon {
-    font-size: 4rem;
-    color: white;
-}
-
-@keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-20px); }
-}
-
-/* Constraints Section */
-.constraints-section {
-    padding: 60px 0;
-}
-
-.section-title {
-    font-size: 2.5rem;
-    font-weight: 700;
-    margin-bottom: 1rem;
-}
-
-.section-subtitle {
-    font-size: 1.1rem;
-    color: #6c757d;
-    max-width: 600px;
-    margin: 0 auto;
-}
-
-.constraint-card {
-    background: white;
-    border-radius: 20px;
-    padding: 2rem;
-    text-align: center;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
-    height: 100%;
-    border: 1px solid #f0f0f0;
-}
-
-.constraint-card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-}
-
-.constraint-icon {
-    width: 80px;
-    height: 80px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 1.5rem;
-}
-
-.constraint-icon i {
+.page-title {
     font-size: 2rem;
-    color: white;
-}
-
-.constraint-card h5 {
-    font-weight: 600;
-    margin-bottom: 1rem;
-    color: #2c3e50;
-}
-
-.constraint-card p {
-    color: #6c757d;
-    line-height: 1.6;
-    margin-bottom: 1.5rem;
-}
-
-.constraint-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: #d4edda;
-    color: #155724;
-    padding: 0.5rem 1rem;
-    border-radius: 50px;
-    font-size: 0.9rem;
-    font-weight: 500;
-}
-
-/* Info Section */
-.info-section {
-    background: #f8f9fa;
-    border-radius: 20px;
-    padding: 60px 40px;
-}
-
-.info-badge {
-    display: inline-flex;
-    align-items: center;
-    background: #e3f2fd;
-    color: #1976d2;
-    padding: 8px 16px;
-    border-radius: 50px;
-    font-size: 0.9rem;
-    font-weight: 500;
-}
-
-.info-title {
-    font-size: 2rem;
-    font-weight: 700;
-    color: #2c3e50;
-}
-
-.info-description {
-    font-size: 1.1rem;
-    color: #6c757d;
-    line-height: 1.6;
-}
-
-.info-visual {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 300px;
-    position: relative;
-}
-
-.floating-elements {
-    position: relative;
-    width: 200px;
-    height: 200px;
-}
-
-.element {
-    position: absolute;
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 15px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 1.5rem;
-    animation: floatElements 4s ease-in-out infinite;
-}
-
-.element-1 {
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    animation-delay: 0s;
-}
-
-.element-2 {
-    bottom: 0;
-    left: 0;
-    animation-delay: 1.3s;
-}
-
-.element-3 {
-    bottom: 0;
-    right: 0;
-    animation-delay: 2.6s;
-}
-
-@keyframes floatElements {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-15px); }
-}
-
-/* Form Section */
-.form-section {
-    padding: 60px 0;
-}
-
-.main-form-card {
-    background: white;
-    border-radius: 25px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
-    overflow: hidden;
-    border: 1px solid #f0f0f0;
-}
-
-.form-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 2rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.form-title {
-    font-size: 1.8rem;
-    font-weight: 700;
-    margin: 0;
-}
-
-.form-subtitle {
-    font-size: 1rem;
-    opacity: 0.9;
-    margin: 0;
-}
-
-.form-progress {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.progress-circle {
-    width: 50px;
-    height: 50px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 1.2rem;
-    backdrop-filter: blur(10px);
-}
-
-.progress-text {
-    font-weight: 500;
-}
-
-.form-content {
-    padding: 2.5rem;
-}
-
-
-/* Divisions Selection */
-.divisions-selection {
-    background: #f8f9fa;
-    border-radius: 20px;
-    padding: 2rem;
-}
-
-/* Months Selection */
-.months-selection {
-    background: #f8f9fa;
-    border-radius: 20px;
-    padding: 2rem;
-}
-
-.select-all-wrapper {
-    text-align: center;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid #dee2e6;
-}
-
-.custom-checkbox {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-weight: 500;
-    color: #495057;
-}
-
-.divisions-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1rem;
-    margin-top: 1.5rem;
-}
-
-.months-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
-    margin-top: 1.5rem;
-}
-
-.division-card {
-    position: relative;
-}
-
-.division-card input[type="checkbox"] {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-}
-
-.month-card {
-    position: relative;
-}
-
-.month-card input[type="checkbox"] {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-}
-
-.division-label {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    background: white;
-    border: 2px solid #e9ecef;
-    border-radius: 15px;
-    padding: 1.5rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    height: 100%;
-}
-
-.month-label {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    background: white;
-    border: 2px solid #e9ecef;
-    border-radius: 15px;
-    padding: 1rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    height: 100%;
-}
-
-.division-label:hover {
-    border-color: #667eea;
-    background: #f8f9ff;
-}
-
-.month-label:hover {
-    border-color: #667eea;
-    background: #f8f9ff;
-}
-
-.division-icon {
-    width: 50px;
-    height: 50px;
-    background: #e9ecef;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-}
-
-.month-icon {
-    width: 40px;
-    height: 40px;
-    background: #e9ecef;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-}
-
-.division-icon i {
-    font-size: 1.5rem;
-    color: #6c757d;
-}
-
-.month-icon i {
-    font-size: 1.2rem;
-    color: #6c757d;
-}
-
-.division-info {
-    flex: 1;
-}
-
-.division-info h6 {
-    margin: 0 0 0.25rem 0;
-    font-weight: 600;
-    color: #2c3e50;
-}
-
-.month-info {
-    flex: 1;
-}
-
-.month-info h6 {
-    margin: 0;
-    font-weight: 600;
-    color: #2c3e50;
-    font-size: 0.95rem;
-}
-
-.division-info p {
-    margin: 0;
-    font-size: 0.9rem;
-    color: #6c757d;
-}
-
-.division-check {
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.month-check {
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.division-check i {
-    font-size: 1.5rem;
-    color: #28a745;
-}
-
-.month-check i {
-    font-size: 1.2rem;
-    color: #28a745;
-}
-
-.division-card input:checked + .division-label {
-    border-color: #667eea;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-}
-
-.month-card input:checked + .month-label {
-    border-color: #667eea;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-}
-
-.division-card input:checked + .division-label .division-icon {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.month-card input:checked + .month-label .month-icon {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.division-card input:checked + .division-label .division-icon i,
-.division-card input:checked + .division-label .division-info h6,
-.division-card input:checked + .division-label .division-info p {
-    color: white;
-}
-
-.month-card input:checked + .month-label .month-icon i,
-.month-card input:checked + .month-label .month-info h6 {
-    color: white;
-}
-
-.division-card input:checked + .division-label .division-check {
-    opacity: 1;
-}
-
-.month-card input:checked + .month-label .month-check {
-    opacity: 1;
-}
-
-.division-card input:checked + .division-label .division-check i {
-    color: white;
-}
-
-.month-card input:checked + .month-label .month-check i {
-    color: white;
-}
-
-/* Info Alert */
-.info-alert {
-    display: flex;
-    gap: 1rem;
-    background: #e3f2fd;
-    border: 1px solid #bbdefb;
-    border-radius: 15px;
-    padding: 1.5rem;
-}
-
-.alert-icon {
-    width: 50px;
-    height: 50px;
-    background: #2196f3;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.alert-icon i {
-    font-size: 1.5rem;
-    color: white;
-}
-
-.alert-content h6 {
-    margin: 0 0 0.5rem 0;
-    font-weight: 600;
-    color: #1976d2;
-}
-
-.alert-content p {
-    margin: 0;
-    color: #1976d2;
-    line-height: 1.5;
-}
-
-/* Generate Button */
-.form-actions {
-    text-align: center;
-}
-
-.btn-generate {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border: none;
-    border-radius: 50px;
-    padding: 1rem 3rem;
-    color: white;
-    font-size: 1.1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 1rem;
-    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-}
-
-.btn-generate:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 15px 40px rgba(102, 126, 234, 0.4);
-}
-
-.btn-content {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.btn-content i {
-    font-size: 1.2rem;
-}
-
-.btn-arrow {
-    width: 30px;
-    height: 30px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.3s ease;
-}
-
-.btn-generate:hover .btn-arrow {
-    transform: translateX(-5px);
-}
-
-/* Sidebar */
-.sidebar-content {
-    position: sticky;
-    top: 2rem;
-}
-
-.process-card {
-    background: white;
-    border-radius: 20px;
-    padding: 2rem;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    border: 1px solid #f0f0f0;
-}
-
-.process-header h3 {
-    font-size: 1.5rem;
     font-weight: 700;
     color: #2c3e50;
     margin-bottom: 0.5rem;
 }
 
-.process-header p {
+.page-subtitle {
     color: #6c757d;
     margin: 0;
 }
 
-.process-steps {
-    margin-top: 2rem;
+/* Compact Form */
+.compact-form {
+    padding: 2rem 0;
 }
 
-.process-step {
+.form-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.form-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* Compact Selections */
+.compact-months, .compact-divisions {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.months-compact-grid, .divisions-compact-grid {
     display: flex;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    position: relative;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
-.process-step:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    left: 20px;
-    top: 40px;
-    bottom: -24px;
-    width: 2px;
-    background: #e9ecef;
+.form-check-inline {
+    margin-right: 1rem;
+    margin-bottom: 0.5rem;
 }
 
-.process-step.active::after {
-    background: #667eea;
+.form-check-label {
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: background-color 0.2s;
 }
 
-.step-indicator {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    background: #e9ecef;
-    color: #6c757d;
-    flex-shrink: 0;
-}
-
-.process-step.active .step-indicator {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.form-check-input:checked + .form-check-label {
+    background-color: #007bff;
     color: white;
 }
 
-.step-content h5 {
+/* Info Sidebar */
+.info-sidebar {
+    position: sticky;
+    top: 2rem;
+}
+
+.info-box {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.info-box h5 {
     font-size: 1rem;
     font-weight: 600;
     color: #2c3e50;
+    margin-bottom: 1rem;
+}
+
+.info-box ul li {
+    color: #6c757d;
     margin-bottom: 0.25rem;
 }
 
-.step-content p {
-    font-size: 0.9rem;
-    color: #6c757d;
-    margin: 0;
-    line-height: 1.4;
-}
-
-.benefits-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 20px;
-    padding: 2rem;
-    color: white;
-}
-
-.benefits-header h4 {
-    font-size: 1.3rem;
-    font-weight: 700;
-    margin-bottom: 1.5rem;
-}
-
-.benefits-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.benefit-item {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-weight: 500;
-}
-
-.benefit-item i {
-    font-size: 1.2rem;
-    opacity: 0.9;
-}
-
-/* Responsive Design */
+/* Responsive */
 @media (max-width: 768px) {
-    .hero-title {
-        font-size: 2rem;
-    }
-    
-    .hero-stats {
-        gap: 1rem;
-    }
-    
-    .divisions-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .months-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
-    .form-header {
-        flex-direction: column;
-        gap: 1rem;
+    .compact-header {
         text-align: center;
     }
     
-    .constraint-card {
-        margin-bottom: 1rem;
-    }
-}
-
-@media (max-width: 576px) {
-    .hero-section {
-        padding: 40px 0;
+    .page-title {
+        font-size: 1.5rem;
     }
     
-    .constraints-section,
-    .form-section {
-        padding: 40px 0;
+    .months-compact-grid, .divisions-compact-grid {
+        justify-content: center;
     }
     
-    .info-section {
-        padding: 40px 20px;
-    }
-    
-    .months-grid {
-        grid-template-columns: 1fr;
+    .info-sidebar {
+        margin-top: 2rem;
+        position: static;
     }
 }
 </style>
