@@ -11,13 +11,45 @@
             <h2 class="section-title">
                 <i class="bi bi-calendar3 me-2"></i>יומן ועדות ואירועים
             </h2>
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-3 align-items-center">
+                <!-- Calendar Controls -->
+                <div class="d-flex gap-2 align-items-center">
+                    <label class="form-label mb-0 me-2">תצוגה:</label>
+                    <select class="form-select form-select-sm" id="monthsToShow" onchange="updateCalendarView()" style="width: auto;">
+                        <option value="1">חודש אחד</option>
+                        <option value="2">2 חודשים</option>
+                        <option value="3">3 חודשים</option>
+                    </select>
+                </div>
+                
+                <!-- Month/Year Selector -->
+                <div class="d-flex gap-2 align-items-center">
+                    <select class="form-select form-select-sm" id="monthSelect" onchange="goToSelectedMonth()" style="width: auto;">
+                        <option value="0">ינואר</option>
+                        <option value="1">פברואר</option>
+                        <option value="2">מרץ</option>
+                        <option value="3">אפריל</option>
+                        <option value="4">מאי</option>
+                        <option value="5">יוני</option>
+                        <option value="6">יולי</option>
+                        <option value="7">אוגוסט</option>
+                        <option value="8">ספטמבר</option>
+                        <option value="9">אוקטובר</option>
+                        <option value="10">נובמבר</option>
+                        <option value="11">דצמבר</option>
+                    </select>
+                    <select class="form-select form-select-sm" id="yearSelect" onchange="goToSelectedMonth()" style="width: auto;">
+                        <!-- Years will be populated by JavaScript -->
+                    </select>
+                </div>
+                
+                <!-- Navigation Buttons -->
                 <div class="btn-group" role="group">
-                    <button class="btn btn-outline-primary" onclick="previousMonth()">
+                    <button class="btn btn-outline-primary btn-sm" onclick="previousPeriod()">
                         <i class="bi bi-chevron-right"></i>
                     </button>
-                    <button class="btn btn-outline-primary" onclick="goToToday()">היום</button>
-                    <button class="btn btn-outline-primary" onclick="nextMonth()">
+                    <button class="btn btn-outline-primary btn-sm" onclick="goToToday()">היום</button>
+                    <button class="btn btn-outline-primary btn-sm" onclick="nextPeriod()">
                         <i class="bi bi-chevron-left"></i>
                     </button>
                 </div>
@@ -29,8 +61,7 @@
             <div class="card-header bg-gradient text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                 <div>
                     <h4 class="mb-0" id="currentMonthYear" style="color: #000000; font-weight: bold; text-shadow: 1px 1px 2px rgba(255,255,255,0.8);">
-                        <span id="monthName" style="color: #000000;">ספטמבר</span> 
-                        <span id="yearNumber" style="color: #000000;">2025</span>
+                        <span id="monthsDisplay" style="color: #000000;">ספטמבר 2025</span>
                     </h4>
                     <small class="opacity-75">לחץ על יום להוספה, על פריט לעריכה</small>
                 </div>
@@ -44,23 +75,8 @@
                 </div>
             </div>
             <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-bordered mb-0" id="calendarTable">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="text-center py-3">ראשון</th>
-                                <th class="text-center py-3">שני</th>
-                                <th class="text-center py-3">שלישי</th>
-                                <th class="text-center py-3">רביעי</th>
-                                <th class="text-center py-3">חמישי</th>
-                                <th class="text-center py-3">שישי</th>
-                                <th class="text-center py-3">שבת</th>
-                            </tr>
-                        </thead>
-                        <tbody id="calendarBody">
-                            <!-- Calendar days will be populated by JavaScript -->
-                        </tbody>
-                    </table>
+                <div id="calendarContainer">
+                    <!-- Calendar content will be populated by JavaScript -->
                 </div>
             </div>
         </div>
@@ -370,6 +386,7 @@
 <script>
 // Calendar functionality
 let currentDate = new Date();
+let monthsToShow = 1; // Default to showing 1 month
 const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
                    'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
@@ -391,27 +408,85 @@ const hativotData = hativotDataElement ? JSON.parse(hativotDataElement.textConte
 window.hativotData = hativotData; // Make it globally available
 
 function renderCalendar() {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
+    const container = document.getElementById('calendarContainer');
+    container.innerHTML = '';
     
-    // Update header elements
-    const monthElement = document.getElementById('monthName');
-    const yearElement = document.getElementById('yearNumber');
+    // Update header display
+    updateHeaderDisplay();
     
-    if (monthElement && yearElement) {
-        monthElement.textContent = monthNames[month];
-        yearElement.textContent = year;
+    // Create calendar layout based on number of months to show
+    if (monthsToShow === 1) {
+        // Single month view
+        const monthCalendar = createMonthCalendar(currentDate.getFullYear(), currentDate.getMonth());
+        container.appendChild(monthCalendar);
+    } else {
+        // Multi-month view
+        const row = document.createElement('div');
+        row.className = 'row';
+        
+        for (let i = 0; i < monthsToShow; i++) {
+            const monthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
+            const colClass = monthsToShow === 2 ? 'col-md-6' : 'col-lg-4';
+            
+            const col = document.createElement('div');
+            col.className = `${colClass} mb-4`;
+            
+            const monthCalendar = createMonthCalendar(monthDate.getFullYear(), monthDate.getMonth(), true);
+            col.appendChild(monthCalendar);
+            row.appendChild(col);
+        }
+        
+        container.appendChild(row);
     }
+}
+
+function createMonthCalendar(year, month, isCompact = false) {
+    const monthContainer = document.createElement('div');
+    monthContainer.className = 'month-calendar';
+    
+    // Month header (only for multi-month view)
+    if (isCompact) {
+        const monthHeader = document.createElement('div');
+        monthHeader.className = 'text-center mb-2 fw-bold text-primary';
+        monthHeader.textContent = `${monthNames[month]} ${year}`;
+        monthContainer.appendChild(monthHeader);
+    }
+    
+    // Create table
+    const table = document.createElement('table');
+    table.className = 'table table-bordered mb-0';
+    if (isCompact) {
+        table.style.fontSize = '0.85rem';
+    }
+    
+    // Table header
+    const thead = document.createElement('thead');
+    thead.className = 'table-light';
+    const headerRow = document.createElement('tr');
+    const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+    dayNames.forEach(dayName => {
+        const th = document.createElement('th');
+        th.className = 'text-center py-2';
+        if (isCompact) {
+            th.style.fontSize = '0.75rem';
+            th.style.padding = '0.25rem';
+        } else {
+            th.className += ' py-3';
+        }
+        th.textContent = dayName;
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    
+    // Table body
+    const tbody = document.createElement('tbody');
     
     // Get first day of month and number of days
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
     const startingDayOfWeek = firstDay.getDay();
-    
-    // Clear calendar body
-    const calendarBody = document.getElementById('calendarBody');
-    calendarBody.innerHTML = '';
     
     let date = 1;
     
@@ -422,7 +497,7 @@ function renderCalendar() {
         for (let day = 0; day < 7; day++) {
             const cell = document.createElement('td');
             cell.className = 'calendar-cell position-relative p-2';
-            cell.style.height = '120px';
+            cell.style.height = isCompact ? '80px' : '120px';
             cell.style.verticalAlign = 'top';
             
             if (week === 0 && day < startingDayOfWeek) {
@@ -456,16 +531,22 @@ function renderCalendar() {
                         const hativaColor = getHativaColor(committee.hativa_id);
                         
                         committeeDiv.className = 'badge text-white mb-1 d-block text-truncate position-relative committee-badge';
-                        committeeDiv.style.fontSize = '0.7rem';
+                        committeeDiv.style.fontSize = isCompact ? '0.6rem' : '0.7rem';
                         committeeDiv.style.cursor = 'pointer';
                         committeeDiv.style.backgroundColor = hativaColor;
                         committeeDiv.style.borderLeft = `4px solid ${hativaColor}`;
-                        committeeDiv.innerHTML = `
-                            ${committee.committee_name}
-                            <small class="d-block opacity-75" style="font-size: 0.6rem;">
-                                <i class="bi bi-clock me-1"></i>SLA
-                            </small>
-                        `;
+                        
+                        if (isCompact) {
+                            committeeDiv.textContent = committee.committee_name;
+                        } else {
+                            committeeDiv.innerHTML = `
+                                ${committee.committee_name}
+                                <small class="d-block opacity-75" style="font-size: 0.6rem;">
+                                    <i class="bi bi-clock me-1"></i>SLA
+                                </small>
+                            `;
+                        }
+                        
                         committeeDiv.title = `${committee.committee_name} - ${committee.hativa_name} (לחץ לעריכה, Shift+לחץ למידע SLA)`;
                         committeeDiv.onclick = function(e) {
                             e.stopPropagation();
@@ -492,13 +573,13 @@ function renderCalendar() {
                     const hativaColorLight = getHativaColorLight(eventCommittee.hativa_id);
                     
                     eventDiv.className = 'badge mb-1 d-block text-truncate event-badge';
-                    eventDiv.style.fontSize = '0.65rem';
+                    eventDiv.style.fontSize = isCompact ? '0.55rem' : '0.65rem';
                     eventDiv.style.cursor = 'pointer';
                     eventDiv.style.backgroundColor = hativaColorLight;
                     eventDiv.style.color = hativaColor;
                     eventDiv.style.border = `1px solid ${hativaColor}`;
                     eventDiv.style.fontWeight = '500';
-                    eventDiv.textContent = `📅 ${event.name}`;
+                    eventDiv.textContent = isCompact ? event.name : `📅 ${event.name}`;
                     eventDiv.title = `${event.name} - ${event.maslul_name} (לחץ לעריכה)`;
                     eventDiv.onclick = function(e) {
                         e.stopPropagation();
@@ -522,26 +603,106 @@ function renderCalendar() {
             row.appendChild(cell);
         }
         
-        calendarBody.appendChild(row);
+        tbody.appendChild(row);
         
         // Stop if we've filled all days
         if (date > daysInMonth) break;
     }
+    
+    table.appendChild(tbody);
+    monthContainer.appendChild(table);
+    
+    return monthContainer;
 }
 
-function previousMonth() {
-    currentDate.setMonth(currentDate.getMonth() - 1);
+function previousPeriod() {
+    currentDate.setMonth(currentDate.getMonth() - monthsToShow);
+    updateSelectors();
     renderCalendar();
 }
 
-function nextMonth() {
-    currentDate.setMonth(currentDate.getMonth() + 1);
+function nextPeriod() {
+    currentDate.setMonth(currentDate.getMonth() + monthsToShow);
+    updateSelectors();
     renderCalendar();
 }
 
 function goToToday() {
     currentDate = new Date();
+    updateSelectors();
     renderCalendar();
+}
+
+function updateCalendarView() {
+    monthsToShow = parseInt(document.getElementById('monthsToShow').value);
+    renderCalendar();
+}
+
+function goToSelectedMonth() {
+    const monthSelect = document.getElementById('monthSelect');
+    const yearSelect = document.getElementById('yearSelect');
+    
+    if (monthSelect && yearSelect) {
+        const selectedMonth = parseInt(monthSelect.value);
+        const selectedYear = parseInt(yearSelect.value);
+        
+        currentDate = new Date(selectedYear, selectedMonth, 1);
+        renderCalendar();
+    }
+}
+
+function updateSelectors() {
+    const monthSelect = document.getElementById('monthSelect');
+    const yearSelect = document.getElementById('yearSelect');
+    
+    if (monthSelect && yearSelect) {
+        monthSelect.value = currentDate.getMonth();
+        yearSelect.value = currentDate.getFullYear();
+    }
+}
+
+function updateHeaderDisplay() {
+    const monthsDisplay = document.getElementById('monthsDisplay');
+    if (!monthsDisplay) return;
+    
+    if (monthsToShow === 1) {
+        const month = currentDate.getMonth();
+        const year = currentDate.getFullYear();
+        monthsDisplay.textContent = `${monthNames[month]} ${year}`;
+    } else {
+        const startMonth = currentDate.getMonth();
+        const startYear = currentDate.getFullYear();
+        const endDate = new Date(startYear, startMonth + monthsToShow - 1, 1);
+        const endMonth = endDate.getMonth();
+        const endYear = endDate.getFullYear();
+        
+        if (startYear === endYear) {
+            monthsDisplay.textContent = `${monthNames[startMonth]} - ${monthNames[endMonth]} ${startYear}`;
+        } else {
+            monthsDisplay.textContent = `${monthNames[startMonth]} ${startYear} - ${monthNames[endMonth]} ${endYear}`;
+        }
+    }
+}
+
+function populateYearSelector() {
+    const yearSelect = document.getElementById('yearSelect');
+    if (!yearSelect) return;
+    
+    const currentYear = new Date().getFullYear();
+    const startYear = currentYear - 2;
+    const endYear = currentYear + 5;
+    
+    yearSelect.innerHTML = '';
+    
+    for (let year = startYear; year <= endYear; year++) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        if (year === currentYear) {
+            option.selected = true;
+        }
+        yearSelect.appendChild(option);
+    }
 }
 
 
@@ -549,17 +710,13 @@ function goToToday() {
 document.addEventListener('DOMContentLoaded', function() {
     currentDate = new Date();
     
-    // Update header elements immediately
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const monthElement = document.getElementById('monthName');
-    const yearElement = document.getElementById('yearNumber');
+    // Populate year selector
+    populateYearSelector();
     
-    if (monthElement && yearElement) {
-        monthElement.textContent = monthNames[month];
-        yearElement.textContent = year;
-    }
+    // Update selectors to current date
+    updateSelectors();
     
+    // Render calendar
     renderCalendar();
     
     // Add click handler for calendar cells to set date in modals
@@ -572,7 +729,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const year = currentDate.getFullYear();
                 const month = currentDate.getMonth() + 1;
                 const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                document.getElementById('modalDate').value = dateStr;
+                const modalDateElement = document.getElementById('modalDate');
+                if (modalDateElement) {
+                    modalDateElement.value = dateStr;
+                }
             }
         }
     });
@@ -1245,7 +1405,7 @@ function showAlert(message, type) {
     margin-bottom: 2px;
 }
 
-#calendarTable th {
+.table th {
     background-color: #f8f9fa;
     font-weight: 600;
 }
@@ -1261,6 +1421,49 @@ function showAlert(message, type) {
 
 .day-menu-item:active {
     background-color: #bbdefb !important;
+}
+
+/* Multi-month view styles */
+.month-calendar {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    overflow: hidden;
+}
+
+.month-calendar .table {
+    margin-bottom: 0;
+}
+
+.month-calendar .table th,
+.month-calendar .table td {
+    border-color: #dee2e6;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .d-flex.gap-3 {
+        flex-direction: column;
+        gap: 1rem !important;
+    }
+    
+    .month-calendar {
+        margin-bottom: 1rem;
+    }
+    
+    .calendar-cell {
+        min-height: 60px;
+    }
+}
+
+/* Compact view for multi-month */
+.month-calendar.compact .calendar-cell {
+    min-height: 60px;
+    padding: 0.25rem;
+}
+
+.month-calendar.compact .badge {
+    font-size: 0.6rem;
+    margin-bottom: 1px;
 }
 </style>
 {% endblock %}
