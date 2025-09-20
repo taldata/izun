@@ -217,46 +217,14 @@
                             </div>
                         </div>
                         <div class="col-sm-6">
-                            <div class="form-group">
-                                <label class="form-label fw-semibold mb-3">אופן בחירת חודשים</label>
-                                <div class="selection-cards">
-                                    <input type="radio" class="btn-check" name="month_selection_type" id="single_month" value="single" checked>
-                                    <label class="selection-card" for="single_month">
-                                        <i class="bi bi-calendar3"></i>
-                                        <span>חודש יחיד</span>
-                                    </label>
-                                    
-                                    <input type="radio" class="btn-check" name="month_selection_type" id="multiple_months" value="multiple">
-                                    <label class="selection-card" for="multiple_months">
-                                        <i class="bi bi-calendar-range"></i>
-                                        <span>מספר חודשים</span>
-                                    </label>
-                                    
-                                    <input type="radio" class="btn-check" name="month_selection_type" id="range_months" value="range">
-                                    <label class="selection-card" for="range_months">
-                                        <i class="bi bi-calendar2-range"></i>
-                                        <span>טווח חודשים</span>
-                                    </label>
-                                </div>
-                            </div>
+                            <!-- Hidden input to always use multiple months mode -->
+                            <input type="hidden" name="month_selection_type" value="multiple">
                         </div>
                     </div>
                     
-                    <!-- Single Month Selection -->
-                    <div id="single_month_selection" class="mb-3">
-                        <label for="month" class="form-label fw-semibold">חודש</label>
-                        <select class="form-select form-select-lg" id="month" name="month">
-                            {% for m in range(1, 13) %}
-                                <option value="{{ m }}" {% if m == current_month %}selected{% endif %}>
-                                    {{ ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
-                                        'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'][m-1] }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
                     
-                    <!-- Multiple Months Selection -->
-                    <div id="multiple_months_selection" class="mb-3" style="display: none;">
+                    <!-- Months Selection -->
+                    <div id="months_selection" class="mb-3">
                         <label class="form-label fw-semibold mb-3">
                             <i class="bi bi-calendar-range me-2"></i>בחר חודשים
                         </label>
@@ -293,33 +261,6 @@
                         </div>
                     </div>
                     
-                    <!-- Range Months Selection -->
-                    <div id="range_months_selection" class="mb-3" style="display: none;">
-                        <div class="row g-3">
-                            <div class="col-sm-6">
-                                <label for="start_month" class="form-label fw-semibold">חודש התחלה</label>
-                                <select class="form-select" id="start_month" name="start_month">
-                                    {% for m in range(1, 13) %}
-                                        <option value="{{ m }}" {% if m == current_month %}selected{% endif %}>
-                                            {{ ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
-                                                'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'][m-1] }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-sm-6">
-                                <label for="end_month" class="form-label fw-semibold">חודש סיום</label>
-                                <select class="form-select" id="end_month" name="end_month">
-                                    {% for m in range(1, 13) %}
-                                        <option value="{{ m }}" {% if m == (current_month + 2) % 12 or (current_month + 2) == 12 %}selected{% endif %}>
-                                            {{ ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
-                                                'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'][m-1] }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
                     
                     <div class="mb-4">
                         <label class="form-label fw-semibold mb-3">
@@ -472,36 +413,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Handle month selection type changes
-    const monthSelectionTypes = document.querySelectorAll('input[name="month_selection_type"]');
-    const singleMonthDiv = document.getElementById('single_month_selection');
-    const multipleMonthsDiv = document.getElementById('multiple_months_selection');
-    const rangeMonthsDiv = document.getElementById('range_months_selection');
-    
-    function updateMonthSelection() {
-        const selectedType = document.querySelector('input[name="month_selection_type"]:checked').value;
-        
-        // Hide all sections
-        singleMonthDiv.style.display = 'none';
-        multipleMonthsDiv.style.display = 'none';
-        rangeMonthsDiv.style.display = 'none';
-        
-        // Show relevant section
-        if (selectedType === 'single') {
-            singleMonthDiv.style.display = 'block';
-        } else if (selectedType === 'multiple') {
-            multipleMonthsDiv.style.display = 'block';
-        } else if (selectedType === 'range') {
-            rangeMonthsDiv.style.display = 'block';
-        }
-    }
-    
-    monthSelectionTypes.forEach(radio => {
-        radio.addEventListener('change', updateMonthSelection);
-    });
-    
-    // Initialize
-    updateMonthSelection();
     
     // Handle select all months checkbox
     const selectAllMonthsCheckbox = document.getElementById('select_all_months');
@@ -551,23 +462,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.querySelector('form');
     if (form) {
         form.addEventListener('submit', function(e) {
-            const selectedType = document.querySelector('input[name="month_selection_type"]:checked').value;
-            
-            if (selectedType === 'multiple') {
-                const selectedMonths = document.querySelectorAll('.month-checkbox:checked');
-                if (selectedMonths.length === 0) {
-                    e.preventDefault();
-                    alert('אנא בחר לפחות חודש אחד');
-                    return false;
-                }
-            } else if (selectedType === 'range') {
-                const startMonth = parseInt(document.getElementById('start_month').value);
-                const endMonth = parseInt(document.getElementById('end_month').value);
-                if (startMonth > endMonth) {
-                    e.preventDefault();
-                    alert('חודש ההתחלה חייב להיות לפני או שווה לחודש הסיום');
-                    return false;
-                }
+            const selectedMonths = document.querySelectorAll('.month-checkbox:checked');
+            if (selectedMonths.length === 0) {
+                e.preventDefault();
+                alert('אנא בחר לפחות חודש אחד');
+                return false;
             }
             
             const selectedHativot = document.querySelectorAll('.hativa-checkbox:checked');
@@ -897,55 +796,6 @@ document.addEventListener('DOMContentLoaded', function() {
     padding: 2.5rem;
 }
 
-/* Selection Cards */
-.selection-cards {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-
-.selection-card {
-    flex: 1;
-    min-width: 120px;
-    background: white;
-    border: 2px solid #e9ecef;
-    border-radius: 15px;
-    padding: 1.5rem 1rem;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.selection-card:hover {
-    border-color: #667eea;
-    background: #f8f9ff;
-}
-
-.selection-card i {
-    font-size: 1.5rem;
-    color: #6c757d;
-    transition: color 0.3s ease;
-}
-
-.selection-card span {
-    font-weight: 500;
-    color: #495057;
-}
-
-.btn-check:checked + .selection-card {
-    border-color: #667eea;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-}
-
-.btn-check:checked + .selection-card i,
-.btn-check:checked + .selection-card span {
-    color: white;
-}
 
 /* Divisions Selection */
 .divisions-selection {
@@ -1382,10 +1232,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     .hero-stats {
         gap: 1rem;
-    }
-    
-    .selection-cards {
-        flex-direction: column;
     }
     
     .divisions-grid {
