@@ -150,8 +150,38 @@ class DatabaseManager:
         conn.commit()
         conn.close()
         
+        # Create default admin user if no users exist
+        self._create_default_admin()
+        
         # Note: Default committee types are no longer inserted automatically
         # Users should create committee types manually through the web interface
+    
+    def _create_default_admin(self):
+        """Create default admin user if no users exist"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Check if any users exist
+        cursor.execute('SELECT COUNT(*) FROM users')
+        user_count = cursor.fetchone()[0]
+        
+        if user_count == 0:
+            # Create default admin user
+            import hashlib
+            password_hash = hashlib.sha256('admin123'.encode()).hexdigest()
+            
+            cursor.execute('''
+                INSERT INTO users (username, email, password_hash, full_name, role, is_active)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', ('admin', 'admin@example.com', password_hash, 'מנהל מערכת', 'admin', 1))
+            
+            print("נוצר משתמש admin ברירת מחדל:")
+            print("שם משתמש: admin")
+            print("סיסמה: admin123")
+            print("אנא שנה את הסיסמה לאחר ההתחברות הראשונה")
+        
+        conn.commit()
+        conn.close()
     
     def _migrate_database(self, cursor):
         """Migrate existing database to add new columns if they don't exist"""
@@ -793,6 +823,155 @@ class DatabaseManager:
         ''', (user_id,))
         conn.commit()
         conn.close()
+    
+    def get_all_users(self) -> List[Dict]:
+        """Get all users with their division information"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
+                   u.hativa_id, h.name as hativa_name, u.is_active, 
+                   u.created_at, u.last_login
+            FROM users u
+            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
+            ORDER BY u.created_at DESC
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+        
+        users = []
+        for row in rows:
+            users.append({
+                'user_id': row[0],
+                'username': row[1],
+                'email': row[2],
+                'full_name': row[3],
+                'role': row[4],
+                'hativa_id': row[5],
+                'hativa_name': row[6],
+                'is_active': row[7],
+                'created_at': row[8],
+                'last_login': row[9]
+            })
+        return users
+    
+    def get_user_by_id(self, user_id: int) -> Optional[Dict]:
+        """Get user by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT u.*, h.name as hativa_name
+            FROM users u
+            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
+            WHERE u.user_id = ?
+        ''', (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return {
+                'user_id': row[0], 'username': row[1], 'email': row[2], 'password_hash': row[3],
+                'full_name': row[4], 'role': row[5], 'hativa_id': row[6], 'is_active': row[7],
+                'created_at': row[8], 'last_login': row[9], 'hativa_name': row[10]
+            }
+        return None
+    
+    def update_user(self, user_id: int, username: str, email: str, full_name: str, 
+                   role: str, hativa_id: Optional[int] = None) -> bool:
+        """Update user information"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE users 
+                SET username = ?, email = ?, full_name = ?, role = ?, hativa_id = ?
+                WHERE user_id = ?
+            ''', (username, email, full_name, role, hativa_id, user_id))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error updating user: {e}")
+            return False
+    
+    def toggle_user_status(self, user_id: int) -> bool:
+        """Toggle user active status"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE users 
+                SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END
+                WHERE user_id = ?
+            ''', (user_id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error toggling user status: {e}")
+            return False
+    
+    def delete_user(self, user_id: int) -> bool:
+        """Delete user (soft delete by setting is_active to 0)"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE users SET is_active = 0 WHERE user_id = ?
+            ''', (user_id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error deleting user: {e}")
+            return False
+    
+    def check_username_exists(self, username: str, exclude_user_id: Optional[int] = None) -> bool:
+        """Check if username already exists"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        if exclude_user_id:
+            cursor.execute('''
+                SELECT COUNT(*) FROM users WHERE username = ? AND user_id != ?
+            ''', (username, exclude_user_id))
+        else:
+            cursor.execute('''
+                SELECT COUNT(*) FROM users WHERE username = ?
+            ''', (username,))
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count > 0
+    
+    def check_email_exists(self, email: str, exclude_user_id: Optional[int] = None) -> bool:
+        """Check if email already exists"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        if exclude_user_id:
+            cursor.execute('''
+                SELECT COUNT(*) FROM users WHERE email = ? AND user_id != ?
+            ''', (email, exclude_user_id))
+        else:
+            cursor.execute('''
+                SELECT COUNT(*) FROM users WHERE email = ?
+            ''', (email,))
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count > 0
+    
+    def change_user_password(self, user_id: int, new_password_hash: str) -> bool:
+        """Change user password"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE users SET password_hash = ? WHERE user_id = ?
+            ''', (new_password_hash, user_id))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error changing password: {e}")
+            return False
     
     def get_system_setting(self, setting_key: str) -> Optional[str]:
         """Get system setting value"""

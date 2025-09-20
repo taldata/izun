@@ -135,6 +135,9 @@
                             <li><span class="dropdown-item-text small text-muted">{{ current_user.username }}</span></li>
                             <li><hr class="dropdown-divider"></li>
                             {% if current_user.role == 'admin' %}
+                            <li><a class="dropdown-item" href="{{ url_for('manage_users') }}">
+                                <i class="bi bi-people me-2 text-primary"></i>ניהול משתמשים
+                            </a></li>
                             <li><a class="dropdown-item" href="#" onclick="toggleEditingPeriod()">
                                 <i class="bi bi-toggle-on me-2"></i>ניהול תקופת עריכה
                             </a></li>
