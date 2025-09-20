@@ -593,7 +593,7 @@ function createMonthCalendar(year, month, isCompact = false) {
                 cell.onclick = function(e) {
                     // Only trigger if clicking on empty space (not on existing items)
                     if (e.target === cell || e.target === dayDiv) {
-                        showDayMenu(currentDateStr, e);
+                        handleDayClick(currentDateStr, e);
                     }
                 };
                 
@@ -825,20 +825,33 @@ function deleteEvent() {
     }
 }
 
-// Day menu functionality
-function showDayMenu(dateStr, event) {
+// Day click functionality
+function handleDayClick(dateStr, event) {
+    // Check if there's already a committee meeting on this date
+    const existingCommittee = committeesData.find(committee => committee.vaada_date === dateStr);
+    
+    if (existingCommittee) {
+        // If there's already a committee, show menu with options
+        showCommitteeMenu(dateStr, event, existingCommittee);
+    } else {
+        // If no committee exists, directly open add committee modal
+        document.getElementById('modalDate').value = dateStr;
+        const modal = new bootstrap.Modal(document.getElementById('addCommitteeModal'));
+        modal.show();
+    }
+}
+
+// Committee menu functionality (for existing committees)
+function showCommitteeMenu(dateStr, event, existingCommittee) {
     // Remove existing menu if any
-    const existingMenu = document.getElementById('dayMenu');
+    const existingMenu = document.getElementById('committeeMenu');
     if (existingMenu) {
         existingMenu.remove();
     }
     
-    // Check if there's already a committee meeting on this date
-    const existingCommittee = committeesData.find(committee => committee.vaada_date === dateStr);
-    
     // Create menu
     const menu = document.createElement('div');
-    menu.id = 'dayMenu';
+    menu.id = 'committeeMenu';
     menu.className = 'day-menu';
     menu.style.cssText = `
         position: fixed;
@@ -856,65 +869,50 @@ function showDayMenu(dateStr, event) {
     menu.style.left = (rect.left + window.scrollX) + 'px';
     menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
     
-    // Create menu items based on whether there's already a committee
-    let menuItems = [];
-    
-    if (existingCommittee) {
-        // If there's already a committee, only show option to add event to it
-        menuItems = [
-            {
-                text: `📅 הוסף אירוע לועדה`,
-                subtitle: `${existingCommittee.committee_name} - ${existingCommittee.hativa_name}`,
-                icon: 'bi-calendar-plus',
-                action: () => {
-                    // Pre-select the existing committee in the event modal
-                    document.getElementById('event_vaadot_id').value = existingCommittee.vaadot_id;
-                    
-                    // Trigger change event to filter routes by division
-                    const event = new Event('change');
-                    document.getElementById('event_vaadot_id').dispatchEvent(event);
-                    
-                    const modal = new bootstrap.Modal(document.getElementById('addEventModal'));
-                    modal.show();
-                    menu.remove();
-                }
-            },
-            {
-                text: '✏️ ערוך ועדה',
-                subtitle: 'עריכת פרטי הועדה הקיימת',
-                icon: 'bi-pencil',
-                action: () => {
-                    editCommittee(existingCommittee);
-                    menu.remove();
-                }
+    // Create menu items for existing committee
+    const menuItems = [
+        {
+            text: `📅 הוסף אירוע לועדה`,
+            subtitle: `${existingCommittee.committee_name} - ${existingCommittee.hativa_name}`,
+            icon: 'bi-calendar-plus',
+            action: () => {
+                // Pre-select the existing committee in the event modal
+                document.getElementById('event_vaadot_id').value = existingCommittee.vaadot_id;
+                
+                // Trigger change event to filter routes by division
+                const changeEvent = new Event('change');
+                document.getElementById('event_vaadot_id').dispatchEvent(changeEvent);
+                
+                const modal = new bootstrap.Modal(document.getElementById('addEventModal'));
+                modal.show();
+                menu.remove();
             }
-        ];
-    } else {
-        // If no committee exists, show option to add committee or event
-        menuItems = [
-            {
-                text: '➕ הוסף ועדה',
-                subtitle: 'יצירת ישיבת ועדה חדשה',
-                icon: 'bi-people',
-                action: () => {
-                    document.getElementById('modalDate').value = dateStr;
-                    const modal = new bootstrap.Modal(document.getElementById('addCommitteeModal'));
-                    modal.show();
-                    menu.remove();
-                }
-            },
-            {
-                text: '📅 הוסף אירוע',
-                subtitle: 'הוספת אירוע לועדה קיימת',
-                icon: 'bi-calendar-event',
-                action: () => {
-                    const modal = new bootstrap.Modal(document.getElementById('addEventModal'));
-                    modal.show();
-                    menu.remove();
-                }
+        },
+        {
+            text: '✏️ ערוך ועדה',
+            subtitle: 'עריכת פרטי הועדה הקיימת',
+            icon: 'bi-pencil',
+            action: () => {
+                editCommittee(existingCommittee);
+                menu.remove();
             }
-        ];
-    }
+        },
+        {
+            text: '🗑️ מחק ועדה',
+            subtitle: 'מחיקת הועדה וכל האירועים שלה',
+            icon: 'bi-trash',
+            action: () => {
+                if (confirm(`האם אתה בטוח שברצונך למחוק את ישיבת הועדה "${existingCommittee.committee_name}"? פעולה זו תמחק גם את כל האירועים הקשורים אליה.`)) {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '/committees/delete/' + existingCommittee.vaadot_id;
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+                menu.remove();
+            }
+        }
+    ];
     
     menuItems.forEach(item => {
         const menuItem = document.createElement('div');
