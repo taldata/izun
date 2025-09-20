@@ -1,184 +1,200 @@
 # Entity Relationship Diagram (ERD)
 
-## Committee System Database
+## Committee Management System Database Schema
 
-This ERD represents the database structure for the committee system that manages divisions (hativot), routes (maslulim), committees (vaadot), events, and exception dates.
+### Tables Overview
 
-```mermaid
-erDiagram
-    HATIVOT {
-        int hativa_id PK
-        text name UK
-        text description
-        timestamp created_at
-    }
-    
-    MASLULIM {
-        int maslul_id PK
-        int hativa_id FK
-        text name
-        text description
-        timestamp created_at
-    }
-    
-    COMMITTEE_TYPES {
-        int committee_type_id PK
-        text name UK
-        int scheduled_day
-        text frequency
-        int week_of_month
-        text description
-        timestamp created_at
-    }
-    
-    VAADOT {
-        int vaadot_id PK
-        int committee_type_id FK
-        int hativa_id FK
-        date vaada_date
-        text status
-        int exception_date_id FK
-        text notes
-        timestamp created_at
-    }
-    
-    EVENTS {
-        int event_id PK
-        int vaadot_id FK
-        int maslul_id FK
-        text name
-        text event_type
-        int expected_requests
-        date scheduled_date
-        text status
-        timestamp created_at
-    }
-    
-    EXCEPTION_DATES {
-        int date_id PK
-        date exception_date UK
-        text description
-        text type
-        timestamp created_at
-    }
+#### 1. Hativot (Divisions)
+```sql
+hativot (
+    hativa_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    color TEXT DEFAULT '#007bff',
+    is_active INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+```
+- **Purpose**: Organizational divisions/departments
+- **Features**: Custom colors for visual organization, soft delete support
 
-    %% Relationships
-    HATIVOT ||--o{ MASLULIM : "has"
-    HATIVOT ||--o{ VAADOT : "hosts_meeting"
-    COMMITTEE_TYPES ||--o{ VAADOT : "defines"
-    VAADOT ||--o{ EVENTS : "schedules"
-    MASLULIM ||--o{ EVENTS : "participates_in"
-    EXCEPTION_DATES ||--o{ VAADOT : "affects"
+#### 2. Maslulim (Routes/Tracks)
+```sql
+maslulim (
+    maslul_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hativa_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id) ON DELETE CASCADE
+)
+```
+- **Purpose**: Sub-units within divisions for specific programs/tracks
+- **Relationship**: Many-to-One with Hativot
+
+#### 3. Committee_Types (Committee Definitions)
+```sql
+committee_types (
+    committee_type_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hativa_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    scheduled_day INTEGER NOT NULL, -- 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday
+    frequency TEXT NOT NULL DEFAULT 'weekly' CHECK (frequency IN ('weekly', 'monthly')),
+    week_of_month INTEGER DEFAULT NULL, -- For monthly: 1=first week, 2=second, etc.
+    is_active INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id) ON DELETE CASCADE,
+    UNIQUE(hativa_id, name)
+)
+```
+- **Purpose**: General committee definitions with scheduling rules
+- **Features**: Division-specific committee types, flexible scheduling (weekly/monthly)
+
+#### 4. Vaadot (Committee Meetings)
+```sql
+vaadot (
+    vaadot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    committee_type_id INTEGER NOT NULL,
+    hativa_id INTEGER NOT NULL,
+    vaada_date DATE NOT NULL, -- actual date of the committee meeting
+    status TEXT DEFAULT 'planned', -- planned, scheduled, completed, cancelled
+    exception_date_id INTEGER, -- reference to exception_dates if meeting is affected
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (committee_type_id) REFERENCES committee_types (committee_type_id),
+    FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id),
+    FOREIGN KEY (exception_date_id) REFERENCES exception_dates (date_id),
+    UNIQUE(committee_type_id, hativa_id, vaada_date)
+)
+```
+- **Purpose**: Specific committee meeting instances
+- **Features**: Links to committee types, tracks meeting status, exception handling
+
+#### 5. Events
+```sql
+events (
+    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vaadot_id INTEGER NOT NULL,
+    maslul_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    event_type TEXT NOT NULL CHECK (event_type IN ('kokok', 'shotef')),
+    expected_requests INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (vaadot_id) REFERENCES vaadot (vaadot_id) ON DELETE CASCADE,
+    FOREIGN KEY (maslul_id) REFERENCES maslulim (maslul_id) ON DELETE CASCADE
+)
+```
+- **Purpose**: Specific events/agenda items within committee meetings
+- **Features**: Links events to specific meeting instances and routes
+
+#### 6. Exception_Dates
+```sql
+exception_dates (
+    date_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    exception_date DATE NOT NULL UNIQUE,
+    description TEXT,
+    type TEXT DEFAULT 'holiday', -- holiday, sabbath, special
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+```
+- **Purpose**: Holidays, sabbaths, and other non-working days
+- **Features**: Affects automatic scheduling and meeting planning
+
+#### 7. Users (Authentication)
+```sql
+users (
+    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'manager', 'user')),
+    hativa_id INTEGER,
+    is_active INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login TIMESTAMP,
+    FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id)
+)
+```
+- **Purpose**: User authentication and authorization
+- **Features**: Role-based access control, division-based permissions
+
+#### 8. System_Settings
+```sql
+system_settings (
+    setting_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    setting_key TEXT NOT NULL UNIQUE,
+    setting_value TEXT NOT NULL,
+    description TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_by INTEGER,
+    FOREIGN KEY (updated_by) REFERENCES users (user_id)
+)
+```
+- **Purpose**: Global system configuration
+- **Features**: Configurable work days, SLA settings, academic year settings
+
+### Relationships Diagram
+
+```
+┌─────────────┐    1:N    ┌─────────────────┐    1:N    ┌─────────────┐
+│   Hativot   │ ────────→ │ Committee_Types │ ────────→ │   Vaadot    │
+│ (Divisions) │           │  (Definitions)  │           │ (Meetings)  │
+└─────────────┘           └─────────────────┘           └─────────────┘
+       │                                                        │
+       │ 1:N                                                    │ 1:N
+       ↓                                                        ↓
+┌─────────────┐                                          ┌─────────────┐
+│  Maslulim   │                                          │   Events    │
+│  (Routes)   │ ────────────────────────────────────────→│             │
+└─────────────┘                    N:1                   └─────────────┘
+
+┌─────────────────┐    1:N    ┌─────────────┐
+│ Exception_Dates │ ────────→ │   Vaadot    │
+│   (Holidays)    │           │ (Meetings)  │
+└─────────────────┘           └─────────────┘
+
+┌─────────────┐    1:N    ┌─────────────┐
+│   Hativot   │ ────────→ │    Users    │
+│ (Divisions) │           │             │
+└─────────────┘           └─────────────┘
 ```
 
-## Table Descriptions
+### Business Rules
 
-### HATIVOT (Divisions)
-- **Purpose**: Represents organizational divisions
-- **Key Fields**:
-  - `hativa_id`: Primary key, auto-increment
-  - `name`: Unique division name
-  - `description`: Optional description
-  - `created_at`: Timestamp of creation
+1. **One Committee Per Day**: Only one committee meeting can be scheduled per day across all divisions
+2. **Division Hierarchy**: Events can only link routes (maslulim) and committees from the same division
+3. **Committee Scheduling**: Committee types define fixed days of the week and frequency (weekly/monthly)
+4. **Business Days**: System operates on Sunday-Thursday schedule (Israeli business week)
+5. **Division-Specific Committee Types**: Each division can define its own committee types with custom schedules
+6. **Meeting Instance Model**: Vaadot represents specific meeting instances, not general committee definitions
 
-### MASLULIM (Routes)
-- **Purpose**: Represents routes within divisions
-- **Key Fields**:
-  - `maslul_id`: Primary key, auto-increment
-  - `hativa_id`: Foreign key to HATIVOT
-  - `name`: Route name
-  - `description`: Optional description
-  - `created_at`: Timestamp of creation
+### Key Features
 
-### COMMITTEE_TYPES (Committee Definitions)
-- **Purpose**: Defines general committee types and their scheduling rules
-- **Key Fields**:
-  - `committee_type_id`: Primary key, auto-increment
-  - `name`: Unique committee type name
-  - `scheduled_day`: Day of week (0=Monday, 1=Tuesday, etc.)
-  - `frequency`: Meeting frequency ('weekly', 'monthly')
-  - `week_of_month`: For monthly committees (1-4)
-  - `description`: Committee description
-  - `created_at`: Timestamp of creation
+- **Multi-Division Support**: Each division can have its own committees, routes, and users
+- **Flexible Scheduling**: Support for both weekly and monthly committee frequencies with specific week-of-month for monthly committees
+- **Exception Handling**: Holiday and special date management affects scheduling
+- **Audit Trail**: Created timestamps on all entities
+- **Soft Deletes**: is_active flags for logical deletion
+- **Color Coding**: Visual organization with custom division colors
+- **Role-Based Access**: Admin, manager, and user roles with division-based permissions
+- **Automatic Scheduling**: AI-powered scheduling system respects all business constraints
 
-### VAADOT (Committee Meeting Instances)
-- **Purpose**: Represents specific committee meetings (date + division)
-- **Key Fields**:
-  - `vaadot_id`: Primary key, auto-increment
-  - `committee_type_id`: Foreign key to COMMITTEE_TYPES (required)
-  - `hativa_id`: Foreign key to HATIVOT (required)
-  - `vaada_date`: Actual date of the committee meeting (required)
-  - `status`: Meeting status ('planned', 'scheduled', 'completed', 'cancelled')
-  - `exception_date_id`: Optional foreign key to EXCEPTION_DATES
-  - `notes`: Optional meeting notes
-  - `created_at`: Timestamp of creation
+### Data Integrity
 
-### EVENTS
-- **Purpose**: Represents scheduled events for committees and routes
-- **Key Fields**:
-  - `event_id`: Primary key, auto-increment
-  - `vaadot_id`: Foreign key to VAADOT (required)
-  - `maslul_id`: Foreign key to MASLULIM (required)
-  - `name`: Event name
-  - `event_type`: Type of event ('kokok' or 'shotef')
-  - `expected_requests`: Number of expected requests
-  - `scheduled_date`: Date when event is scheduled
-  - `status`: Event status ('planned', 'scheduled', 'completed', 'cancelled')
-  - `created_at`: Timestamp of creation
+- **Referential Integrity**: All foreign key relationships enforced with CASCADE deletes where appropriate
+- **Data Validation**: Check constraints on enums (event_type, frequency, role, etc.)
+- **Unique Constraints**: Prevent duplicate committee names within divisions, unique meeting instances
+- **Business Logic Validation**: Server-side and client-side validation ensures data consistency
 
-### EXCEPTION_DATES
-- **Purpose**: Stores dates when committees should not meet
-- **Key Fields**:
-  - `date_id`: Primary key, auto-increment
-  - `exception_date`: Unique date that is an exception
-  - `description`: Description of the exception
-  - `type`: Type of exception ('holiday', 'sabbath', 'special')
-  - `created_at`: Timestamp of creation
+### System Configuration
 
-## Relationships
+The system includes configurable settings stored in `system_settings`:
 
-1. **HATIVOT → MASLULIM** (One-to-Many)
-   - Each division can have multiple routes
-   - Each route belongs to exactly one division
+- **work_days**: "0,1,2,3,4" (Sunday-Thursday)
+- **editing_period_active**: Controls general user editing permissions
+- **academic_year_start**: Start of current academic year
+- **sla_days_before**: Default SLA days before committee meeting
 
-2. **COMMITTEE_TYPES → VAADOT** (One-to-Many)
-   - Each committee type can have multiple meeting instances
-   - Each meeting belongs to exactly one committee type
-
-3. **HATIVOT → VAADOT** (One-to-Many)
-   - Each division can host multiple committee meetings
-   - Each meeting belongs to exactly one division
-
-4. **VAADOT → EVENTS** (One-to-Many)
-   - Each committee meeting can schedule multiple events
-   - Each event belongs to exactly one committee meeting
-
-5. **MASLULIM → EVENTS** (One-to-Many)
-   - Each route can participate in multiple events
-   - Each event involves exactly one route
-
-6. **VAADOT → EXCEPTION_DATES** (Many-to-One, Optional)
-   - Committee meetings can be linked to exception dates when affected
-   - Exception dates can affect multiple committee meetings
-
-6. **EXCEPTION_DATES** (Referenced by VAADOT)
-   - Table for managing non-working dates
-   - Can be referenced by committees when meetings are affected by exceptions
-
-## Default Data
-
-The system includes default committees:
-- **ועדת הזנק** (Monday, Weekly)
-- **ועדת תשתיות** (Wednesday, Weekly)
-- **ועדת צמיחה** (Thursday, Weekly)
-- **ייצור מתקדם** (Tuesday, Monthly - 3rd week)
-
-## Business Rules
-
-1. Committee names must be unique
-2. Division names must be unique
-3. Exception dates must be unique
-4. Events must be associated with both a committee and a route
-5. Monthly committees specify which week of the month they meet
-6. Event types are restricted to 'kokok' or 'shotef'
-7. Event status follows the lifecycle: planned → scheduled → completed/cancelled
+This ERD represents a comprehensive committee management system designed for organizational scheduling and event tracking with proper data integrity, business rule enforcement, and modern features like automatic scheduling and role-based access control.
