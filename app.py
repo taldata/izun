@@ -917,8 +917,28 @@ def generate_auto_schedule():
     try:
         # Get form data
         year = request.form.get('year', type=int)
-        month = request.form.get('month', type=int)
+        month_selection_type = request.form.get('month_selection_type', 'single')
         selected_hativot = request.form.getlist('hativot_ids')
+        
+        # Get months based on selection type
+        months_to_process = []
+        if month_selection_type == 'single':
+            month = request.form.get('month', type=int)
+            months_to_process = [month]
+        elif month_selection_type == 'multiple':
+            months_to_process = [int(m) for m in request.form.getlist('months')]
+        elif month_selection_type == 'range':
+            start_month = request.form.get('start_month', type=int)
+            end_month = request.form.get('end_month', type=int)
+            if start_month <= end_month:
+                months_to_process = list(range(start_month, end_month + 1))
+            else:
+                # Handle year wrap-around (e.g., Nov-Feb)
+                months_to_process = list(range(start_month, 13)) + list(range(1, end_month + 1))
+        
+        if not months_to_process:
+            flash('יש לבחור לפחות חודש אחד', 'warning')
+            return redirect(url_for('auto_schedule'))
         
         # Determine hativa_id - if only one selected, use it; otherwise None for all
         hativa_id = None
@@ -931,39 +951,54 @@ def generate_auto_schedule():
             flash('יש לבחור לפחות חטיבה אחת', 'warning')
             return redirect(url_for('auto_schedule'))
         
-        # Create schedule request
+        # Generate schedules for all selected months
+        all_suggestions = []
+        successful_months = []
+        
         from services.auto_schedule_service import ScheduleRequest
-        schedule_request = ScheduleRequest(
-            year=year,
-            month=month,
-            hativa_id=hativa_id,
-            auto_approve=False
-        )
         
-        # Generate schedule using service
-        result = auto_schedule_service.generate_schedule(schedule_request)
+        for month in months_to_process:
+            schedule_request = ScheduleRequest(
+                year=year,
+                month=month,
+                hativa_id=hativa_id,
+                auto_approve=False
+            )
+            
+            # Generate schedule using service
+            result = auto_schedule_service.generate_schedule(schedule_request)
+            
+            if result.success and result.suggested_meetings:
+                all_suggestions.extend(result.suggested_meetings)
+                successful_months.append(month)
+                app.logger.info(f"Generated {len(result.suggested_meetings)} suggestions for {year}/{month}")
+            else:
+                app.logger.warning(f"Failed to generate schedule for {year}/{month}: {result.message}")
         
-        if not result.success:
-            flash(result.message, 'error')
-            return redirect(url_for('auto_schedule'))
-        
-        if not result.suggested_meetings:
-            flash('לא ניתן ליצור תזמון עבור התקופה והחטיבות שנבחרו', 'warning')
+        if not all_suggestions:
+            months_names = [['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+                            'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'][m-1] 
+                           for m in months_to_process]
+            flash(f'לא ניתן ליצור תזמון עבור החודשים: {", ".join(months_names)}', 'warning')
             return redirect(url_for('auto_schedule'))
         
         # Store in session for review
         from flask import session
         session['pending_schedule'] = {
-            'year': result.year,
-            'month': result.month,
-            'suggestions': result.suggested_meetings,
+            'year': year,
+            'months': successful_months,
+            'month_selection_type': month_selection_type,
+            'suggestions': all_suggestions,
             'selected_hativot': selected_hativot
         }
         
-        app.logger.info(f"Stored in session: {len(result.suggested_meetings)} suggestions for {result.year}/{result.month}")
-        app.logger.info(f"First suggestion in session: {result.suggested_meetings[0] if result.suggested_meetings else 'None'}")
+        app.logger.info(f"Stored in session: {len(all_suggestions)} suggestions for {year} months: {successful_months}")
+        app.logger.info(f"First suggestion in session: {all_suggestions[0] if all_suggestions else 'None'}")
         
-        flash(result.message, 'success')
+        months_names = [['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+                        'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'][m-1] 
+                       for m in successful_months]
+        flash(f'נוצרו {len(all_suggestions)} הצעות ישיבות עבור {", ".join(months_names)} {year}', 'success')
         return redirect(url_for('review_auto_schedule'))
         
     except Exception as e:
@@ -996,10 +1031,20 @@ def review_auto_schedule():
             'committee_type_name': suggestion['committee_type']
         })
     
-    # Validate schedule constraints
-    validation_result = auto_scheduler.validate_schedule_constraints(
-        pending_schedule['year'], pending_schedule['month']
-    )
+    # Validate schedule constraints for all months
+    validation_result = {'valid': True, 'violations': [], 'warnings': []}
+    
+    # If we have multiple months, validate each one
+    months = pending_schedule.get('months', [pending_schedule.get('month')])
+    for month in months:
+        if month:  # Skip None values
+            month_validation = auto_scheduler.validate_schedule_constraints(
+                pending_schedule['year'], month
+            )
+            if not month_validation['valid']:
+                validation_result['valid'] = False
+                validation_result['violations'].extend(month_validation.get('violations', []))
+            validation_result['warnings'].extend(month_validation.get('warnings', []))
     
     return render_template('review_auto_schedule.html',
                          suggestions=enriched_suggestions,

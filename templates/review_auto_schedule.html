@@ -6,7 +6,17 @@
 <div class="row">
     <div class="col-12">
         <h2><i class="bi bi-clipboard-check me-2"></i>בדיקת לוח זמנים אוטומטי</h2>
-        <p class="text-muted">בדוק ואשר את הישיבות המוצעות לחודש {{ schedule_info.month }}/{{ schedule_info.year }}</p>
+        <p class="text-muted">
+            בדוק ואשר את הישיבות המוצעות עבור 
+            {% if schedule_info.months|length == 1 %}
+                חודש {{ ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'][schedule_info.months[0]-1] }} {{ schedule_info.year }}
+            {% else %}
+                החודשים: 
+                {% for month in schedule_info.months %}
+                    {{ ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'][month-1] }}{% if not loop.last %}, {% endif %}
+                {% endfor %} {{ schedule_info.year }}
+            {% endif %}
+        </p>
     </div>
 </div>
 
