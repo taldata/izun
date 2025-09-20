@@ -281,6 +281,7 @@ def index():
                          committees=committees,
                          events=events,
                          exception_dates=exception_dates,
+                         stats=stats,
                          current_user=current_user)
 
 @app.route('/hativot')
@@ -351,11 +352,20 @@ def maslulim():
                 maslulim_by_hativa[hativa_name] = []
             maslulim_by_hativa[hativa_name].append(maslul)
         
-        # Calculate statistics
+        # Calculate statistics with colors
+        maslulim_per_hativa_with_colors = {}
+        for hativa in hativot_list:
+            count = len([m for m in maslulim_list if m['hativa_id'] == hativa['hativa_id']])
+            maslulim_per_hativa_with_colors[hativa['name']] = {
+                'count': count,
+                'color': hativa['color']
+            }
+        
         stats = {
             'total_maslulim': len(maslulim_list),
             'total_hativot': len(hativot_list),
-            'maslulim_per_hativa': {hativa['name']: len([m for m in maslulim_list if m['hativa_id'] == hativa['hativa_id']]) for hativa in hativot_list}
+            'maslulim_per_hativa': {hativa['name']: len([m for m in maslulim_list if m['hativa_id'] == hativa['hativa_id']]) for hativa in hativot_list},
+            'maslulim_per_hativa_with_colors': maslulim_per_hativa_with_colors
         }
         
         return render_template('maslulim.html', 
@@ -374,6 +384,7 @@ def add_maslul():
         hativa_id = request.form.get('hativa_id')
         name = request.form.get('name', '').strip()
         description = request.form.get('description', '').strip()
+        sla_days = request.form.get('sla_days', 45)
         
         # Enhanced validation
         if not hativa_id:
@@ -400,8 +411,18 @@ def add_maslul():
             flash(f'מסלול בשם "{name}" כבר קיים בחטיבה זו', 'error')
             return redirect(url_for('maslulim'))
         
+        # Validate SLA
+        try:
+            sla_days = int(sla_days)
+            if sla_days < 1 or sla_days > 365:
+                flash('SLA חייב להיות בין 1 ל-365 ימים', 'error')
+                return redirect(url_for('maslulim'))
+        except (ValueError, TypeError):
+            flash('SLA חייב להיות מספר תקין', 'error')
+            return redirect(url_for('maslulim'))
+        
         # Add the maslul
-        maslul_id = db.add_maslul(int(hativa_id), name, description)
+        maslul_id = db.add_maslul(int(hativa_id), name, description, sla_days)
         hativa_name = next(h['name'] for h in hativot if h['hativa_id'] == int(hativa_id))
         flash(f'מסלול "{name}" נוסף בהצלחה לחטיבת {hativa_name}', 'success')
         
@@ -418,6 +439,7 @@ def edit_maslul(maslul_id):
     try:
         name = request.form.get('name', '').strip()
         description = request.form.get('description', '').strip()
+        sla_days = request.form.get('sla_days', 45)
         
         if not name:
             flash('שם המסלול הוא שדה חובה', 'error')
@@ -427,8 +449,18 @@ def edit_maslul(maslul_id):
             flash('שם המסלול חייב להכיל לפחות 2 תווים', 'error')
             return redirect(url_for('maslulim'))
         
+        # Validate SLA
+        try:
+            sla_days = int(sla_days)
+            if sla_days < 1 or sla_days > 365:
+                flash('SLA חייב להיות בין 1 ל-365 ימים', 'error')
+                return redirect(url_for('maslulim'))
+        except (ValueError, TypeError):
+            flash('SLA חייב להיות מספר תקין', 'error')
+            return redirect(url_for('maslulim'))
+        
         # Update the maslul
-        success = db.update_maslul(maslul_id, name, description)
+        success = db.update_maslul(maslul_id, name, description, sla_days)
         if success:
             flash(f'מסלול "{name}" עודכן בהצלחה', 'success')
         else:

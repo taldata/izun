@@ -270,6 +270,14 @@ class DatabaseManager:
             if 'is_active' not in committee_types_columns:
                 cursor.execute('ALTER TABLE committee_types ADD COLUMN is_active INTEGER DEFAULT 1')
                 print("Added is_active column to committee_types table")
+            
+            # Check if sla_days column exists in maslulim table
+            cursor.execute("PRAGMA table_info(maslulim)")
+            maslulim_columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'sla_days' not in maslulim_columns:
+                cursor.execute('ALTER TABLE maslulim ADD COLUMN sla_days INTEGER DEFAULT 45')
+                print("Added sla_days column to maslulim table")
                 
         except Exception as e:
             print(f"Migration error: {e}")
@@ -322,12 +330,12 @@ class DatabaseManager:
         return success
     
     # Maslulim operations
-    def add_maslul(self, hativa_id: int, name: str, description: str = "") -> int:
+    def add_maslul(self, hativa_id: int, name: str, description: str = "", sla_days: int = 45) -> int:
         """Add a new route to a division"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('INSERT INTO maslulim (hativa_id, name, description) VALUES (?, ?, ?)', 
-                      (hativa_id, name, description))
+        cursor.execute('INSERT INTO maslulim (hativa_id, name, description, sla_days) VALUES (?, ?, ?, ?)', 
+                      (hativa_id, name, description, sla_days))
         maslul_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -358,18 +366,20 @@ class DatabaseManager:
         conn.close()
         
         return [{'maslul_id': row[0], 'hativa_id': row[1], 'name': row[2], 
-                'description': row[3], 'hativa_name': row[5]} for row in rows]
+                'description': row[3], 'created_at': row[4], 'is_active': row[5], 
+                'sla_days': row[6] if len(row) > 6 else 45, 
+                'hativa_name': row[7] if len(row) > 7 else 'לא ידוע'} for row in rows]
     
-    def update_maslul(self, maslul_id: int, name: str, description: str = "") -> bool:
+    def update_maslul(self, maslul_id: int, name: str, description: str = "", sla_days: int = 45) -> bool:
         """Update an existing route"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
             UPDATE maslulim 
-            SET name = ?, description = ? 
+            SET name = ?, description = ?, sla_days = ? 
             WHERE maslul_id = ?
-        ''', (name, description, maslul_id))
+        ''', (name, description, sla_days, maslul_id))
         
         success = cursor.rowcount > 0
         conn.commit()
@@ -1143,8 +1153,9 @@ class DatabaseManager:
         rows = cursor.fetchall()
         conn.close()
         return [{'maslul_id': row[0], 'hativa_id': row[1], 'name': row[2], 
-                'description': row[3], 'is_active': row[4], 'created_at': row[5], 
-                'hativa_name': row[6]} for row in rows]
+                'description': row[3], 'created_at': row[4], 'is_active': row[5], 
+                'sla_days': row[6] if len(row) > 6 else 45, 
+                'hativa_name': row[7] if len(row) > 7 else 'לא ידוע'} for row in rows]
     
     def get_committee_types_active_only(self, hativa_id: Optional[int] = None) -> List[Dict]:
         """Get only active committee types"""
