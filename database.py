@@ -50,7 +50,7 @@ class DatabaseManager:
                 committee_type_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 hativa_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
-                scheduled_day INTEGER NOT NULL, -- 0=Monday, 1=Tuesday, etc.
+                scheduled_day INTEGER NOT NULL, -- 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday
                 frequency TEXT NOT NULL DEFAULT 'weekly' CHECK (frequency IN ('weekly', 'monthly')),
                 week_of_month INTEGER DEFAULT NULL, -- For monthly: 1=first week, 2=second, etc.
                 is_active INTEGER DEFAULT 1,
@@ -428,7 +428,7 @@ class DatabaseManager:
         rows = cursor.fetchall()
         conn.close()
         
-        days = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון']
+        days = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת']
         
         return [{'committee_type_id': row[0], 'hativa_id': row[1], 'name': row[2], 'scheduled_day': row[3],
                 'scheduled_day_name': days[row[3]], 'frequency': row[4], 
@@ -572,7 +572,7 @@ class DatabaseManager:
         rows = cursor.fetchall()
         conn.close()
         
-        days = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון']
+        days = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת']
         
         return [{'vaadot_id': row[0], 'name': row[1], 'scheduled_day': row[2], 
                 'scheduled_day_name': days[row[2]], 'frequency': row[3], 
@@ -612,7 +612,7 @@ class DatabaseManager:
         rows = cursor.fetchall()
         conn.close()
         
-        days = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון']
+        days = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת']
         
         return [{'vaadot_id': row[0], 'name': row[1], 'scheduled_day': row[2], 
                 'scheduled_day_name': days[row[2]], 'frequency': row[3], 

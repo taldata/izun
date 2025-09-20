@@ -14,12 +14,31 @@ class AutoMeetingScheduler:
     def __init__(self, db: DatabaseManager):
         self.db = db
     
+    def our_weekday_to_python_weekday(self, our_weekday: int) -> int:
+        """
+        המרה מימי השבוע שלנו (0=ראשון, 1=שני...) לימי השבוע של Python (0=שני, 6=ראשון)
+        """
+        # המערכת שלנו: 0=ראשון, 1=שני, 2=שלישי, 3=רביעי, 4=חמישי
+        # Python: 0=שני, 1=שלישי, 2=רביעי, 3=חמישי, 4=שישי, 5=שבת, 6=ראשון
+        mapping = {
+            0: 6,  # ראשון -> 6
+            1: 0,  # שני -> 0
+            2: 1,  # שלישי -> 1
+            3: 2,  # רביעי -> 2
+            4: 3   # חמישי -> 3
+        }
+        return mapping.get(our_weekday, -1)
+    
     def is_business_day(self, check_date: date) -> bool:
         """
         בדיקה האם התאריך הוא יום עסקים
+        ימי עסקים: ראשון עד חמישי
         """
-        # בדיקת שבת (יום 5 = שבת)
-        if check_date.weekday() == 5:
+        # בדיקת ימי עסקים - ראשון עד חמישי
+        # ב-Python: יום שני=0, שלישי=1, רביעי=2, חמישי=3, שישי=4, שבת=5, ראשון=6
+        # ימי עסקים: ראשון(6), שני(0), שלישי(1), רביעי(2), חמישי(3)
+        weekday = check_date.weekday()
+        if weekday == 4 or weekday == 5:  # שישי (4) ושבת (5)
             return False
             
         # בדיקת חגים ותאריכי חריגים
@@ -103,8 +122,10 @@ class AutoMeetingScheduler:
         frequency = committee_type_data['frequency']
         week_of_month = committee_type_data.get('week_of_month')
             
-        if target_date.weekday() != expected_weekday:
-            weekday_names = ['שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת', 'ראשון']
+        # המרת יום השבוע שלנו ליום השבוע של Python
+        expected_python_weekday = self.our_weekday_to_python_weekday(expected_weekday)
+        if target_date.weekday() != expected_python_weekday:
+            weekday_names = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
             expected_day_name = weekday_names[expected_weekday]
             return False, f"ועדה זו מתקיימת רק בימי {expected_day_name}"
         
@@ -170,7 +191,8 @@ class AutoMeetingScheduler:
         
         while days_checked < max_days:
             # בדיקה שהיום הוא היום הנכון בשבוע
-            if current_date.weekday() == expected_weekday:
+            expected_python_weekday = self.our_weekday_to_python_weekday(expected_weekday)
+            if current_date.weekday() == expected_python_weekday:
                 # בדיקה נוספת לועדות חודשיות - שהן בשבוע הנכון
                 if frequency == 'monthly' and week_of_month:
                     week_num = (current_date.day - 1) // 7 + 1

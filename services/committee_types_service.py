@@ -86,7 +86,7 @@ class CommitteeTypesService:
         
         # Validate scheduled day
         if request.scheduled_day is None or request.scheduled_day < 0 or request.scheduled_day > 4:
-            raise ValidationError('יש לבחור יום תקין בשבוע (יום שני עד יום שישי)')
+            raise ValidationError('יש לבחור יום תקין בשבוע (יום ראשון עד יום חמישי)')
         
         # Validate frequency
         if request.frequency not in ['weekly', 'monthly']:
