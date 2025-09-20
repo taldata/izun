@@ -234,7 +234,7 @@
                                     
                                     <input type="radio" class="btn-check" name="month_selection_type" id="range_months" value="range">
                                     <label class="selection-card" for="range_months">
-                                        <i class="bi bi-arrow-left-right"></i>
+                                        <i class="bi bi-calendar2-range"></i>
                                         <span>טווח חודשים</span>
                                     </label>
                                 </div>
@@ -257,28 +257,36 @@
                     
                     <!-- Multiple Months Selection -->
                     <div id="multiple_months_selection" class="mb-3" style="display: none;">
-                        <label class="form-label fw-semibold">בחר חודשים</label>
-                        <div class="border rounded p-3">
-                            <div class="form-check mb-3">
-                                <input class="form-check-input" type="checkbox" id="select_all_months">
-                                <label class="form-check-label fw-bold" for="select_all_months">
-                                    <i class="bi bi-check-all me-2"></i>בחר את כל החודשים
-                                </label>
+                        <label class="form-label fw-semibold mb-3">
+                            <i class="bi bi-calendar-range me-2"></i>בחר חודשים
+                        </label>
+                        <div class="months-selection">
+                            <div class="select-all-wrapper mb-3">
+                                <div class="custom-checkbox">
+                                    <input class="form-check-input" type="checkbox" id="select_all_months">
+                                    <label class="form-check-label" for="select_all_months">
+                                        <i class="bi bi-check-all me-2"></i>בחר את כל החודשים
+                                    </label>
+                                </div>
                             </div>
-                            <div class="row g-2">
+                            <div class="months-grid">
                                 {% for m in range(1, 13) %}
-                                <div class="col-sm-6 col-lg-4 mb-2">
-                                    <div class="form-check p-2 border rounded hover-bg-light">
-                                        <input class="form-check-input month-checkbox" type="checkbox" 
-                                               name="months" value="{{ m }}" 
-                                               id="month_{{ m }}"
-                                               {% if m == current_month %}checked{% endif %}>
-                                        <label class="form-check-label w-100 cursor-pointer" for="month_{{ m }}">
-                                            <i class="bi bi-calendar me-2 text-primary"></i>
-                                            {{ ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
-                                                'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'][m-1] }}
-                                        </label>
-                                    </div>
+                                <div class="month-card">
+                                    <input class="form-check-input month-checkbox" type="checkbox" 
+                                           name="months" value="{{ m }}" 
+                                           id="month_{{ m }}"
+                                           {% if m == current_month %}checked{% endif %}>
+                                    <label class="month-label" for="month_{{ m }}">
+                                        <div class="month-icon">
+                                            <i class="bi bi-calendar"></i>
+                                        </div>
+                                        <div class="month-info">
+                                            <h6>{{ ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'][m-1] }}</h6>
+                                        </div>
+                                        <div class="month-check">
+                                            <i class="bi bi-check-circle-fill"></i>
+                                        </div>
+                                    </label>
                                 </div>
                                 {% endfor %}
                             </div>
@@ -946,6 +954,13 @@ document.addEventListener('DOMContentLoaded', function() {
     padding: 2rem;
 }
 
+/* Months Selection */
+.months-selection {
+    background: #f8f9fa;
+    border-radius: 20px;
+    padding: 2rem;
+}
+
 .select-all-wrapper {
     text-align: center;
     padding-bottom: 1rem;
@@ -967,11 +982,28 @@ document.addEventListener('DOMContentLoaded', function() {
     margin-top: 1.5rem;
 }
 
+.months-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
 .division-card {
     position: relative;
 }
 
 .division-card input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.month-card {
+    position: relative;
+}
+
+.month-card input[type="checkbox"] {
     position: absolute;
     opacity: 0;
     pointer-events: none;
@@ -990,7 +1022,25 @@ document.addEventListener('DOMContentLoaded', function() {
     height: 100%;
 }
 
+.month-label {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 15px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    height: 100%;
+}
+
 .division-label:hover {
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+
+.month-label:hover {
     border-color: #667eea;
     background: #f8f9ff;
 }
@@ -1006,8 +1056,24 @@ document.addEventListener('DOMContentLoaded', function() {
     transition: all 0.3s ease;
 }
 
+.month-icon {
+    width: 40px;
+    height: 40px;
+    background: #e9ecef;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
 .division-icon i {
     font-size: 1.5rem;
+    color: #6c757d;
+}
+
+.month-icon i {
+    font-size: 1.2rem;
     color: #6c757d;
 }
 
@@ -1021,6 +1087,17 @@ document.addEventListener('DOMContentLoaded', function() {
     color: #2c3e50;
 }
 
+.month-info {
+    flex: 1;
+}
+
+.month-info h6 {
+    margin: 0;
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 0.95rem;
+}
+
 .division-info p {
     margin: 0;
     font-size: 0.9rem;
@@ -1032,8 +1109,18 @@ document.addEventListener('DOMContentLoaded', function() {
     transition: opacity 0.3s ease;
 }
 
+.month-check {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
 .division-check i {
     font-size: 1.5rem;
+    color: #28a745;
+}
+
+.month-check i {
+    font-size: 1.2rem;
     color: #28a745;
 }
 
@@ -1043,7 +1130,17 @@ document.addEventListener('DOMContentLoaded', function() {
     color: white;
 }
 
+.month-card input:checked + .month-label {
+    border-color: #667eea;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
 .division-card input:checked + .division-label .division-icon {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.month-card input:checked + .month-label .month-icon {
     background: rgba(255, 255, 255, 0.2);
 }
 
@@ -1053,11 +1150,24 @@ document.addEventListener('DOMContentLoaded', function() {
     color: white;
 }
 
+.month-card input:checked + .month-label .month-icon i,
+.month-card input:checked + .month-label .month-info h6 {
+    color: white;
+}
+
 .division-card input:checked + .division-label .division-check {
     opacity: 1;
 }
 
+.month-card input:checked + .month-label .month-check {
+    opacity: 1;
+}
+
 .division-card input:checked + .division-label .division-check i {
+    color: white;
+}
+
+.month-card input:checked + .month-label .month-check i {
     color: white;
 }
 
@@ -1282,6 +1392,10 @@ document.addEventListener('DOMContentLoaded', function() {
         grid-template-columns: 1fr;
     }
     
+    .months-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
     .form-header {
         flex-direction: column;
         gap: 1rem;
@@ -1305,6 +1419,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     .info-section {
         padding: 40px 20px;
+    }
+    
+    .months-grid {
+        grid-template-columns: 1fr;
     }
 }
 </style>
