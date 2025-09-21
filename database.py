@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import List, Dict, Optional, Tuple
 
 class DatabaseManager:
@@ -16,10 +16,8 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Check if we need to migrate existing database
         self._migrate_database(cursor)
         
-        # Hativot (Divisions) table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS hativot (
                 hativa_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,7 +29,6 @@ class DatabaseManager:
             )
         ''')
         
-        # Maslulim (Routes) table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS maslulim (
                 maslul_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,15 +41,14 @@ class DatabaseManager:
             )
         ''')
         
-        # Committee Types table (general committee definitions)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS committee_types (
                 committee_type_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 hativa_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
-                scheduled_day INTEGER NOT NULL, -- 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday
+                scheduled_day INTEGER NOT NULL,
                 frequency TEXT NOT NULL DEFAULT 'weekly' CHECK (frequency IN ('weekly', 'monthly')),
-                week_of_month INTEGER DEFAULT NULL, -- For monthly: 1=first week, 2=second, etc.
+                week_of_month INTEGER DEFAULT NULL,
                 is_active INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id) ON DELETE CASCADE,
@@ -60,15 +56,14 @@ class DatabaseManager:
             )
         ''')
         
-        # Vaadot (Committee Meetings) table - specific meeting instances
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS vaadot (
                 vaadot_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 committee_type_id INTEGER NOT NULL,
                 hativa_id INTEGER NOT NULL,
-                vaada_date DATE NOT NULL, -- actual date of the committee meeting
-                status TEXT DEFAULT 'planned', -- planned, scheduled, completed, cancelled
-                exception_date_id INTEGER, -- reference to exception_dates if meeting is affected
+                vaada_date DATE NOT NULL,
+                status TEXT DEFAULT 'planned',
+                exception_date_id INTEGER,
                 notes TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (committee_type_id) REFERENCES committee_types (committee_type_id),
@@ -78,18 +73,16 @@ class DatabaseManager:
             )
         ''')
         
-        # Exception dates table (holidays, sabbaths, special non-working days)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS exception_dates (
                 date_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 exception_date DATE NOT NULL UNIQUE,
                 description TEXT,
-                type TEXT DEFAULT 'holiday', -- holiday, sabbath, special
+                type TEXT DEFAULT 'holiday',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
-        # Events table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS events (
                 event_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,7 +97,6 @@ class DatabaseManager:
             )
         ''')
         
-        # Users table for authentication and permissions
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,7 +113,6 @@ class DatabaseManager:
             )
         ''')
         
-        # System settings table for global permissions control
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS system_settings (
                 setting_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -134,7 +125,6 @@ class DatabaseManager:
             )
         ''')
         
-        # Insert default system settings
         cursor.execute('''
             INSERT OR IGNORE INTO system_settings (setting_key, setting_value, description)
             VALUES 
@@ -150,23 +140,18 @@ class DatabaseManager:
         conn.commit()
         conn.close()
         
-        # Create default admin user if no users exist
         self._create_default_admin()
         
-        # Note: Default committee types are no longer inserted automatically
-        # Users should create committee types manually through the web interface
     
     def _create_default_admin(self):
         """Create default admin user if no users exist"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Check if any users exist
         cursor.execute('SELECT COUNT(*) FROM users')
         user_count = cursor.fetchone()[0]
         
         if user_count == 0:
-            # Create default admin user
             import hashlib
             password_hash = hashlib.sha256('admin123'.encode()).hexdigest()
             
@@ -175,10 +160,6 @@ class DatabaseManager:
                 VALUES (?, ?, ?, ?, ?, ?)
             ''', ('admin', 'admin@example.com', password_hash, 'מנהל מערכת', 'admin', 1))
             
-            print("נוצר משתמש admin ברירת מחדל:")
-            print("שם משתמש: admin")
-            print("סיסמה: admin123")
-            print("אנא שנה את הסיסמה לאחר ההתחברות הראשונה")
         
         conn.commit()
         conn.close()
@@ -186,104 +167,44 @@ class DatabaseManager:
     def _migrate_database(self, cursor):
         """Migrate existing database to add new columns if they don't exist"""
         try:
-            # Check if vaada_date column exists in vaadot table
             cursor.execute("PRAGMA table_info(vaadot)")
             vaadot_columns = [column[1] for column in cursor.fetchall()]
             
             if 'vaada_date' not in vaadot_columns:
                 cursor.execute('ALTER TABLE vaadot ADD COLUMN vaada_date DATE')
-                print("Added vaada_date column to vaadot table")
             
             if 'exception_date_id' not in vaadot_columns:
                 cursor.execute('ALTER TABLE vaadot ADD COLUMN exception_date_id INTEGER REFERENCES exception_dates(date_id)')
-                print("Added exception_date_id column to vaadot table")
             
-            # Check if hativa_id column exists in committee_types table
             cursor.execute("PRAGMA table_info(committee_types)")
             committee_types_columns = [column[1] for column in cursor.fetchall()]
             
             if 'hativa_id' not in committee_types_columns:
-                # First, check if we have any hativot to assign to
-                cursor.execute("SELECT COUNT(*) FROM hativot")
-                hativot_count = cursor.fetchone()[0]
-                
-                if hativot_count == 0:
-                    # Create a default hativa if none exist
-                    cursor.execute("INSERT INTO hativot (name, description) VALUES (?, ?)", 
-                                 ("חטיבה כללית", "חטיבה ברירת מחדל למעבר"))
-                    default_hativa_id = cursor.lastrowid
-                else:
-                    # Get the first hativa ID
-                    cursor.execute("SELECT hativa_id FROM hativot LIMIT 1")
-                    default_hativa_id = cursor.fetchone()[0]
-                
-                # Add the column with a default value
-                cursor.execute(f'ALTER TABLE committee_types ADD COLUMN hativa_id INTEGER DEFAULT {default_hativa_id}')
-                
-                # Update all existing committee types to have the default hativa_id
-                cursor.execute(f'UPDATE committee_types SET hativa_id = {default_hativa_id} WHERE hativa_id IS NULL')
-                
-                print(f"Added hativa_id column to committee_types table with default value {default_hativa_id}")
-                
-                # Remove the unique constraint on name and add unique constraint on (hativa_id, name)
-                # Note: SQLite doesn't support dropping constraints directly, so we'll handle this in the application logic
+                cursor.execute('ALTER TABLE committee_types ADD COLUMN hativa_id INTEGER DEFAULT 1')
             
-            # Check if color column exists in hativot table
             cursor.execute("PRAGMA table_info(hativot)")
             hativot_columns = [column[1] for column in cursor.fetchall()]
             
             if 'color' not in hativot_columns:
                 cursor.execute('ALTER TABLE hativot ADD COLUMN color TEXT DEFAULT "#007bff"')
-                print("Added color column to hativot table")
+            
+            tables_columns = {
+                'hativot': [('is_active', 'INTEGER DEFAULT 1')],
+                'maslulim': [('is_active', 'INTEGER DEFAULT 1'), ('sla_days', 'INTEGER DEFAULT 45')],
+                'committee_types': [('is_active', 'INTEGER DEFAULT 1')]
+            }
+            
+            for table_name, columns in tables_columns.items():
+                cursor.execute(f"PRAGMA table_info({table_name})")
+                existing_columns = [column[1] for column in cursor.fetchall()]
                 
-                # Set default colors for existing divisions
-                default_colors = ['#007bff', '#28a745', '#dc3545', '#fd7e14', '#6f42c1', '#20c997', '#e83e8c', '#6c757d', '#17a2b8', '#ffc107']
-                cursor.execute("SELECT hativa_id FROM hativot ORDER BY hativa_id")
-                hativot_ids = cursor.fetchall()
-                
-                for i, (hativa_id,) in enumerate(hativot_ids):
-                    color = default_colors[i % len(default_colors)]
-                    cursor.execute('UPDATE hativot SET color = ? WHERE hativa_id = ?', (color, hativa_id))
-                
-                print(f"Set default colors for {len(hativot_ids)} existing divisions")
-            
-            # Check if is_active column exists in hativot table
-            cursor.execute("PRAGMA table_info(hativot)")
-            hativot_columns = [column[1] for column in cursor.fetchall()]
-            
-            if 'is_active' not in hativot_columns:
-                cursor.execute('ALTER TABLE hativot ADD COLUMN is_active INTEGER DEFAULT 1')
-                print("Added is_active column to hativot table")
-            
-            # Check if is_active column exists in maslulim table
-            cursor.execute("PRAGMA table_info(maslulim)")
-            maslulim_columns = [column[1] for column in cursor.fetchall()]
-            
-            if 'is_active' not in maslulim_columns:
-                cursor.execute('ALTER TABLE maslulim ADD COLUMN is_active INTEGER DEFAULT 1')
-                print("Added is_active column to maslulim table")
-            
-            # Check if is_active column exists in committee_types table
-            cursor.execute("PRAGMA table_info(committee_types)")
-            committee_types_columns = [column[1] for column in cursor.fetchall()]
-            
-            if 'is_active' not in committee_types_columns:
-                cursor.execute('ALTER TABLE committee_types ADD COLUMN is_active INTEGER DEFAULT 1')
-                print("Added is_active column to committee_types table")
-            
-            # Check if sla_days column exists in maslulim table
-            cursor.execute("PRAGMA table_info(maslulim)")
-            maslulim_columns = [column[1] for column in cursor.fetchall()]
-            
-            if 'sla_days' not in maslulim_columns:
-                cursor.execute('ALTER TABLE maslulim ADD COLUMN sla_days INTEGER DEFAULT 45')
-                print("Added sla_days column to maslulim table")
+                for column_name, column_def in columns:
+                    if column_name not in existing_columns:
+                        cursor.execute(f'ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}')
                 
         except Exception as e:
             print(f"Migration error: {e}")
-            # Continue with normal initialization if migration fails
     
-    # Hativot operations
     def add_hativa(self, name: str, description: str = "", color: str = "#007bff") -> int:
         """Add a new division"""
         conn = self.get_connection()
@@ -1258,32 +1179,3 @@ class DatabaseManager:
         
         return sla_dates
     
-    def get_monthly_business_days(self, year: int, month: int) -> Dict:
-        """Get business days analysis for a specific month"""
-        from calendar import monthrange
-        
-        # Get first and last day of month
-        first_day = date(year, month, 1)
-        last_day = date(year, month, monthrange(year, month)[1])
-        
-        # Get all business days in month
-        business_days = self.get_business_days_in_range(first_day, last_day)
-        
-        # Group by week
-        weeks = {}
-        for business_day in business_days:
-            week_num = (business_day.day - 1) // 7 + 1
-            if week_num not in weeks:
-                weeks[week_num] = []
-            weeks[week_num].append(business_day)
-        
-        return {
-            'year': year,
-            'month': month,
-            'total_days': monthrange(year, month)[1],
-            'business_days': business_days,
-            'business_days_count': len(business_days),
-            'weeks': weeks,
-            'first_business_day': business_days[0] if business_days else None,
-            'last_business_day': business_days[-1] if business_days else None
-        }
