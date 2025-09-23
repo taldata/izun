@@ -1396,6 +1396,81 @@ def change_user_password():
     
     return redirect(url_for('manage_users'))
 
+# Drag & Drop API endpoints
+@app.route('/api/move_committee', methods=['POST'])
+@login_required
+@editing_permission_required
+def move_committee():
+    """Move committee meeting to a different date"""
+    try:
+        data = request.get_json()
+        vaada_id = data.get('vaada_id')
+        new_date = data.get('new_date')
+        
+        if not vaada_id or not new_date:
+            return jsonify({'success': False, 'message': 'נתונים חסרים'}), 400
+        
+        # Validate date format and convert to date object
+        try:
+            new_date_obj = datetime.strptime(new_date, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'success': False, 'message': 'פורמט תאריך לא תקין'}), 400
+        
+        # Check if target date is available (one meeting per day constraint)
+        # But allow moving the same committee to a different date
+        existing_meetings = db.get_vaada_by_date(new_date_obj)
+        if existing_meetings and any(meeting['vaadot_id'] != vaada_id for meeting in existing_meetings):
+            return jsonify({'success': False, 'message': 'התאריך תפוס - יש כבר ועדה ביום זה'}), 400
+        
+        # Update committee meeting date
+        success = db.update_vaada_date(vaada_id, new_date_obj)
+        
+        if success:
+            return jsonify({'success': True, 'message': 'הועדה הועברה בהצלחה'})
+        else:
+            return jsonify({'success': False, 'message': 'שגיאה בהעברת הועדה'}), 500
+            
+    except Exception as e:
+        app.logger.error(f"Error moving committee: {str(e)}")
+        return jsonify({'success': False, 'message': f'שגיאה: {str(e)}'}), 500
+
+@app.route('/api/move_event', methods=['POST'])
+@login_required
+@editing_permission_required
+def move_event():
+    """Move event to a different committee meeting"""
+    try:
+        data = request.get_json()
+        event_id = data.get('event_id')
+        target_vaada_id = data.get('target_vaada_id')
+        
+        if not event_id or not target_vaada_id:
+            return jsonify({'success': False, 'message': 'נתונים חסרים'}), 400
+        
+        # Get event and target committee details for validation
+        event = db.get_event_by_id(event_id)
+        target_committee = db.get_vaada_by_id(target_vaada_id)
+        
+        if not event or not target_committee:
+            return jsonify({'success': False, 'message': 'אירוע או ועדה לא נמצאו'}), 404
+        
+        # Validate that event's route belongs to target committee's division
+        route = db.get_maslul_by_id(event['maslul_id'])
+        if route['hativa_id'] != target_committee['hativa_id']:
+            return jsonify({'success': False, 'message': 'לא ניתן להעביר אירוע לועדה מחטיבה אחרת'}), 400
+        
+        # Update event's committee meeting
+        success = db.update_event_vaada(event_id, target_vaada_id)
+        
+        if success:
+            return jsonify({'success': True, 'message': 'האירוע הועבר בהצלחה'})
+        else:
+            return jsonify({'success': False, 'message': 'שגיאה בהעברת האירוע'}), 500
+            
+    except Exception as e:
+        app.logger.error(f"Error moving event: {str(e)}")
+        return jsonify({'success': False, 'message': f'שגיאה: {str(e)}'}), 500
+
 if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5001))

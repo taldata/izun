@@ -64,7 +64,7 @@
                     <h4 class="mb-0" id="currentMonthYear" style="color: #000000; font-weight: bold; text-shadow: 1px 1px 2px rgba(255,255,255,0.8);">
                         <span id="monthsDisplay" style="color: #000000;">ספטמבר 2025</span>
                     </h4>
-                    <small class="opacity-75">לחץ על יום להוספה, על פריט לעריכה</small>
+                    <small class="opacity-75">לחץ על יום להוספה | גרור פריטים להעברה | לחץ על פריט לעריכה</small>
                 </div>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addCommitteeModal">
@@ -404,6 +404,18 @@ const committeesData = committeesDataElement ? JSON.parse(committeesDataElement.
 const eventsDataElement = document.getElementById('events-data');
 const eventsData = eventsDataElement ? JSON.parse(eventsDataElement.textContent) : [];
 
+// Debug data
+console.log('Committees data loaded:', committeesData.length, committeesData);
+console.log('Events data loaded:', eventsData.length, eventsData);
+
+// Check if we have any committees with the right structure
+if (committeesData.length > 0) {
+    console.log('Sample committee structure:', Object.keys(committeesData[0]));
+}
+if (eventsData.length > 0) {
+    console.log('Sample event structure:', Object.keys(eventsData[0]));
+}
+
 const hativotDataElement = document.getElementById('hativot-data');
 const hativotData = hativotDataElement ? JSON.parse(hativotDataElement.textContent) : [];
 window.hativotData = hativotData; // Make it globally available
@@ -426,19 +438,23 @@ function renderCalendar() {
         row.className = 'row';
         
         for (let i = 0; i < monthsToShow; i++) {
-            const monthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
+            const displayDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
+            const monthCalendar = createMonthCalendar(displayDate.getFullYear(), displayDate.getMonth(), true);
+            
             const colClass = monthsToShow === 2 ? 'col-md-6' : 'col-lg-4';
-            
             const col = document.createElement('div');
-            col.className = `${colClass} mb-4`;
-            
-            const monthCalendar = createMonthCalendar(monthDate.getFullYear(), monthDate.getMonth(), true);
+            col.className = `${colClass} mb-3`;
             col.appendChild(monthCalendar);
             row.appendChild(col);
         }
         
         container.appendChild(row);
     }
+    
+    // Re-initialize drag and drop after rendering
+    setTimeout(() => {
+        initializeDragAndDrop();
+    }, 50);
 }
 
 function createMonthCalendar(year, month, isCompact = false) {
@@ -528,6 +544,7 @@ function createMonthCalendar(year, month, isCompact = false) {
                 // Add committees
                 committeesData.forEach(committee => {
                     if (committee.vaada_date === currentDateStr) {
+                        console.log('Creating committee badge for:', committee.committee_name, 'ID:', committee.vaadot_id); // Debug
                         const committeeDiv = document.createElement('div');
                         const hativaColor = getHativaColor(committee.hativa_id);
                         
@@ -537,10 +554,22 @@ function createMonthCalendar(year, month, isCompact = false) {
                         committeeDiv.style.backgroundColor = hativaColor;
                         committeeDiv.style.borderLeft = `4px solid ${hativaColor}`;
                         
+                        // Add drag & drop attributes
+                        committeeDiv.draggable = true;
+                        committeeDiv.setAttribute('data-vaada-id', committee.vaadot_id);
+                        committeeDiv.setAttribute('data-date', currentDateStr);
+                        committeeDiv.setAttribute('data-type', 'committee');
+                        console.log('Committee badge attributes set:', {
+                            vaadaId: committee.vaadot_id,
+                            date: currentDateStr,
+                            draggable: committeeDiv.draggable
+                        }); // Debug
+                        
                         if (isCompact) {
                             committeeDiv.textContent = committee.committee_name;
                         } else {
                             committeeDiv.innerHTML = `
+                                <i class="bi bi-arrows-move me-1" style="font-size: 0.6rem; opacity: 0.7;"></i>
                                 ${committee.committee_name}
                                 <small class="d-block opacity-75" style="font-size: 0.6rem;">
                                     <i class="bi bi-clock me-1"></i>SLA
@@ -548,7 +577,7 @@ function createMonthCalendar(year, month, isCompact = false) {
                             `;
                         }
                         
-                        committeeDiv.title = `${committee.committee_name} - ${committee.hativa_name} (לחץ לעריכה, Shift+לחץ למידע SLA)`;
+                        committeeDiv.title = `${committee.committee_name} - ${committee.hativa_name}\nגרור להעברה | לחץ לעריכה | Shift+לחץ למידע SLA`;
                         committeeDiv.onclick = function(e) {
                             e.stopPropagation();
                             if (e.shiftKey) {
@@ -568,6 +597,7 @@ function createMonthCalendar(year, month, isCompact = false) {
                 });
                 
                 dayEvents.forEach(event => {
+                    console.log('Creating event badge for:', event.name, 'ID:', event.event_id); // Debug
                     const eventCommittee = committeesData.find(c => c.vaadot_id === event.vaadot_id);
                     const eventDiv = document.createElement('div');
                     const hativaColor = getHativaColor(eventCommittee.hativa_id);
@@ -580,8 +610,25 @@ function createMonthCalendar(year, month, isCompact = false) {
                     eventDiv.style.color = hativaColor;
                     eventDiv.style.border = `1px solid ${hativaColor}`;
                     eventDiv.style.fontWeight = '500';
-                    eventDiv.textContent = isCompact ? event.name : `📅 ${event.name}`;
-                    eventDiv.title = `${event.name} - ${event.maslul_name} (לחץ לעריכה)`;
+                    
+                    // Add drag & drop attributes
+                    eventDiv.draggable = true;
+                    eventDiv.setAttribute('data-event-id', event.event_id);
+                    eventDiv.setAttribute('data-vaada-id', event.vaadot_id);
+                    eventDiv.setAttribute('data-type', 'event');
+                    console.log('Event badge attributes set:', {
+                        eventId: event.event_id,
+                        vaadaId: event.vaadot_id,
+                        draggable: eventDiv.draggable
+                    }); // Debug
+                    
+                    if (isCompact) {
+                        eventDiv.textContent = event.name;
+                    } else {
+                        eventDiv.innerHTML = `<i class="bi bi-arrows-move me-1" style="font-size: 0.5rem; opacity: 0.7;"></i>📅 ${event.name}`;
+                    }
+                    
+                    eventDiv.title = `${event.name} - ${event.maslul_name}\nגרור להעברה | לחץ לעריכה`;
                     eventDiv.onclick = function(e) {
                         e.stopPropagation();
                         editEvent(event);
@@ -589,9 +636,18 @@ function createMonthCalendar(year, month, isCompact = false) {
                     cell.appendChild(eventDiv);
                 });
                 
+                // Add data attribute for drag & drop
+                cell.setAttribute('data-date', currentDateStr);
+                
                 // Make cell clickable for adding items
                 cell.style.cursor = 'pointer';
                 cell.onclick = function(e) {
+                    // Don't handle click if we just finished dragging
+                    if (isDragging) {
+                        console.log('Click cancelled - was dragging'); // Debug
+                        return;
+                    }
+                    
                     // Only trigger if clicking on empty space (not on existing items)
                     if (e.target === cell || e.target === dayDiv) {
                         handleDayClick(currentDateStr, e);
@@ -720,6 +776,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Render calendar
     renderCalendar();
     
+    // Initialize drag and drop functionality
+    setTimeout(() => {
+        console.log('About to initialize drag and drop...'); // Debug
+        initializeDragAndDrop();
+        console.log('Drag and drop initialization completed'); // Debug
+    }, 100);
+    
     // Add click handler for calendar cells to set date in modals
     document.addEventListener('click', function(e) {
         if (e.target.classList.contains('calendar-cell') || e.target.closest('.calendar-cell')) {
@@ -826,8 +889,367 @@ function deleteEvent() {
     }
 }
 
+// Drag & Drop functionality
+let draggedElement = null;
+let draggedData = null;
+let isDragging = false;
+
+function initializeDragAndDrop() {
+    console.log('Initializing drag and drop...'); // Debug
+    
+    // Initialize drag and drop for calendar cells
+    const calendarCells = document.querySelectorAll('.calendar-cell');
+    console.log('Found calendar cells:', calendarCells.length); // Debug
+    
+    calendarCells.forEach(cell => {
+        // Make cells drop zones
+        cell.addEventListener('dragover', handleDragOver);
+        cell.addEventListener('drop', handleDrop);
+        cell.addEventListener('dragenter', handleDragEnter);
+        cell.addEventListener('dragleave', handleDragLeave);
+    });
+    
+    // Initialize draggable items (committees and events)
+    initializeDraggableItems();
+}
+
+function initializeDraggableItems() {
+    // Make committee badges draggable
+    const committeeBadges = document.querySelectorAll('.committee-badge');
+    console.log('Found committee badges:', committeeBadges.length); // Debug
+    
+    committeeBadges.forEach((badge, index) => {
+        badge.draggable = true;
+        badge.addEventListener('dragstart', handleCommitteeDragStart);
+        badge.addEventListener('dragend', handleDragEnd);
+        badge.style.cursor = 'grab';
+        console.log(`Committee badge ${index + 1} initialized:`, {
+            vaadaId: badge.getAttribute('data-vaada-id'),
+            date: badge.getAttribute('data-date'),
+            draggable: badge.draggable,
+            element: badge
+        }); // Debug
+    });
+    
+    // Make event badges draggable
+    const eventBadges = document.querySelectorAll('.event-badge');
+    console.log('Found event badges:', eventBadges.length); // Debug
+    
+    eventBadges.forEach((badge, index) => {
+        badge.draggable = true;
+        badge.addEventListener('dragstart', handleEventDragStart);
+        badge.addEventListener('dragend', handleDragEnd);
+        badge.style.cursor = 'grab';
+        console.log(`Event badge ${index + 1} initialized:`, {
+            eventId: badge.getAttribute('data-event-id'),
+            vaadaId: badge.getAttribute('data-vaada-id'),
+            draggable: badge.draggable,
+            element: badge
+        }); // Debug
+    });
+}
+
+function handleCommitteeDragStart(e) {
+    console.log('handleCommitteeDragStart called'); // Debug
+    
+    isDragging = true;
+    draggedElement = e.target;
+    
+    // Extract committee data from the badge
+    const vaadaId = draggedElement.getAttribute('data-vaada-id');
+    const committeeDate = draggedElement.getAttribute('data-date');
+    
+    console.log('Committee drag start:', { vaadaId, committeeDate, element: draggedElement }); // Debug
+    
+    if (!vaadaId || !committeeDate) {
+        console.error('Missing committee data attributes');
+        return;
+    }
+    
+    draggedData = {
+        type: 'committee',
+        vaada_id: parseInt(vaadaId),
+        current_date: committeeDate
+    };
+    
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', draggedElement.outerHTML);
+    
+    // Visual feedback
+    draggedElement.style.opacity = '0.5';
+    draggedElement.style.cursor = 'grabbing';
+    
+    // Add visual indicators to valid drop zones
+    highlightValidDropZones('committee');
+}
+
+function handleEventDragStart(e) {
+    isDragging = true;
+    draggedElement = e.target;
+    
+    // Extract event data from the badge
+    const eventId = draggedElement.getAttribute('data-event-id');
+    const currentVaadaId = draggedElement.getAttribute('data-vaada-id');
+    
+    console.log('Event drag start:', { eventId, currentVaadaId }); // Debug
+    
+    if (!eventId || !currentVaadaId) {
+        console.error('Missing event data attributes');
+        return;
+    }
+    
+    draggedData = {
+        type: 'event',
+        event_id: parseInt(eventId),
+        current_vaada_id: parseInt(currentVaadaId)
+    };
+    
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', draggedElement.outerHTML);
+    
+    // Visual feedback
+    draggedElement.style.opacity = '0.5';
+    draggedElement.style.cursor = 'grabbing';
+    
+    // Add visual indicators to valid drop zones
+    highlightValidDropZones('event');
+}
+
+function handleDragEnd(e) {
+    console.log('Drag end called'); // Debug
+    
+    // Reset visual feedback
+    if (draggedElement) {
+        draggedElement.style.opacity = '1';
+        draggedElement.style.cursor = 'grab';
+    }
+    
+    // Remove drop zone highlights
+    removeDropZoneHighlights();
+    
+    draggedElement = null;
+    draggedData = null;
+    
+    // Reset isDragging after a small delay to prevent click interference
+    setTimeout(() => {
+        isDragging = false;
+        console.log('isDragging reset to false'); // Debug
+    }, 100);
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    console.log('Drag over:', e.currentTarget.getAttribute('data-date')); // Debug
+}
+
+function handleDragEnter(e) {
+    e.preventDefault();
+    console.log('Drag enter:', e.currentTarget.getAttribute('data-date')); // Debug
+    if (isDragging && isValidDropZone(e.currentTarget)) {
+        e.currentTarget.classList.add('drag-over');
+        console.log('Added drag-over class'); // Debug
+    }
+}
+
+function handleDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    
+    console.log('Drop event triggered', { isDragging, draggedData }); // Debug
+    
+    if (!isDragging || !draggedData) {
+        console.log('Drop cancelled - not dragging or no data'); // Debug
+        return;
+    }
+    
+    const targetCell = e.currentTarget;
+    const targetDate = targetCell.getAttribute('data-date');
+    
+    console.log('Drop target:', { targetDate }); // Debug
+    
+    if (!isValidDropZone(targetCell)) {
+        console.log('Drop cancelled - invalid drop zone'); // Debug
+        showAlert('לא ניתן להעביר לתאריך זה', 'error');
+        return;
+    }
+    
+    console.log('Executing drop action...'); // Debug
+    
+    if (draggedData.type === 'committee') {
+        moveCommittee(draggedData.vaada_id, targetDate);
+    } else if (draggedData.type === 'event') {
+        moveEventToDate(draggedData.event_id, targetDate);
+    }
+}
+
+function isValidDropZone(cell) {
+    if (!draggedData) return false;
+    
+    const targetDate = cell.getAttribute('data-date');
+    if (!targetDate) return false;
+    
+    console.log('Checking drop zone:', { targetDate, draggedData }); // Debug
+    
+    if (draggedData.type === 'committee') {
+        // For committees, check if target date is available (no other committee)
+        const existingCommittee = committeesData.find(c => c.vaada_date === targetDate);
+        const isValid = !existingCommittee || existingCommittee.vaadot_id == draggedData.vaada_id;
+        console.log('Committee drop zone valid:', isValid, { 
+            targetDate, 
+            existingCommittee: existingCommittee ? existingCommittee.vaadot_id : 'none',
+            draggedVaadaId: draggedData.vaada_id 
+        }); // Debug
+        return isValid;
+    } else if (draggedData.type === 'event') {
+        // For events, check if there's a committee on target date
+        const targetCommittee = committeesData.find(c => c.vaada_date === targetDate);
+        const isValid = targetCommittee && targetCommittee.vaadot_id != draggedData.current_vaada_id;
+        console.log('Event drop zone valid:', isValid, { targetCommittee }); // Debug
+        return isValid;
+    }
+    
+    return false;
+}
+
+function highlightValidDropZones(type) {
+    const cells = document.querySelectorAll('.calendar-cell');
+    cells.forEach(cell => {
+        if (isValidDropZone(cell)) {
+            cell.classList.add('valid-drop-zone');
+            // Add hint for valid drop zones
+            const hint = document.createElement('div');
+            hint.className = 'drop-zone-hint';
+            hint.textContent = type === 'committee' ? 'שחרר כאן' : 'שחרר כאן';
+            cell.appendChild(hint);
+        } else {
+            cell.classList.add('invalid-drop-zone');
+            // Add hint for invalid drop zones
+            const hint = document.createElement('div');
+            hint.className = 'drop-zone-hint';
+            hint.textContent = type === 'committee' ? 'תאריך תפוס' : 'אין ועדה';
+            cell.appendChild(hint);
+        }
+    });
+}
+
+function removeDropZoneHighlights() {
+    const cells = document.querySelectorAll('.calendar-cell');
+    cells.forEach(cell => {
+        cell.classList.remove('valid-drop-zone', 'invalid-drop-zone', 'drag-over');
+        // Remove hint elements
+        const hints = cell.querySelectorAll('.drop-zone-hint');
+        hints.forEach(hint => hint.remove());
+    });
+}
+
+function updateCommitteeData(vaadaId, newDate) {
+    // Update the committee data in memory
+    const committee = committeesData.find(c => c.vaadot_id == vaadaId);
+    if (committee) {
+        committee.vaada_date = newDate;
+        console.log('Updated committee data in memory:', committee); // Debug
+    }
+}
+
+function updateEventData(eventId, newVaadaId) {
+    // Update the event data in memory
+    const event = eventsData.find(e => e.event_id == eventId);
+    if (event) {
+        event.vaadot_id = newVaadaId;
+        console.log('Updated event data in memory:', event); // Debug
+    }
+}
+
+function moveCommittee(vaadaId, newDate) {
+    console.log('Moving committee:', { vaadaId, newDate }); // Debug
+    
+    fetch('/api/move_committee', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            vaada_id: vaadaId,
+            new_date: newDate
+        })
+    })
+    .then(response => {
+        console.log('Move committee response:', response.status); // Debug
+        return response.json();
+    })
+    .then(data => {
+        console.log('Move committee data:', data); // Debug
+        if (data.success) {
+            showAlert(data.message, 'success');
+            // Update data in memory
+            updateCommitteeData(vaadaId, newDate);
+            // Refresh calendar without losing current view
+            renderCalendar();
+            // Re-initialize drag and drop after rendering
+            setTimeout(() => {
+                initializeDragAndDrop();
+            }, 100);
+        } else {
+            showAlert(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error moving committee:', error);
+        showAlert('שגיאה בהעברת הועדה', 'error');
+    });
+}
+
+function moveEventToDate(eventId, targetDate) {
+    // Find the committee on the target date
+    const targetCommittee = committeesData.find(c => c.vaada_date === targetDate);
+    
+    if (!targetCommittee) {
+        showAlert('לא נמצאה ועדה בתאריך היעד', 'error');
+        return;
+    }
+    
+    fetch('/api/move_event', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            event_id: eventId,
+            target_vaada_id: targetCommittee.vaadot_id
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+            // Update data in memory
+            updateEventData(eventId, targetCommittee.vaadot_id);
+            // Refresh calendar without losing current view
+            renderCalendar();
+            // Re-initialize drag and drop after rendering
+            setTimeout(() => {
+                initializeDragAndDrop();
+            }, 100);
+        } else {
+            showAlert(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error moving event:', error);
+        showAlert('שגיאה בהעברת האירוע', 'error');
+    });
+}
+
 // Day click functionality
 function handleDayClick(dateStr, event) {
+    // Don't handle click if we're dragging
+    if (isDragging) return;
+    
     // Check if there's already a committee meeting on this date
     const existingCommittee = committeesData.find(committee => committee.vaada_date === dateStr);
     
@@ -1492,6 +1914,82 @@ function showAlert(message, type) {
 .month-calendar.compact .badge {
     font-size: 0.6rem;
     margin-bottom: 1px;
+}
+
+/* Drag & Drop Styles */
+.committee-badge, .event-badge {
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.committee-badge:hover, .event-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.committee-badge[draggable="true"], .event-badge[draggable="true"] {
+    cursor: grab;
+    cursor: -webkit-grab;
+    cursor: -moz-grab;
+}
+
+.committee-badge[draggable="true"]:active, .event-badge[draggable="true"]:active {
+    cursor: grabbing;
+    cursor: -webkit-grabbing;
+    cursor: -moz-grabbing;
+}
+
+/* Drop zone styles */
+.calendar-cell.valid-drop-zone {
+    background-color: #e8f5e8 !important;
+    border: 2px dashed #28a745 !important;
+    animation: pulse-green 1s infinite;
+}
+
+.calendar-cell.invalid-drop-zone {
+    background-color: #ffeaea !important;
+    border: 2px dashed #dc3545 !important;
+    opacity: 0.6;
+}
+
+.calendar-cell.drag-over {
+    background-color: #cce5ff !important;
+    border: 2px solid #007bff !important;
+    transform: scale(1.02);
+}
+
+@keyframes pulse-green {
+    0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+}
+
+/* Drag feedback */
+.dragging {
+    opacity: 0.5 !important;
+    transform: rotate(5deg);
+}
+
+/* Drop zone indicators */
+.drop-zone-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.8rem;
+    color: #6c757d;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.valid-drop-zone .drop-zone-hint {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.invalid-drop-zone .drop-zone-hint {
+    color: #dc3545;
+    font-weight: bold;
 }
 </style>
 {% endblock %}

@@ -457,8 +457,13 @@ class DatabaseManager:
         conn.close()
         return vaadot_id
     
-    def is_date_available_for_meeting(self, vaada_date: date) -> bool:
+    def is_date_available_for_meeting(self, vaada_date) -> bool:
         """Check if a date is available for a committee meeting (no existing meetings)"""
+        # Convert string to date if needed
+        if isinstance(vaada_date, str):
+            from datetime import datetime
+            vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+        
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT COUNT(*) FROM vaadot WHERE vaada_date = ?', (vaada_date,))
@@ -507,39 +512,53 @@ class DatabaseManager:
                 'exception_date': row[10], 'exception_description': row[11], 
                 'exception_type': row[12]} for row in rows]
     
-    def update_vaada_date(self, vaadot_id: int, vaada_date: date, exception_date_id: Optional[int] = None):
+    def update_vaada_date(self, vaadot_id: int, vaada_date: date, exception_date_id: Optional[int] = None) -> bool:
         """Update the actual meeting date for a committee and optionally link to exception date"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE vaadot 
-            SET vaada_date = ?, exception_date_id = ?
-            WHERE vaadot_id = ?
-        ''', (vaada_date, exception_date_id, vaadot_id))
-        conn.commit()
-        conn.close()
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE vaadot 
+                SET vaada_date = ?, exception_date_id = ?
+                WHERE vaadot_id = ?
+            ''', (vaada_date, exception_date_id, vaadot_id))
+            
+            success = cursor.rowcount > 0
+            conn.commit()
+            conn.close()
+            return success
+        except Exception as e:
+            print(f"Error updating vaada date: {e}")
+            if conn:
+                conn.close()
+            return False
     
     def get_vaada_by_date(self, vaada_date: date) -> List[Dict]:
         """Get committees scheduled for a specific date"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT v.*, ed.exception_date, ed.description as exception_description, ed.type as exception_type
+            SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date, v.status, v.notes, v.exception_date_id,
+                   ct.name, ct.scheduled_day, ct.frequency, ct.week_of_month,
+                   h.name as hativa_name,
+                   ed.exception_date, ed.description as exception_description, ed.type as exception_type
             FROM vaadot v
+            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+            JOIN hativot h ON v.hativa_id = h.hativa_id
             LEFT JOIN exception_dates ed ON v.exception_date_id = ed.date_id
             WHERE v.vaada_date = ?
-            ORDER BY v.scheduled_day
+            ORDER BY ct.scheduled_day
         ''', (vaada_date,))
         rows = cursor.fetchall()
         conn.close()
         
         days = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת']
         
-        return [{'vaadot_id': row[0], 'name': row[1], 'scheduled_day': row[2], 
-                'scheduled_day_name': days[row[2]], 'frequency': row[3], 
-                'week_of_month': row[4], 'vaada_date': row[5], 'exception_date_id': row[6],
-                'exception_date': row[9], 'exception_description': row[10], 
-                'exception_type': row[11]} for row in rows]
+        return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2], 'vaada_date': row[3], 
+                'status': row[4], 'notes': row[5], 'exception_date_id': row[6],
+                'committee_name': row[7], 'scheduled_day': row[8], 'frequency': row[9], 'week_of_month': row[10],
+                'hativa_name': row[11], 'exception_date': row[12], 'exception_description': row[13], 
+                'exception_type': row[14]} for row in rows]
     
     def get_vaadot_by_date_and_hativa(self, vaada_date: str, hativa_id: int) -> List[Dict]:
         """Get committees scheduled for a specific date and hativa"""
@@ -564,22 +583,27 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT v.*, ed.exception_date, ed.description as exception_description, ed.type as exception_type
+            SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date, v.status, v.notes, v.exception_date_id,
+                   ct.name, ct.scheduled_day, ct.frequency, ct.week_of_month,
+                   h.name as hativa_name,
+                   ed.exception_date, ed.description as exception_description, ed.type as exception_type
             FROM vaadot v
+            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+            JOIN hativot h ON v.hativa_id = h.hativa_id
             JOIN exception_dates ed ON v.exception_date_id = ed.date_id
             WHERE v.exception_date_id = ?
-            ORDER BY v.scheduled_day
+            ORDER BY ct.scheduled_day
         ''', (exception_date_id,))
         rows = cursor.fetchall()
         conn.close()
         
         days = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת']
         
-        return [{'vaadot_id': row[0], 'name': row[1], 'scheduled_day': row[2], 
-                'scheduled_day_name': days[row[2]], 'frequency': row[3], 
-                'week_of_month': row[4], 'vaada_date': row[5], 'exception_date_id': row[6],
-                'exception_date': row[9], 'exception_description': row[10], 
-                'exception_type': row[11]} for row in rows]
+        return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2], 'vaada_date': row[3], 
+                'status': row[4], 'notes': row[5], 'exception_date_id': row[6],
+                'committee_name': row[7], 'scheduled_day': row[8], 'frequency': row[9], 'week_of_month': row[10],
+                'hativa_name': row[11], 'exception_date': row[12], 'exception_description': row[13], 
+                'exception_type': row[14]} for row in rows]
     
     # Events operations
     def add_event(self, vaadot_id: int, maslul_id: int, name: str, event_type: str, expected_requests: int = 0) -> int:
@@ -1178,4 +1202,114 @@ class DatabaseManager:
         )
         
         return sla_dates
+    
+    def get_event_by_id(self, event_id: int) -> Optional[Dict]:
+        """Get event by ID"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT e.*, m.name as maslul_name, m.hativa_id,
+                       v.vaada_date, ct.name as committee_name, h.name as hativa_name
+                FROM events e
+                JOIN maslulim m ON e.maslul_id = m.maslul_id
+                JOIN vaadot v ON e.vaadot_id = v.vaadot_id
+                JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+                JOIN hativot h ON m.hativa_id = h.hativa_id
+                WHERE e.event_id = ?
+            """, (event_id,))
+            
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'event_id': row[0],
+                    'vaadot_id': row[1],
+                    'maslul_id': row[2],
+                    'event_type': row[3],
+                    'expected_requests': row[4],
+                    'created_at': row[5],
+                    'maslul_name': row[6],
+                    'hativa_id': row[7],
+                    'vaada_date': row[8],
+                    'committee_name': row[9],
+                    'hativa_name': row[10]
+                }
+            return None
+        except Exception as e:
+            print(f"Error getting event by ID: {e}")
+            return None
+    
+    def get_vaada_by_id(self, vaada_id: int) -> Optional[Dict]:
+        """Get committee meeting by ID"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT v.*, ct.name as committee_name, h.name as hativa_name
+                FROM vaadot v
+                JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+                JOIN hativot h ON v.hativa_id = h.hativa_id
+                WHERE v.vaadot_id = ?
+            """, (vaada_id,))
+            
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'vaadot_id': row[0],
+                    'committee_type_id': row[1],
+                    'hativa_id': row[2],
+                    'vaada_date': row[3],
+                    'status': row[4],
+                    'notes': row[5],
+                    'exception_date_id': row[6],
+                    'committee_name': row[7],
+                    'hativa_name': row[8]
+                }
+            return None
+        except Exception as e:
+            print(f"Error getting vaada by ID: {e}")
+            return None
+    
+    def get_maslul_by_id(self, maslul_id: int) -> Optional[Dict]:
+        """Get route by ID"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT m.*, h.name as hativa_name
+                FROM maslulim m
+                JOIN hativot h ON m.hativa_id = h.hativa_id
+                WHERE m.maslul_id = ?
+            """, (maslul_id,))
+            
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'maslul_id': row[0],
+                    'hativa_id': row[1],
+                    'name': row[2],
+                    'description': row[3],
+                    'created_at': row[4],
+                    'is_active': row[5],
+                    'sla_days': row[6],
+                    'hativa_name': row[7]
+                }
+            return None
+        except Exception as e:
+            print(f"Error getting maslul by ID: {e}")
+            return None
+    
+    def update_event_vaada(self, event_id: int, new_vaada_id: int) -> bool:
+        """Update event's committee meeting"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                UPDATE events 
+                SET vaadot_id = ?
+                WHERE event_id = ?
+            """, (new_vaada_id, event_id))
+            
+            self.conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error updating event vaada: {e}")
+            self.conn.rollback()
+            return False
     
