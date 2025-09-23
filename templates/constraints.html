@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% block title %}ניהול אילוצים{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-12 col-lg-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header py-3" style="background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%); color: #2c3e50;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <h5 class="mb-0 fw-bold">ניהול אילוצים</h5>
+                        <small class="text-dark">עדכון ימי עבודה, שעות פעילות ומגבלות לוח זמנים</small>
+                    </div>
+                    <div class="badge bg-dark-subtle text-dark">
+                        <i class="bi bi-shield-lock me-1"></i>למנהלי מערכת בלבד
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-4">
+                <form action="{{ url_for('update_constraints') }}" method="post" class="needs-validation" novalidate>
+                    <div class="mb-4">
+                        <h6 class="text-primary fw-bold mb-3">
+                            <i class="bi bi-calendar2-week me-2"></i>ימי עבודה
+                        </h6>
+                        <div class="row g-2">
+                            {% for day in settings.work_days.options %}
+                            <div class="col-6 col-md-4 col-lg-3">
+                                <div class="form-check form-switch card border {% if day.selected %}border-primary{% else %}border-light-subtle{% endif %} h-100">
+                                    <div class="card-body py-2">
+                                        <input class="form-check-input float-end" type="checkbox" role="switch" id="day-{{ day.value }}" name="work_days" value="{{ day.value }}" {% if day.selected %}checked{% endif %}>
+                                        <label class="form-check-label pe-4" for="day-{{ day.value }}">{{ day.label }}</label>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% if errors and errors.get('work_days') %}
+                        <div class="text-danger small mt-2">
+                            <i class="bi bi-exclamation-triangle me-1"></i>{{ errors.get('work_days') }}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-4">
+                        <h6 class="text-primary fw-bold mb-3">
+                            <i class="bi bi-clock-history me-2"></i>שעות פעילות
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">שעת התחלה</label>
+                                <input type="time" class="form-control {% if errors and errors.get('work_start_time') %}is-invalid{% endif %}" name="work_start_time" value="{{ settings.business_hours.start }}">
+                                {% if errors and errors.get('work_start_time') %}
+                                <div class="invalid-feedback d-block">{{ errors.get('work_start_time') }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">שעת סיום</label>
+                                <input type="time" class="form-control {% if errors and errors.get('work_end_time') %}is-invalid{% endif %}" name="work_end_time" value="{{ settings.business_hours.end }}">
+                                {% if errors and errors.get('work_end_time') %}
+                                <div class="invalid-feedback d-block">{{ errors.get('work_end_time') }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <h6 class="text-primary fw-bold mb-3">
+                            <i class="bi bi-list-ol me-2"></i>מגבלות כמותיות
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">מקסימום ועדות ביום</label>
+                                <input type="number" min="1" max="10" class="form-control {% if errors and errors.get('max_meetings_per_day') %}is-invalid{% endif %}" name="max_meetings_per_day" value="{{ settings.limits.max_meetings_per_day }}">
+                                {% if errors and errors.get('max_meetings_per_day') %}
+                                <div class="invalid-feedback d-block">{{ errors.get('max_meetings_per_day') }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">מקסימום ועדות בשבוע</label>
+                                <input type="number" min="1" max="30" class="form-control {% if errors and errors.get('max_weekly_meetings') %}is-invalid{% endif %}" name="max_weekly_meetings" value="{{ settings.limits.max_weekly_meetings }}">
+                                {% if errors and errors.get('max_weekly_meetings') %}
+                                <div class="invalid-feedback d-block">{{ errors.get('max_weekly_meetings') }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">מקסימום ועדות בשבוע השלישי</label>
+                                <input type="number" min="1" max="30" class="form-control {% if errors and errors.get('max_third_week_meetings') %}is-invalid{% endif %}" name="max_third_week_meetings" value="{{ settings.limits.max_third_week_meetings }}">
+                                {% if errors and errors.get('max_third_week_meetings') %}
+                                <div class="invalid-feedback d-block">{{ errors.get('max_third_week_meetings') }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">ימי SLA לפני ישיבה</label>
+                                <input type="number" min="1" max="180" class="form-control {% if errors and errors.get('sla_days_before') %}is-invalid{% endif %}" name="sla_days_before" value="{{ settings.sla_days_before }}">
+                                {% if errors and errors.get('sla_days_before') %}
+                                <div class="invalid-feedback d-block">{{ errors.get('sla_days_before') }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{{ url_for('constraints') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>איפוס שינויים
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-1"></i>שמירת הגדרות
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-4">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-dark text-light py-3">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-info-circle me-2"></i>סיכום אילוצים נוכחי</h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <span class="text-muted">ימי עבודה:</span>
+                        <span class="fw-semibold">{{ settings.work_days.summary }}</span>
+                    </li>
+                    <li class="mb-2">
+                        <span class="text-muted">שעות פעילות:</span>
+                        <span class="fw-semibold">{{ settings.business_hours.range }}</span>
+                    </li>
+                    <li class="mb-2">
+                        <span class="text-muted">מקסימום ועדות ביום:</span>
+                        <span class="fw-semibold">{{ settings.limits.max_meetings_per_day }}</span>
+                    </li>
+                    <li class="mb-2">
+                        <span class="text-muted">מקסימום ועדות בשבוע:</span>
+                        <span class="fw-semibold">{{ settings.limits.max_weekly_meetings }}</span>
+                    </li>
+                    <li class="mb-2">
+                        <span class="text-muted">מקסימום בשבוע השלישי:</span>
+                        <span class="fw-semibold">{{ settings.limits.max_third_week_meetings }}</span>
+                    </li>
+                    <li class="mb-0">
+                        <span class="text-muted">ימי SLA לפני ישיבה:</span>
+                        <span class="fw-semibold">{{ settings.sla_days_before }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-light py-3">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-lightbulb me-2"></i>טיפים</h6>
+            </div>
+            <div class="card-body small text-muted">
+                <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>הקפידו על התאמה בין מכסות יומיות ושבועיות כדי למנוע חסימות מיותרות.</p>
+                <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>ימי העבודה משפיעים על חישובי SLA, אירועים ותזמון אוטומטי.</p>
+                <p class="mb-0"><i class="bi bi-check-circle text-success me-1"></i>לאחר שינוי ההגדרות, הריצו מחדש את התזמון האוטומטי לבדיקת התוצאות.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

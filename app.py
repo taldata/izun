@@ -7,6 +7,7 @@ import json
 from database import DatabaseManager
 from auto_scheduler import AutoMeetingScheduler
 from services.auto_schedule_service import AutoScheduleService
+from services.constraints_service import ConstraintsService
 from services.committee_types_service import CommitteeTypesService, CommitteeTypeRequest
 from auth import AuthManager, login_required, admin_required, editing_permission_required
 
@@ -17,6 +18,7 @@ app.secret_key = 'committee_management_secret_key_2025'
 db = DatabaseManager()
 auto_scheduler = AutoMeetingScheduler(db)
 auto_schedule_service = AutoScheduleService(db)
+constraints_service = ConstraintsService(db)
 committee_types_service = CommitteeTypesService(db)
 auth_manager = AuthManager(db)
 
@@ -244,6 +246,40 @@ def get_business_days_info(year, month):
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/constraints')
+@admin_required
+def constraints():
+    """Constraint management dashboard"""
+    try:
+        settings = constraints_service.get_constraints_overview()
+        current_user = auth_manager.get_current_user()
+        return render_template('constraints.html', settings=settings, errors={}, current_user=current_user)
+    except Exception as e:
+        flash(f'שגיאה בטעינת נתוני האילוצים: {e}', 'error')
+        return redirect(url_for('index'))
+
+
+@app.route('/constraints/update', methods=['POST'])
+@admin_required
+def update_constraints():
+    """Update system constraint settings"""
+    try:
+        payload = constraints_service.parse_request(request.form)
+        result = constraints_service.update_constraints(payload, session.get('user_id'))
+        if result.success:
+            flash(result.message, 'success')
+            return redirect(url_for('constraints'))
+        flash(result.message, 'error')
+        settings = constraints_service.get_constraints_overview()
+        settings = constraints_service.apply_form_values(settings, payload)
+        current_user = auth_manager.get_current_user()
+        status_code = 400 if result.errors else 200
+        return render_template('constraints.html', settings=settings, errors=result.errors or {}, current_user=current_user), status_code
+    except Exception as e:
+        flash(f'שגיאה בעדכון האילוצים: {e}', 'error')
+        return redirect(url_for('constraints'))
 
 @app.route('/')
 @login_required

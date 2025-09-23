@@ -30,30 +30,8 @@ class AutoMeetingScheduler:
         return mapping.get(our_weekday, -1)
     
     def is_business_day(self, check_date: date) -> bool:
-        """
-        בדיקה האם התאריך הוא יום עסקים
-        ימי עסקים: ראשון עד חמישי
-        """
-        # בדיקת ימי עסקים - ראשון עד חמישי
-        # ב-Python: יום שני=0, שלישי=1, רביעי=2, חמישי=3, שישי=4, שבת=5, ראשון=6
-        # ימי עסקים: ראשון(6), שני(0), שלישי(1), רביעי(2), חמישי(3)
-        weekday = check_date.weekday()
-        if weekday == 4 or weekday == 5:  # שישי (4) ושבת (5)
-            return False
-            
-        # בדיקת חגים ותאריכי חריגים
-        exception_dates = self.db.get_exception_dates()
-        for exc_date in exception_dates:
-            exc_date_str = exc_date.get('exception_date')
-            if exc_date_str:
-                try:
-                    exc_date_obj = datetime.strptime(exc_date_str, '%Y-%m-%d').date()
-                    if exc_date_obj == check_date:
-                        return False
-                except (ValueError, TypeError):
-                    continue
-                
-        return True
+        """בדיקה האם התאריך הוא יום עסקים בהתאם להגדרות המערכת"""
+        return self.db.is_work_day(check_date)
     
     def get_third_week_of_month(self, year: int, month: int) -> Tuple[date, date]:
         """
@@ -83,15 +61,7 @@ class AutoMeetingScheduler:
         week_end = week_start + timedelta(days=6)
         
         # ספירת ישיבות בשבוע
-        meetings = self.db.get_vaadot()
-        week_meetings = 0
-        
-        for meeting in meetings:
-            meeting_date = datetime.strptime(meeting['vaada_date'], '%Y-%m-%d').date()
-            if week_start <= meeting_date <= week_end:
-                week_meetings += 1
-                
-        return week_meetings
+        return self.db.get_meetings_count_in_range(week_start, week_end)
     
     def is_third_week_of_month(self, check_date: date) -> bool:
         """
@@ -129,17 +99,24 @@ class AutoMeetingScheduler:
             expected_day_name = weekday_names[expected_weekday]
             return False, f"ועדה זו מתקיימת רק בימי {expected_day_name}"
         
-        # בדיקת ועדה אחת ביום
+        constraint_settings = self.db.get_constraint_settings()
+
+        # בדיקת ועדה אחת ביום (על פי מגבלת המערכת)
         if not self.db.is_date_available_for_meeting(target_date):
-            return False, "קיימת כבר ישיבה אחרת באותו תאריך"
-        
+            max_per_day = constraint_settings['max_meetings_per_day']
+            if max_per_day == 1:
+                return False, "קיימת כבר ישיבה אחרת באותו תאריך"
+            return False, f"מכסת הישיבות היומית ({max_per_day}) נוצלה בתאריך זה"
+
         # בדיקת מגבלות שבועיות
         week_meetings = self.count_meetings_in_week(target_date)
         is_third_week = self.is_third_week_of_month(target_date)
-        
-        max_weekly_meetings = 4 if is_third_week else 3
-        if week_meetings >= max_weekly_meetings:
-            return False, f"הושג מספר הישיבות המקסימלי השבועי ({max_weekly_meetings})"
+
+        weekly_limit = constraint_settings['max_weekly_meetings']
+        third_week_limit = constraint_settings['max_third_week_meetings']
+        allowed_weekly = third_week_limit if is_third_week else weekly_limit
+        if week_meetings >= allowed_weekly:
+            return False, f"מכסת הישיבות השבועית ({allowed_weekly}) נוצלה השבוע"
         
         # בדיקה מיוחדת לועדות חודשיות - רק בשבוע המתאים
         if frequency == 'monthly':

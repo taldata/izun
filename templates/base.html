@@ -116,6 +116,11 @@
                             <li><a class="dropdown-item" href="{{ url_for('exception_dates') }}">
                                 <i class="bi bi-calendar-x me-2 text-danger"></i>תאריכי חריגים
                             </a></li>
+                            {% if current_user and current_user.role == 'admin' %}
+                            <li><a class="dropdown-item" href="{{ url_for('constraints') }}">
+                                <i class="bi bi-sliders me-2 text-warning"></i>ניהול אילוצים
+                            </a></li>
+                            {% endif %}
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('auto_schedule') }}">
                                 <i class="bi bi-robot me-2 text-success"></i>תזמון אוטומטי

@@ -1,7 +1,7 @@
 import sqlite3
 import os
 from datetime import datetime, date, timedelta
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 
 class DatabaseManager:
     def __init__(self, db_path: str = "committee_system.db"):
@@ -131,10 +131,13 @@ class DatabaseManager:
                 ('editing_period_active', '1', 'Whether general editing is allowed (1=yes, 0=admin only)'),
                 ('academic_year_start', '2024-09-01', 'Start of current academic year'),
                 ('editing_deadline', '2024-10-31', 'Deadline for general user editing'),
-                ('work_days', '0,1,2,3,4', 'Working days (0=Sunday, 1=Monday, etc.)'),
+                ('work_days', '6,0,1,2,3,4', 'Working days (Python weekday: 0=Monday ... 6=Sunday)'),
                 ('work_start_time', '08:00', 'Daily work start time'),
                 ('work_end_time', '17:00', 'Daily work end time'),
-                ('sla_days_before', '14', 'Default SLA days before committee meeting')
+                ('sla_days_before', '14', 'Default SLA days before committee meeting'),
+                ('max_meetings_per_day', '1', 'Maximum number of committee meetings per calendar day'),
+                ('max_weekly_meetings', '3', 'Maximum number of committee meetings per standard week'),
+                ('max_third_week_meetings', '4', 'Maximum number of committee meetings during the third week of a month')
         ''')
         
         conn.commit()
@@ -438,15 +441,18 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         
+        max_per_day = self.get_int_setting('max_meetings_per_day', 1)
         # Check if there's already a committee meeting on this date
         cursor.execute('''
             SELECT COUNT(*) FROM vaadot WHERE vaada_date = ?
         ''', (vaada_date,))
         existing_count = cursor.fetchone()[0]
         
-        if existing_count > 0:
+        if existing_count >= max_per_day:
             conn.close()
-            raise ValueError(f"כבר קיימת ועדה בתאריך {vaada_date}. לא ניתן לקבוע יותר מועדה אחת ביום.")
+            if max_per_day == 1:
+                raise ValueError(f"כבר קיימת ועדה בתאריך {vaada_date}. לא ניתן לקבוע יותר מועדה אחת ביום.")
+            raise ValueError(f"כבר קיימות {existing_count} ועדות בתאריך {vaada_date}. המגבלה הנוכחית מאפשרת עד {max_per_day} ועדות ביום.")
         
         cursor.execute('''
             INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, status, exception_date_id, notes)
@@ -469,7 +475,8 @@ class DatabaseManager:
         cursor.execute('SELECT COUNT(*) FROM vaadot WHERE vaada_date = ?', (vaada_date,))
         count = cursor.fetchone()[0]
         conn.close()
-        return count == 0
+        max_per_day = self.get_int_setting('max_meetings_per_day', 1)
+        return count < max_per_day
     
     def get_vaadot(self, hativa_id: Optional[int] = None, start_date: Optional[date] = None, 
                    end_date: Optional[date] = None) -> List[Dict]:
@@ -950,6 +957,23 @@ class DatabaseManager:
         ''', (setting_value, user_id, setting_key))
         conn.commit()
         conn.close()
+
+    def get_int_setting(self, setting_key: str, default: int) -> int:
+        """Get an integer system setting with fallback"""
+        value = self.get_system_setting(setting_key)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    def get_constraint_settings(self) -> Dict[str, Any]:
+        """Return parsed constraint settings for the scheduling system"""
+        return {
+            'work_days': self.get_work_days(),
+            'max_meetings_per_day': self.get_int_setting('max_meetings_per_day', 1),
+            'max_weekly_meetings': self.get_int_setting('max_weekly_meetings', 3),
+            'max_third_week_meetings': self.get_int_setting('max_third_week_meetings', 4)
+        }
     
     def is_editing_allowed(self, user_role: str) -> bool:
         """Check if editing is allowed for user role"""
@@ -1133,8 +1157,31 @@ class DatabaseManager:
     # Enhanced Business Days and SLA Calculations
     def get_work_days(self) -> List[int]:
         """Get configured work days"""
-        work_days_str = self.get_system_setting('work_days') or '0,1,2,3,4'
+        work_days_str = self.get_system_setting('work_days') or '6,0,1,2,3,4'
         return [int(day) for day in work_days_str.split(',')]
+
+    def get_meetings_count_on_date(self, vaada_date: Any) -> int:
+        """Get the number of meetings scheduled for a specific date"""
+        if isinstance(vaada_date, str):
+            vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM vaadot WHERE vaada_date = ?', (vaada_date,))
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
+    def get_meetings_count_in_range(self, start_date: date, end_date: date) -> int:
+        """Get number of meetings in an inclusive date range"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT COUNT(*) FROM vaadot 
+            WHERE vaada_date BETWEEN ? AND ?
+        ''', (start_date, end_date))
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
     
     def is_work_day(self, check_date: date) -> bool:
         """Check if date is a work day (not weekend, not holiday, configured work days)"""
