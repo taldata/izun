@@ -438,30 +438,47 @@ class DatabaseManager:
                   status: str = 'planned', exception_date_id: Optional[int] = None, 
                   notes: str = "") -> int:
         """Add a specific committee meeting instance"""
+        # Ensure meeting date is an allowed business day
+        if not self.is_work_day(vaada_date):
+            raise ValueError(f"התאריך {vaada_date} אינו יום עסקים חוקי לועדות")
+
         conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        max_per_day = self.get_int_setting('max_meetings_per_day', 1)
-        # Check if there's already a committee meeting on this date
-        cursor.execute('''
-            SELECT COUNT(*) FROM vaadot WHERE vaada_date = ?
-        ''', (vaada_date,))
-        existing_count = cursor.fetchone()[0]
-        
-        if existing_count >= max_per_day:
+        try:
+            cursor = conn.cursor()
+            constraint_settings = self.get_constraint_settings()
+
+            max_per_day = constraint_settings['max_meetings_per_day']
+            cursor.execute('''
+                SELECT COUNT(*) FROM vaadot WHERE vaada_date = ?
+            ''', (vaada_date,))
+            existing_count = cursor.fetchone()[0]
+            if existing_count >= max_per_day:
+                if max_per_day == 1:
+                    raise ValueError(f"כבר קיימת ועדה בתאריך {vaada_date}. לא ניתן לקבוע יותר מועדה אחת ביום.")
+                raise ValueError(f"כבר קיימות {existing_count} ועדות בתאריך {vaada_date}. המגבלה הנוכחית מאפשרת עד {max_per_day} ועדות ביום.")
+
+            week_start, week_end = self._get_week_bounds(vaada_date)
+            weekly_count = self._count_meetings_in_week(cursor, week_start, week_end)
+            weekly_limit = self._get_weekly_limit(vaada_date, constraint_settings)
+            if weekly_count >= weekly_limit:
+                raise ValueError(f"השבוע של {vaada_date} כבר מכיל {weekly_count} ועדות (המגבלה היא {weekly_limit})")
+
+            cursor.execute('''
+                INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, status, exception_date_id, notes)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (committee_type_id, hativa_id, vaada_date, status, exception_date_id, notes))
+            vaadot_id = cursor.lastrowid
+            conn.commit()
+            return vaadot_id
+        except ValueError:
+            conn.rollback()
+            raise
+        except Exception as e:
+            conn.rollback()
+            print(f"Error adding vaada: {e}")
+            raise
+        finally:
             conn.close()
-            if max_per_day == 1:
-                raise ValueError(f"כבר קיימת ועדה בתאריך {vaada_date}. לא ניתן לקבוע יותר מועדה אחת ביום.")
-            raise ValueError(f"כבר קיימות {existing_count} ועדות בתאריך {vaada_date}. המגבלה הנוכחית מאפשרת עד {max_per_day} ועדות ביום.")
-        
-        cursor.execute('''
-            INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, status, exception_date_id, notes)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (committee_type_id, hativa_id, vaada_date, status, exception_date_id, notes))
-        vaadot_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return vaadot_id
     
     def is_date_available_for_meeting(self, vaada_date) -> bool:
         """Check if a date is available for a committee meeting (no existing meetings)"""
@@ -521,9 +538,31 @@ class DatabaseManager:
     
     def update_vaada_date(self, vaadot_id: int, vaada_date: date, exception_date_id: Optional[int] = None) -> bool:
         """Update the actual meeting date for a committee and optionally link to exception date"""
+        conn = None
         try:
+            if not self.is_work_day(vaada_date):
+                raise ValueError(f"התאריך {vaada_date} אינו יום עסקים חוקי לועדות")
+
             conn = self.get_connection()
             cursor = conn.cursor()
+
+            # Enforce daily limit excluding the current meeting
+            constraint_settings = self.get_constraint_settings()
+            max_per_day = constraint_settings['max_meetings_per_day']
+            cursor.execute('''
+                SELECT COUNT(*) FROM vaadot
+                WHERE vaada_date = ? AND vaadot_id != ?
+            ''', (vaada_date, vaadot_id))
+            existing_count = cursor.fetchone()[0]
+            if existing_count >= max_per_day:
+                raise ValueError(f"התאריך {vaada_date} כבר מכיל {existing_count} ועדות (המגבלה היא {max_per_day})")
+
+            week_start, week_end = self._get_week_bounds(vaada_date)
+            weekly_count = self._count_meetings_in_week(cursor, week_start, week_end, exclude_vaada_id=vaadot_id)
+            weekly_limit = self._get_weekly_limit(vaada_date, constraint_settings)
+            if weekly_count >= weekly_limit:
+                raise ValueError(f"השבוע של {vaada_date} כבר מכיל {weekly_count} ועדות (המגבלה היא {weekly_limit})")
+
             cursor.execute('''
                 UPDATE vaadot 
                 SET vaada_date = ?, exception_date_id = ?
@@ -532,13 +571,56 @@ class DatabaseManager:
             
             success = cursor.rowcount > 0
             conn.commit()
-            conn.close()
             return success
+        except ValueError:
+            if conn:
+                conn.rollback()
+            raise
         except Exception as e:
             print(f"Error updating vaada date: {e}")
             if conn:
-                conn.close()
+                conn.rollback()
             return False
+        finally:
+            if conn:
+                conn.close()
+
+    def _get_week_bounds(self, check_date: date) -> Tuple[date, date]:
+        """Return start (Sunday) and end (Saturday) dates for the week of the given date."""
+        days_since_sunday = (check_date.weekday() + 1) % 7
+        week_start = check_date - timedelta(days=days_since_sunday)
+        week_end = week_start + timedelta(days=6)
+        return week_start, week_end
+
+    def _get_weekly_limit(self, check_date: date, constraint_settings: Dict[str, Any]) -> int:
+        """Return the applicable weekly meeting limit for a given date."""
+        limit = constraint_settings['max_weekly_meetings']
+        if self._is_third_week_of_month(check_date):
+            limit = constraint_settings['max_third_week_meetings']
+        return limit
+
+    def _count_meetings_in_week(self, cursor, week_start: date, week_end: date, exclude_vaada_id: Optional[int] = None) -> int:
+        """Count meetings within a week range, optionally excluding a specific meeting."""
+        query = '''
+            SELECT COUNT(*) FROM vaadot
+            WHERE vaada_date BETWEEN ? AND ?
+        '''
+        params = [week_start, week_end]
+        if exclude_vaada_id is not None:
+            query += ' AND vaadot_id != ?'
+            params.append(exclude_vaada_id)
+        cursor.execute(query, params)
+        result = cursor.fetchone()
+        return result[0] if result else 0
+
+    def _is_third_week_of_month(self, check_date: date) -> bool:
+        """Return True if date falls within the third week of its month (Sunday-Saturday)."""
+        first_day = date(check_date.year, check_date.month, 1)
+        days_to_first_sunday = (6 - first_day.weekday()) % 7
+        first_sunday = first_day + timedelta(days=days_to_first_sunday)
+        third_week_start = first_sunday + timedelta(weeks=2)
+        third_week_end = third_week_start + timedelta(days=6)
+        return third_week_start <= check_date <= third_week_end
     
     def get_vaada_by_date(self, vaada_date: date) -> List[Dict]:
         """Get committees scheduled for a specific date"""

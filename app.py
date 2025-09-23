@@ -1452,6 +1452,10 @@ def move_committee():
         except ValueError:
             return jsonify({'success': False, 'message': 'פורמט תאריך לא תקין'}), 400
         
+        # Ensure target date is an allowed business day
+        if not db.is_work_day(new_date_obj):
+            return jsonify({'success': False, 'message': 'לא ניתן להעביר ועדה ליום שאינו יום עסקים'}), 400
+
         # Check if target date is available (one meeting per day constraint)
         # But allow moving the same committee to a different date
         existing_meetings = db.get_vaada_by_date(new_date_obj)
@@ -1459,7 +1463,10 @@ def move_committee():
             return jsonify({'success': False, 'message': 'התאריך תפוס - יש כבר ועדה ביום זה'}), 400
         
         # Update committee meeting date
-        success = db.update_vaada_date(vaada_id, new_date_obj)
+        try:
+            success = db.update_vaada_date(vaada_id, new_date_obj)
+        except ValueError as ve:
+            return jsonify({'success': False, 'message': str(ve)}), 400
         
         if success:
             return jsonify({'success': True, 'message': 'הועדה הועברה בהצלחה'})
