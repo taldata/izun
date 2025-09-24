@@ -187,6 +187,54 @@ class AutoMeetingScheduler:
         
         return None
     
+    def find_available_dates(self, committee_type_id: int, hativa_id: int,
+                              start_date: Optional[date] = None, max_results: int = 5,
+                              max_days: int = 180) -> List[date]:
+        """
+        מציאת רשימת תאריכים פנויים עבור ועדה נתונה
+        """
+        if start_date is None:
+            start_date = date.today()
+
+        if max_results <= 0:
+            return []
+
+        committee_types = self.db.get_committee_types(hativa_id)
+        committee_type_data = next(
+            (ct for ct in committee_types if ct['committee_type_id'] == committee_type_id),
+            None
+        )
+
+        if not committee_type_data:
+            return []
+
+        expected_weekday = committee_type_data['scheduled_day']
+        frequency = committee_type_data['frequency']
+        week_of_month = committee_type_data.get('week_of_month')
+        expected_python_weekday = self.our_weekday_to_python_weekday(expected_weekday)
+
+        available_dates: List[date] = []
+        current_date = start_date
+        days_checked = 0
+
+        while len(available_dates) < max_results and days_checked < max_days:
+            if current_date.weekday() == expected_python_weekday:
+                if frequency == 'monthly' and week_of_month:
+                    week_num = (current_date.day - 1) // 7 + 1
+                    if week_num != week_of_month:
+                        current_date += timedelta(days=1)
+                        days_checked += 1
+                        continue
+
+                can_schedule, _ = self.can_schedule_meeting(committee_type_id, current_date, hativa_id)
+                if can_schedule:
+                    available_dates.append(current_date)
+
+            current_date += timedelta(days=1)
+            days_checked += 1
+
+        return available_dates
+
     def generate_monthly_schedule(self, year: int, month: int, 
                                  hativot_ids: List[int] = None) -> Dict:
         """

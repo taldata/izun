@@ -248,6 +248,63 @@ def get_business_days_info(year, month):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/available_dates')
+@login_required
+def get_available_dates():
+    """Get upcoming available dates for a committee type within a division"""
+    try:
+        committee_type_id = request.args.get('committee_type_id', type=int)
+        hativa_id = request.args.get('hativa_id', type=int)
+
+        if not committee_type_id or not hativa_id:
+            return jsonify({'success': False, 'message': 'נדרש לבחור סוג ועדה וחטיבה'}), 400
+
+        # Validate that the committee type belongs to the given division
+        committee_types = db.get_committee_types(hativa_id)
+        committee_type = next((ct for ct in committee_types if ct['committee_type_id'] == committee_type_id), None)
+
+        if not committee_type:
+            return jsonify({'success': False, 'message': 'סוג הועדה אינו משויך לחטיבה שנבחרה'}), 400
+
+        start_date_str = request.args.get('start_date')
+        start_date = None
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({'success': False, 'message': 'פורמט תאריך התחלה אינו תקין'}), 400
+
+        limit = request.args.get('limit', default=5, type=int)
+        limit = max(1, min(limit or 5, 20))
+        max_days = request.args.get('max_days', default=180, type=int)
+        max_days = max(7, min(max_days or 180, 365))
+
+        available_dates = auto_scheduler.find_available_dates(
+            committee_type_id,
+            hativa_id,
+            start_date=start_date,
+            max_results=limit,
+            max_days=max_days
+        )
+
+        formatted_dates = [d.strftime('%Y-%m-%d') for d in available_dates]
+
+        message = 'נמצאו תאריכים פנויים' if formatted_dates else 'לא נמצאו תאריכים פנויים בטווח שנבחר'
+
+        return jsonify({
+            'success': True,
+            'dates': formatted_dates,
+            'total': len(formatted_dates),
+            'message': message,
+            'committee_type': committee_type.get('name'),
+            'hativa_id': hativa_id
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error fetching available dates: {str(e)}")
+        return jsonify({'success': False, 'message': f'שגיאה בשליפת תאריכים פנויים: {str(e)}'}), 500
+
+
 @app.route('/constraints')
 @admin_required
 def constraints():
