@@ -548,99 +548,169 @@ function createMonthCalendar(year, month, isCompact = false) {
                 // Add committees and events for this date
                 const currentDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
                 
-                // Add committees
-                committeesData.forEach(committee => {
-                    if (committee.vaada_date === currentDateStr) {
-                        console.log('Creating committee badge for:', committee.committee_name, 'ID:', committee.vaadot_id); // Debug
-                        const committeeDiv = document.createElement('div');
-                        const hativaColor = getHativaColor(committee.hativa_id);
-                        
-                        committeeDiv.className = 'badge text-white mb-1 d-block text-truncate position-relative committee-badge';
-                        committeeDiv.style.fontSize = isCompact ? '0.6rem' : '0.7rem';
-                        committeeDiv.style.cursor = 'pointer';
-                        committeeDiv.style.backgroundColor = hativaColor;
-                        committeeDiv.style.borderLeft = `4px solid ${hativaColor}`;
-                        
-                        // Add drag & drop attributes
-                        committeeDiv.draggable = true;
-                        committeeDiv.setAttribute('data-vaada-id', committee.vaadot_id);
-                        committeeDiv.setAttribute('data-date', currentDateStr);
-                        committeeDiv.setAttribute('data-type', 'committee');
-                        console.log('Committee badge attributes set:', {
-                            vaadaId: committee.vaadot_id,
-                            date: currentDateStr,
-                            draggable: committeeDiv.draggable
-                        }); // Debug
-                        
-                        if (isCompact) {
-                            committeeDiv.textContent = committee.committee_name;
-                        } else {
-                            committeeDiv.innerHTML = `
-                                <i class="bi bi-arrows-move me-1" style="font-size: 0.6rem; opacity: 0.7;"></i>
-                                ${committee.committee_name}
-                                <small class="d-block opacity-75" style="font-size: 0.6rem;">
-                                    <i class="bi bi-clock me-1"></i>SLA
-                                </small>
-                            `;
-                        }
-                        
-                        committeeDiv.title = `${committee.committee_name} - ${committee.hativa_name}\nגרור להעברה | לחץ לעריכה | Shift+לחץ למידע SLA`;
-                        committeeDiv.onclick = function(e) {
-                            e.stopPropagation();
-                            if (e.shiftKey) {
-                                showSLAInfo(committee.vaadot_id);
-                            } else {
-                                editCommittee(committee);
-                            }
-                        };
-                        cell.appendChild(committeeDiv);
-                    }
-                });
+                // Group committees and their events together
+                const dayCommittees = committeesData.filter(committee => committee.vaada_date === currentDateStr);
                 
-                // Add events (grouped by committee)
-                const dayEvents = eventsData.filter(event => {
-                    const eventCommittee = committeesData.find(c => c.vaadot_id === event.vaadot_id);
-                    return eventCommittee && eventCommittee.vaada_date === currentDateStr;
-                });
-                
-                dayEvents.forEach(event => {
-                    console.log('Creating event badge for:', event.name, 'ID:', event.event_id); // Debug
-                    const eventCommittee = committeesData.find(c => c.vaadot_id === event.vaadot_id);
-                    const eventDiv = document.createElement('div');
-                    const hativaColor = getHativaColor(eventCommittee.hativa_id);
-                    const hativaColorLight = getHativaColorLight(eventCommittee.hativa_id);
+                dayCommittees.forEach(committee => {
+                    console.log('Creating committee group for:', committee.committee_name, 'ID:', committee.vaadot_id); // Debug
                     
-                    eventDiv.className = 'badge mb-1 d-block text-truncate event-badge';
-                    eventDiv.style.fontSize = isCompact ? '0.55rem' : '0.65rem';
-                    eventDiv.style.cursor = 'pointer';
-                    eventDiv.style.backgroundColor = hativaColorLight;
-                    eventDiv.style.color = hativaColor;
-                    eventDiv.style.border = `1px solid ${hativaColor}`;
-                    eventDiv.style.fontWeight = '500';
+                    // Create committee container
+                    const committeeContainer = document.createElement('div');
+                    committeeContainer.className = 'committee-container mb-2';
+                    committeeContainer.style.border = `2px solid ${getHativaColor(committee.hativa_id)}`;
+                    committeeContainer.style.borderRadius = '10px';
+                    committeeContainer.style.padding = '6px';
+                    committeeContainer.style.backgroundColor = `${getHativaColorLight(committee.hativa_id)}15`;
+                    committeeContainer.style.position = 'relative';
+                    
+                    // Committee header
+                    const committeeDiv = document.createElement('div');
+                    const hativaColor = getHativaColor(committee.hativa_id);
+                    
+                    committeeDiv.className = 'badge text-white mb-1 d-block text-truncate position-relative committee-badge';
+                    committeeDiv.style.fontSize = isCompact ? '0.6rem' : '0.7rem';
+                    committeeDiv.style.cursor = 'pointer';
+                    committeeDiv.style.backgroundColor = hativaColor;
+                    committeeDiv.style.borderRadius = '6px';
+                    committeeDiv.style.fontWeight = 'bold';
                     
                     // Add drag & drop attributes
-                    eventDiv.draggable = true;
-                    eventDiv.setAttribute('data-event-id', event.event_id);
-                    eventDiv.setAttribute('data-vaada-id', event.vaadot_id);
-                    eventDiv.setAttribute('data-type', 'event');
-                    console.log('Event badge attributes set:', {
-                        eventId: event.event_id,
-                        vaadaId: event.vaadot_id,
-                        draggable: eventDiv.draggable
-                    }); // Debug
+                    committeeDiv.draggable = true;
+                    committeeDiv.setAttribute('data-vaada-id', committee.vaadot_id);
+                    committeeDiv.setAttribute('data-date', currentDateStr);
+                    committeeDiv.setAttribute('data-type', 'committee');
+                    
+                    // Add events for this committee
+                    const committeeEvents = eventsData.filter(event => event.vaadot_id === committee.vaadot_id);
+                    const eventCount = committeeEvents.length;
                     
                     if (isCompact) {
-                        eventDiv.textContent = event.name;
+                        committeeDiv.innerHTML = `
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-people-fill me-1"></i>
+                                    ${committee.committee_name}
+                                </div>
+                                ${eventCount > 0 ? `<span class="badge bg-light text-dark" style="font-size: 0.45rem;">${eventCount}</span>` : ''}
+                            </div>
+                        `;
                     } else {
-                        eventDiv.innerHTML = `<i class="bi bi-arrows-move me-1" style="font-size: 0.5rem; opacity: 0.7;"></i>📅 ${event.name}`;
+                        committeeDiv.innerHTML = `
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-arrows-move me-1" style="font-size: 0.6rem; opacity: 0.7;"></i>
+                                    <i class="bi bi-people-fill me-1"></i>
+                                    ${committee.committee_name}
+                                </div>
+                                <div class="d-flex align-items-center gap-1">
+                                    ${eventCount > 0 ? `<span class="badge bg-light text-dark" style="font-size: 0.5rem;">${eventCount} אירועים</span>` : ''}
+                                    <small style="font-size: 0.6rem; opacity: 0.8;">
+                                        <i class="bi bi-clock me-1"></i>ועדה
+                                    </small>
+                                </div>
+                            </div>
+                        `;
                     }
                     
-                    eventDiv.title = `${event.name} - ${event.maslul_name}\nגרור להעברה | לחץ לעריכה`;
-                    eventDiv.onclick = function(e) {
+                    committeeDiv.title = `${committee.committee_name} - ${committee.hativa_name}\nגרור להעברה | לחץ לעריכה | Shift+לחץ למידע SLA`;
+                    committeeDiv.onclick = function(e) {
                         e.stopPropagation();
-                        editEvent(event);
+                        if (e.shiftKey) {
+                            showSLAInfo(committee.vaadot_id);
+                        } else {
+                            editCommittee(committee);
+                        }
                     };
-                    cell.appendChild(eventDiv);
+                    
+                    committeeContainer.appendChild(committeeDiv);
+                    
+                    if (committeeEvents.length > 0) {
+                        // Events header (only if there are events)
+                        if (!isCompact) {
+                            const eventsHeader = document.createElement('div');
+                            eventsHeader.className = 'text-muted';
+                            eventsHeader.style.fontSize = '0.55rem';
+                            eventsHeader.style.marginBottom = '3px';
+                            eventsHeader.style.paddingRight = '4px';
+                            eventsHeader.innerHTML = `<i class="bi bi-calendar-event me-1"></i>אירועים בועדה:`;
+                            committeeContainer.appendChild(eventsHeader);
+                        }
+                        
+                        // Events container
+                        const eventsContainer = document.createElement('div');
+                        eventsContainer.className = 'events-container';
+                        eventsContainer.style.paddingRight = isCompact ? '0' : '8px';
+                        eventsContainer.style.borderRight = isCompact ? 'none' : `3px solid ${hativaColor}40`;
+                        eventsContainer.style.marginRight = isCompact ? '0' : '4px';
+                        
+                        committeeEvents.forEach(event => {
+                            console.log('Creating event badge for:', event.name, 'ID:', event.event_id); // Debug
+                            const eventDiv = document.createElement('div');
+                            const hativaColorLight = getHativaColorLight(committee.hativa_id);
+                            
+                            eventDiv.className = 'event-badge mb-1 d-block text-truncate position-relative';
+                            eventDiv.style.fontSize = isCompact ? '0.5rem' : '0.6rem';
+                            eventDiv.style.cursor = 'pointer';
+                            eventDiv.style.backgroundColor = hativaColorLight;
+                            eventDiv.style.color = hativaColor;
+                            eventDiv.style.border = `1px solid ${hativaColor}60`;
+                            eventDiv.style.borderRadius = '6px';
+                            eventDiv.style.fontWeight = '500';
+                            eventDiv.style.padding = isCompact ? '2px 4px' : '3px 6px';
+                            eventDiv.style.boxShadow = `0 1px 3px rgba(0,0,0,0.1)`;
+                            eventDiv.style.transition = 'all 0.2s ease';
+                            eventDiv.style.marginRight = '4px';
+                            
+                            // Add drag & drop attributes
+                            eventDiv.draggable = true;
+                            eventDiv.setAttribute('data-event-id', event.event_id);
+                            eventDiv.setAttribute('data-vaada-id', event.vaadot_id);
+                            eventDiv.setAttribute('data-type', 'event');
+                            
+                            if (isCompact) {
+                                eventDiv.innerHTML = `
+                                    <i class="bi bi-dot me-1" style="font-size: 0.4rem;"></i>
+                                    ${event.name}
+                                `;
+                            } else {
+                                eventDiv.innerHTML = `
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-arrows-move me-1" style="font-size: 0.4rem; opacity: 0.7;"></i>
+                                        <i class="bi bi-dot me-1" style="font-size: 0.5rem;"></i>
+                                        <span class="text-truncate flex-grow-1">${event.name}</span>
+                                        <small class="ms-1 opacity-75" style="font-size: 0.45rem;">
+                                            ${event.maslul_name}
+                                        </small>
+                                    </div>
+                                `;
+                            }
+                            
+                            // Add hover effects
+                            eventDiv.addEventListener('mouseenter', function() {
+                                this.style.transform = 'translateX(2px)';
+                                this.style.boxShadow = `0 2px 6px rgba(0,0,0,0.15)`;
+                                this.style.backgroundColor = lightenColor(hativaColorLight, 10);
+                            });
+                            
+                            eventDiv.addEventListener('mouseleave', function() {
+                                this.style.transform = 'translateX(0)';
+                                this.style.boxShadow = `0 1px 3px rgba(0,0,0,0.1)`;
+                                this.style.backgroundColor = hativaColorLight;
+                            });
+                            
+                            eventDiv.title = `${event.name} - ${event.maslul_name}\nשייך לועדה: ${committee.committee_name}\nגרור להעברה | לחץ לעריכה`;
+                            eventDiv.onclick = function(e) {
+                                e.stopPropagation();
+                                editEvent(event);
+                            };
+                            
+                            eventsContainer.appendChild(eventDiv);
+                        });
+                        
+                        committeeContainer.appendChild(eventsContainer);
+                    }
+                    
+                    cell.appendChild(committeeContainer);
                 });
                 
                 // Add data attribute for drag & drop
@@ -947,6 +1017,18 @@ function lightenColor(color, amount) {
     return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
         (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
         (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
+}
+
+// Function to darken a hex color
+function darkenColor(color, amount) {
+    const num = parseInt(color.replace("#", ""), 16);
+    const amt = Math.round(2.55 * amount);
+    const R = (num >> 16) - amt;
+    const G = (num >> 8 & 0x00FF) - amt;
+    const B = (num & 0x0000FF) - amt;
+    return "#" + (0x1000000 + (R > 255 ? 255 : R < 0 ? 0 : R) * 0x10000 +
+        (G > 255 ? 255 : G < 0 ? 0 : G) * 0x100 +
+        (B > 255 ? 255 : B < 0 ? 0 : B)).toString(16).slice(1);
 }
 
 // Edit functions
@@ -2037,6 +2119,143 @@ function showAlert(message, type) {
 .committee-badge:hover, .event-badge:hover {
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* Committee Container Styles */
+.committee-container {
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.committee-container:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.committee-container::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+    border-radius: 12px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: -1;
+}
+
+.committee-container:hover::before {
+    opacity: 1;
+}
+
+/* Enhanced Committee Badge */
+.committee-badge {
+    position: relative;
+    overflow: hidden;
+}
+
+.committee-badge::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+.committee-badge:hover::after {
+    left: 100%;
+}
+
+/* Events Container Styles */
+.events-container {
+    position: relative;
+}
+
+.events-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 3px;
+    height: 100%;
+    background: linear-gradient(to bottom, transparent, currentColor, transparent);
+    opacity: 0.3;
+    border-radius: 2px;
+}
+
+/* Enhanced Event Badge Styles */
+.event-badge {
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 2px !important;
+}
+
+.event-badge::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.4s ease;
+}
+
+.event-badge:hover::before {
+    transform: translateX(100%);
+}
+
+.event-badge .bi-dot {
+    color: inherit;
+    opacity: 0.8;
+}
+
+/* Animation for committee containers */
+@keyframes committeeSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.committee-container {
+    animation: committeeSlideIn 0.3s ease-out;
+}
+
+/* Event badge animation on creation */
+@keyframes eventSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.event-badge {
+    animation: eventSlideIn 0.2s ease-out;
+}
+
+/* Hierarchy visual indicators */
+.committee-container .committee-badge {
+    border-bottom: 2px solid rgba(255,255,255,0.3);
+}
+
+.events-container .event-badge:last-child {
+    margin-bottom: 0 !important;
 }
 
 .committee-badge[draggable="true"], .event-badge[draggable="true"] {
