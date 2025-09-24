@@ -350,6 +350,14 @@ def index():
     events = db.get_events()
     exception_dates = db.get_exception_dates()
     
+    # Debug logging
+    app.logger.info(f"Loaded {len(committees)} committees")
+    app.logger.info(f"Loaded {len(events)} events")
+    if committees:
+        app.logger.info(f"First committee: {committees[0]}")
+    if events:
+        app.logger.info(f"First event: {events[0]}")
+    
     # Get current month schedule
     today = date.today()
     monthly_schedule = []
@@ -1548,10 +1556,15 @@ def move_event():
             return jsonify({'success': False, 'message': 'נתונים חסרים'}), 400
         
         # Get event and target committee details for validation
+        app.logger.info(f"Looking for event_id: {event_id}, target_vaada_id: {target_vaada_id}")
         event = db.get_event_by_id(event_id)
         target_committee = db.get_vaada_by_id(target_vaada_id)
         
+        app.logger.info(f"Found event: {event}")
+        app.logger.info(f"Found target_committee: {target_committee}")
+        
         if not event or not target_committee:
+            app.logger.error(f"Event or committee not found. Event: {event}, Committee: {target_committee}")
             return jsonify({'success': False, 'message': 'אירוע או ועדה לא נמצאו'}), 404
         
         # Validate that event's route belongs to target committee's division

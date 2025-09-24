@@ -418,10 +418,16 @@ console.log('Events data loaded:', eventsData.length, eventsData);
 // Check if we have any committees with the right structure
 if (committeesData.length > 0) {
     console.log('Sample committee structure:', Object.keys(committeesData[0]));
+    console.log('First committee:', committeesData[0]);
 }
 if (eventsData.length > 0) {
     console.log('Sample event structure:', Object.keys(eventsData[0]));
+    console.log('First event:', eventsData[0]);
 }
+
+// Check if data is properly structured
+console.log('Committees with dates:', committeesData.filter(c => c.vaada_date));
+console.log('Events with vaadot_id:', eventsData.filter(e => e.vaadot_id));
 
 const hativotDataElement = document.getElementById('hativot-data');
 const hativotData = hativotDataElement ? JSON.parse(hativotDataElement.textContent) : [];
@@ -1103,6 +1109,17 @@ function initializeDragAndDrop() {
         cell.addEventListener('dragleave', handleDragLeave);
     });
     
+    // Also make committee containers drop zones
+    const committeeContainers = document.querySelectorAll('.committee-container');
+    console.log('Found committee containers:', committeeContainers.length); // Debug
+    
+    committeeContainers.forEach(container => {
+        container.addEventListener('dragover', handleContainerDragOver);
+        container.addEventListener('drop', handleContainerDrop);
+        container.addEventListener('dragenter', handleContainerDragEnter);
+        container.addEventListener('dragleave', handleContainerDragLeave);
+    });
+    
     // Initialize draggable items (committees and events)
     initializeDraggableItems();
 }
@@ -1281,6 +1298,59 @@ function handleDrop(e) {
     }
 }
 
+// Container drag handlers for events moving between committees
+function handleContainerDragOver(e) {
+    if (draggedData && draggedData.type === 'event') {
+        e.preventDefault();
+        e.currentTarget.classList.add('drag-over');
+    }
+}
+
+function handleContainerDragEnter(e) {
+    if (draggedData && draggedData.type === 'event') {
+        e.currentTarget.classList.add('drag-over');
+    }
+}
+
+function handleContainerDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function handleContainerDrop(e) {
+    e.preventDefault();
+    e.stopPropagation(); // Prevent event from bubbling to cell
+    e.currentTarget.classList.remove('drag-over');
+    
+    console.log('Container drop event triggered', { isDragging, draggedData }); // Debug
+    
+    if (!isDragging || !draggedData || draggedData.type !== 'event') {
+        console.log('Container drop cancelled - not dragging event'); // Debug
+        return;
+    }
+    
+    // Find the committee associated with this container
+    const containerCell = e.currentTarget.closest('.calendar-cell');
+    const targetDate = containerCell.getAttribute('data-date');
+    const targetCommittee = committeesData.find(c => c.vaada_date === targetDate);
+    
+    console.log('Container drop target:', { targetDate, targetCommittee }); // Debug
+    
+    if (!targetCommittee) {
+        console.log('Container drop cancelled - no target committee'); // Debug
+        showAlert('לא נמצאה ועדה ביעד', 'error');
+        return;
+    }
+    
+    if (targetCommittee.vaadot_id === draggedData.current_vaada_id) {
+        console.log('Container drop cancelled - same committee'); // Debug
+        showAlert('האירוע כבר נמצא בועדה זו', 'error');
+        return;
+    }
+    
+    console.log('Moving event to committee:', targetCommittee.vaadot_id); // Debug
+    moveEventToCommittee(draggedData.event_id, targetCommittee.vaadot_id);
+}
+
 function isValidDropZone(cell) {
     if (!draggedData) return false;
     
@@ -1436,6 +1506,42 @@ function moveEventToDate(eventId, targetDate) {
     .catch(error => {
         console.error('Error moving event:', error);
         showAlert('שגיאה בהעברת האירוע', 'error');
+    });
+}
+
+function moveEventToCommittee(eventId, targetVaadaId) {
+    console.log('Moving event to committee:', { eventId, targetVaadaId }); // Debug
+    console.log('Event ID type:', typeof eventId, 'Target Vaada ID type:', typeof targetVaadaId); // Debug
+    
+    fetch('/api/move_event', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            event_id: eventId,
+            target_vaada_id: targetVaadaId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+            // Update data in memory
+            updateEventData(eventId, targetVaadaId);
+            // Refresh calendar without losing current view
+            renderCalendar();
+            // Re-initialize drag and drop after rendering
+            setTimeout(() => {
+                initializeDragAndDrop();
+            }, 100);
+        } else {
+            showAlert(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error moving event to committee:', error);
+        showAlert('שגיאה בהעברת האירוע לועדה', 'error');
     });
 }
 
@@ -2130,6 +2236,31 @@ function showAlert(message, type) {
 .committee-container:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Drag & Drop styles for committee containers */
+.committee-container.drag-over {
+    background-color: rgba(40, 167, 69, 0.1) !important;
+    border-color: #28a745 !important;
+    border-width: 3px !important;
+    transform: scale(1.02);
+    box-shadow: 0 6px 16px rgba(40, 167, 69, 0.2);
+}
+
+.committee-container.drag-over::after {
+    content: '↓ שחרר כאן להעברת האירוע';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(40, 167, 69, 0.9);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    z-index: 10;
+    pointer-events: none;
 }
 
 .committee-container::before {

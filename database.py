@@ -532,7 +532,7 @@ class DatabaseManager:
         
         return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2],
                 'vaada_date': row[3], 'status': row[4], 'exception_date_id': row[5],
-                'notes': row[6], 'committee_name': row[8], 'hativa_name': row[9],
+                'notes': row[6], 'created_at': row[7], 'committee_name': row[8], 'hativa_name': row[9],
                 'exception_date': row[10], 'exception_description': row[11], 
                 'exception_type': row[12]} for row in rows]
     
@@ -769,7 +769,7 @@ class DatabaseManager:
         
         return [{'event_id': row[0], 'vaadot_id': row[1], 'maslul_id': row[2], 'name': row[3],
                 'event_type': row[4], 'expected_requests': row[5], 'scheduled_date': row[6],
-                'status': row[7], 'committee_name': row[9], 'vaada_date': row[10], 
+                'status': row[7], 'created_at': row[8], 'committee_name': row[9], 'vaada_date': row[10], 
                 'vaada_hativa_name': row[11], 'maslul_name': row[12], 'hativa_name': row[13]} for row in rows]
     
     def update_event(self, event_id: int, vaadot_id: int, maslul_id: int, name: str, event_type: str, expected_requests: int = 0) -> bool:
@@ -1335,7 +1335,8 @@ class DatabaseManager:
     def get_event_by_id(self, event_id: int) -> Optional[Dict]:
         """Get event by ID"""
         try:
-            cursor = self.conn.cursor()
+            conn = self.get_connection()
+            cursor = conn.cursor()
             cursor.execute("""
                 SELECT e.*, m.name as maslul_name, m.hativa_id,
                        v.vaada_date, ct.name as committee_name, h.name as hativa_name
@@ -1348,29 +1349,37 @@ class DatabaseManager:
             """, (event_id,))
             
             row = cursor.fetchone()
+            conn.close()
+            
             if row:
                 return {
                     'event_id': row[0],
                     'vaadot_id': row[1],
                     'maslul_id': row[2],
-                    'event_type': row[3],
-                    'expected_requests': row[4],
-                    'created_at': row[5],
-                    'maslul_name': row[6],
-                    'hativa_id': row[7],
-                    'vaada_date': row[8],
-                    'committee_name': row[9],
-                    'hativa_name': row[10]
+                    'name': row[3],
+                    'event_type': row[4],
+                    'expected_requests': row[5],
+                    'scheduled_date': row[6],
+                    'status': row[7],
+                    'created_at': row[8],
+                    'maslul_name': row[9],
+                    'hativa_id': row[10],
+                    'vaada_date': row[11],
+                    'committee_name': row[12],
+                    'hativa_name': row[13]
                 }
             return None
         except Exception as e:
             print(f"Error getting event by ID: {e}")
+            if 'conn' in locals():
+                conn.close()
             return None
     
     def get_vaada_by_id(self, vaada_id: int) -> Optional[Dict]:
         """Get committee meeting by ID"""
         try:
-            cursor = self.conn.cursor()
+            conn = self.get_connection()
+            cursor = conn.cursor()
             cursor.execute("""
                 SELECT v.*, ct.name as committee_name, h.name as hativa_name
                 FROM vaadot v
@@ -1380,6 +1389,8 @@ class DatabaseManager:
             """, (vaada_id,))
             
             row = cursor.fetchone()
+            conn.close()
+            
             if row:
                 return {
                     'vaadot_id': row[0],
@@ -1387,20 +1398,24 @@ class DatabaseManager:
                     'hativa_id': row[2],
                     'vaada_date': row[3],
                     'status': row[4],
-                    'notes': row[5],
-                    'exception_date_id': row[6],
-                    'committee_name': row[7],
-                    'hativa_name': row[8]
+                    'exception_date_id': row[5],
+                    'notes': row[6],
+                    'created_at': row[7],
+                    'committee_name': row[8],
+                    'hativa_name': row[9]
                 }
             return None
         except Exception as e:
             print(f"Error getting vaada by ID: {e}")
+            if 'conn' in locals():
+                conn.close()
             return None
     
     def get_maslul_by_id(self, maslul_id: int) -> Optional[Dict]:
         """Get route by ID"""
         try:
-            cursor = self.conn.cursor()
+            conn = self.get_connection()
+            cursor = conn.cursor()
             cursor.execute("""
                 SELECT m.*, h.name as hativa_name
                 FROM maslulim m
@@ -1409,6 +1424,8 @@ class DatabaseManager:
             """, (maslul_id,))
             
             row = cursor.fetchone()
+            conn.close()
+            
             if row:
                 return {
                     'maslul_id': row[0],
@@ -1423,22 +1440,29 @@ class DatabaseManager:
             return None
         except Exception as e:
             print(f"Error getting maslul by ID: {e}")
+            if 'conn' in locals():
+                conn.close()
             return None
     
     def update_event_vaada(self, event_id: int, new_vaada_id: int) -> bool:
         """Update event's committee meeting"""
         try:
-            cursor = self.conn.cursor()
+            conn = self.get_connection()
+            cursor = conn.cursor()
             cursor.execute("""
                 UPDATE events 
                 SET vaadot_id = ?
                 WHERE event_id = ?
             """, (new_vaada_id, event_id))
             
-            self.conn.commit()
-            return cursor.rowcount > 0
+            success = cursor.rowcount > 0
+            conn.commit()
+            conn.close()
+            return success
         except Exception as e:
             print(f"Error updating event vaada: {e}")
-            self.conn.rollback()
+            if 'conn' in locals():
+                conn.rollback()
+                conn.close()
             return False
     
