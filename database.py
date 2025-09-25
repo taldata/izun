@@ -205,7 +205,8 @@ class DatabaseManager:
                 'events': [
                     ('call_deadline_date', 'DATE'),
                     ('intake_deadline_date', 'DATE'),
-                    ('review_deadline_date', 'DATE')
+                    ('review_deadline_date', 'DATE'),
+                    ('response_deadline_date', 'DATE')
                 ]
             }
             
@@ -812,10 +813,11 @@ class DatabaseManager:
         
         cursor.execute('''
             INSERT INTO events (vaadot_id, maslul_id, name, event_type, expected_requests, 
-                              call_deadline_date, intake_deadline_date, review_deadline_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                              call_deadline_date, intake_deadline_date, review_deadline_date, response_deadline_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (vaadot_id, maslul_id, name, event_type, expected_requests,
-              stage_dates['call_deadline_date'], stage_dates['intake_deadline_date'], stage_dates['review_deadline_date']))
+              stage_dates['call_deadline_date'], stage_dates['intake_deadline_date'], stage_dates['review_deadline_date'],
+              stage_dates['response_deadline_date']))
         event_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -826,31 +828,40 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         
+        base_query = '''
+            SELECT 
+                e.event_id,
+                e.vaadot_id,
+                e.maslul_id,
+                e.name,
+                e.event_type,
+                e.expected_requests,
+                e.scheduled_date,
+                e.status,
+                e.created_at,
+                e.call_deadline_date,
+                e.intake_deadline_date,
+                e.review_deadline_date,
+                e.response_deadline_date,
+                ct.name as committee_name,
+                v.vaada_date,
+                vh.name as vaada_hativa_name,
+                m.name as maslul_name,
+                h.name as hativa_name,
+                h.hativa_id,
+                ct.committee_type_id
+            FROM events e
+            JOIN vaadot v ON e.vaadot_id = v.vaadot_id
+            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+            JOIN hativot vh ON v.hativa_id = vh.hativa_id
+            JOIN maslulim m ON e.maslul_id = m.maslul_id
+            JOIN hativot h ON m.hativa_id = h.hativa_id
+        '''
+
         if vaadot_id:
-            cursor.execute('''
-                SELECT e.*, ct.name as committee_name, v.vaada_date, vh.name as vaada_hativa_name, 
-                       m.name as maslul_name, h.name as hativa_name, h.hativa_id, ct.committee_type_id
-                FROM events e
-                JOIN vaadot v ON e.vaadot_id = v.vaadot_id
-                JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-                JOIN hativot vh ON v.hativa_id = vh.hativa_id
-                JOIN maslulim m ON e.maslul_id = m.maslul_id
-                JOIN hativot h ON m.hativa_id = h.hativa_id
-                WHERE e.vaadot_id = ?
-                ORDER BY e.created_at DESC
-            ''', (vaadot_id,))
+            cursor.execute(base_query + ' WHERE e.vaadot_id = ? ORDER BY e.created_at DESC', (vaadot_id,))
         else:
-            cursor.execute('''
-                SELECT e.*, ct.name as committee_name, v.vaada_date, vh.name as vaada_hativa_name,
-                       m.name as maslul_name, h.name as hativa_name, h.hativa_id, ct.committee_type_id
-                FROM events e
-                JOIN vaadot v ON e.vaadot_id = v.vaadot_id
-                JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-                JOIN hativot vh ON v.hativa_id = vh.hativa_id
-                JOIN maslulim m ON e.maslul_id = m.maslul_id
-                JOIN hativot h ON m.hativa_id = h.hativa_id
-                ORDER BY e.created_at DESC
-            ''')
+            cursor.execute(base_query + ' ORDER BY e.created_at DESC')
         
         rows = cursor.fetchall()
         conn.close()
@@ -859,10 +870,10 @@ class DatabaseManager:
                 'event_type': row[4], 'expected_requests': row[5], 'scheduled_date': row[6],
                 'status': row[7], 'created_at': row[8], 
                 'call_deadline_date': row[9], 'intake_deadline_date': row[10], 'review_deadline_date': row[11],
-                'committee_name': row[12], 'vaada_date': row[13], 
-                'vaada_hativa_name': row[14], 'maslul_name': row[15], 'hativa_name': row[16],
-                'hativa_id': row[17] if len(row) > 17 else None,
-                'committee_type_id': row[18] if len(row) > 18 else None} for row in rows]
+                'response_deadline_date': row[12], 'committee_name': row[13], 'vaada_date': row[14], 
+                'vaada_hativa_name': row[15], 'maslul_name': row[16], 'hativa_name': row[17],
+                'hativa_id': row[18] if len(row) > 18 else None,
+                'committee_type_id': row[19] if len(row) > 19 else None} for row in rows]
     
     def update_event(self, event_id: int, vaadot_id: int, maslul_id: int, name: str, event_type: str, expected_requests: int = 0) -> bool:
         """Update an existing event"""
@@ -900,10 +911,11 @@ class DatabaseManager:
         cursor.execute('''
             UPDATE events 
             SET vaadot_id = ?, maslul_id = ?, name = ?, event_type = ?, expected_requests = ?,
-                call_deadline_date = ?, intake_deadline_date = ?, review_deadline_date = ?
+                call_deadline_date = ?, intake_deadline_date = ?, review_deadline_date = ?, response_deadline_date = ?
             WHERE event_id = ?
         ''', (vaadot_id, maslul_id, name, event_type, expected_requests,
-              stage_dates['call_deadline_date'], stage_dates['intake_deadline_date'], stage_dates['review_deadline_date'], event_id))
+              stage_dates['call_deadline_date'], stage_dates['intake_deadline_date'], stage_dates['review_deadline_date'],
+              stage_dates['response_deadline_date'], event_id))
         
         success = cursor.rowcount > 0
         conn.commit()
@@ -1422,7 +1434,9 @@ class DatabaseManager:
             committee_date = datetime.strptime(committee_date, '%Y-%m-%d').date()
         
         # חישוב התאריכים אחורה מתאריך הועדה
-        # שלב ד: מהועדה להגשת תשובה (לא רלוונטי לחישוב התאריכים הנגזרים)
+        
+        # תאריך הגשת תשובת ועדה = תאריך ועדה + שלב ד
+        response_deadline = self.add_business_days(committee_date, stage_d_days)
         
         # תאריך סיום שלב בדיקה = תאריך ועדה - שלב ג
         review_deadline = self.subtract_business_days(committee_date, stage_c_days)
@@ -1437,6 +1451,7 @@ class DatabaseManager:
             'call_deadline_date': call_deadline,      # תאריך סיום קול קורא
             'intake_deadline_date': intake_deadline,  # תאריך סיום קליטה
             'review_deadline_date': review_deadline,  # תאריך סיום בדיקה
+            'response_deadline_date': response_deadline,  # תאריך הגשת תשובת ועדה
             'committee_date': committee_date          # תאריך הועדה
         }
     

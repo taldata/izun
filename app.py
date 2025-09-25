@@ -1652,7 +1652,7 @@ def events_table():
                     except ValueError:
                         continue
 
-            for date_field in ['call_deadline_date', 'intake_deadline_date', 'review_deadline_date', 'vaada_date']:
+            for date_field in ['call_deadline_date', 'intake_deadline_date', 'review_deadline_date', 'response_deadline_date', 'vaada_date']:
                 value = event.get(date_field)
                 if isinstance(value, str):
                     for fmt in ('%Y-%m-%d', '%Y-%m-%d %H:%M:%S'):

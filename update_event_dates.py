@@ -31,7 +31,7 @@ def update_event_dates():
             SELECT e.event_id, e.name as event_name, v.vaada_date,
                    m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days,
                    m.name as maslul_name, ct.name as committee_name,
-                   e.call_deadline_date, e.intake_deadline_date, e.review_deadline_date
+                   e.call_deadline_date, e.intake_deadline_date, e.review_deadline_date, e.response_deadline_date
             FROM events e
             JOIN vaadot v ON e.vaadot_id = v.vaadot_id
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
@@ -50,10 +50,13 @@ def update_event_dates():
         updated_count = 0
         
         for event in events:
-            event_id, event_name, vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days, maslul_name, committee_name, current_call_date, current_intake_date, current_review_date = event
+            (event_id, event_name, vaada_date,
+             stage_a_days, stage_b_days, stage_c_days, stage_d_days,
+             maslul_name, committee_name,
+             current_call_date, current_intake_date, current_review_date, current_response_date) = event
             
             # בדוק אם התאריכים הנגזרים ריקים או None
-            needs_update = (current_call_date is None or current_intake_date is None or current_review_date is None)
+            needs_update = (current_call_date is None or current_intake_date is None or current_review_date is None or current_response_date is None)
             
             if needs_update or True:  # עדכן תמיד כדי לוודא שהתאריכים נכונים
                 # חשב את התאריכים הנגזרים
@@ -62,10 +65,10 @@ def update_event_dates():
                 # עדכן את האירוע
                 cursor.execute('''
                     UPDATE events 
-                    SET call_deadline_date = ?, intake_deadline_date = ?, review_deadline_date = ?
+                    SET call_deadline_date = ?, intake_deadline_date = ?, review_deadline_date = ?, response_deadline_date = ?
                     WHERE event_id = ?
                 ''', (stage_dates['call_deadline_date'], stage_dates['intake_deadline_date'], 
-                      stage_dates['review_deadline_date'], event_id))
+                      stage_dates['review_deadline_date'], stage_dates['response_deadline_date'], event_id))
                 
                 updated_count += 1
                 
@@ -76,6 +79,7 @@ def update_event_dates():
                 print(f"   תאריך סיום קול קורא: {stage_dates['call_deadline_date']}")
                 print(f"   תאריך סיום קליטה: {stage_dates['intake_deadline_date']}")
                 print(f"   תאריך סיום בדיקה: {stage_dates['review_deadline_date']}")
+                print(f"   תאריך תשובת ועדה: {stage_dates['response_deadline_date']}")
                 print(f"   שלבים: {stage_a_days}+{stage_b_days}+{stage_c_days}+{stage_d_days} ימים")
                 print()
             else:

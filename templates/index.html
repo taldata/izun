@@ -329,7 +329,7 @@
                             <i class="bi bi-calendar-range me-2"></i>תאריכי דדליין נגזרים
                         </h6>
                         <div class="row g-2">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="card border-warning">
                                     <div class="card-body p-2 text-center">
                                         <small class="text-muted d-block">סיום קול קורא</small>
@@ -337,7 +337,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="card border-info">
                                     <div class="card-body p-2 text-center">
                                         <small class="text-muted d-block">סיום קליטה</small>
@@ -345,7 +345,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="card border-success">
                                     <div class="card-body p-2 text-center">
                                         <small class="text-muted d-block">סיום בדיקה</small>
@@ -353,9 +353,17 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="col-md-3">
+                                <div class="card border-primary">
+                                    <div class="card-body p-2 text-center">
+                                        <small class="text-muted d-block">הגשת תשובת ועדה</small>
+                                        <strong class="text-primary" id="responseDeadlineDate">-</strong>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="text-muted mt-2">
-                            <small><i class="bi bi-info-circle me-1"></i>התאריכים מחושבים אוטומטית בהתבסס על תאריך הועדה ושלבי ה-SLA של המסלול</small>
+                            <small><i class="bi bi-info-circle me-1"></i>התאריכים מחושבים אוטומטית בהתבסס על תאריך הועדה ושלבי ה-SLA של המסלול, כולל הגשת תשובת ועדה</small>
                         </div>
                     </div>
                 </div>
@@ -1097,11 +1105,12 @@ function editEvent(event) {
     document.getElementById('edit_expected_requests').value = event.expected_requests;
     
     // הצג תאריכים נגזרים אם קיימים
-    if (event.call_deadline_date || event.intake_deadline_date || event.review_deadline_date) {
+    if (event.call_deadline_date || event.intake_deadline_date || event.review_deadline_date || event.response_deadline_date) {
         document.getElementById('derivedDatesSection').style.display = 'block';
         document.getElementById('callDeadlineDate').textContent = event.call_deadline_date || '-';
         document.getElementById('intakeDeadlineDate').textContent = event.intake_deadline_date || '-';
         document.getElementById('reviewDeadlineDate').textContent = event.review_deadline_date || '-';
+        document.getElementById('responseDeadlineDate').textContent = event.response_deadline_date || '-';
     } else {
         document.getElementById('derivedDatesSection').style.display = 'none';
     }
