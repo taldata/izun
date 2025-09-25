@@ -766,6 +766,7 @@ def add_event():
     name = request.form.get('name', '').strip()
     event_type = request.form.get('event_type')
     expected_requests = request.form.get('expected_requests', '0')
+    call_publication_date = request.form.get('call_publication_date')
     
     if not all([vaadot_id, maslul_id, name, event_type]):
         flash('כל השדות הם שדות חובה', 'error')
@@ -801,11 +802,11 @@ def add_event():
             'maslul_id': int(maslul_id),
             'name': name,
             'event_type': event_type,
-            'expected_requests': expected_requests
+            'expected_requests': expected_requests,
+            'call_publication_date': call_publication_date
         }
         
-        
-        event_id = db.add_event(int(vaadot_id), int(maslul_id), name, event_type, expected_requests)
+        event_id = db.add_event(int(vaadot_id), int(maslul_id), name, event_type, expected_requests, call_publication_date)
         flash(f'אירוע "{name}" נוצר בהצלחה', 'success')
         
     except Exception as e:
@@ -821,7 +822,8 @@ def edit_event(event_id):
     name = request.form.get('name', '').strip()
     event_type = request.form.get('event_type')
     expected_requests = request.form.get('expected_requests', '0')
-    
+    call_publication_date = request.form.get('call_publication_date')
+
     if not all([vaadot_id, maslul_id, name, event_type]):
         flash('כל השדות הם שדות חובה', 'error')
         return redirect(url_for('index'))
@@ -850,7 +852,7 @@ def edit_event(event_id):
             flash(f'שגיאה: המסלול "{maslul["name"]}" מחטיבת "{maslul["hativa_name"]}" אינו יכול להיות משויך לועדה מחטיבת "{vaada["hativa_name"]}"', 'error')
             return redirect(url_for('index'))
         
-        success = db.update_event(event_id, int(vaadot_id), int(maslul_id), name, event_type, expected_requests)
+        success = db.update_event(event_id, int(vaadot_id), int(maslul_id), name, event_type, expected_requests, call_publication_date)
         if success:
             flash(f'אירוע "{name}" עודכן בהצלחה', 'success')
         else:

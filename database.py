@@ -91,6 +91,7 @@ class DatabaseManager:
                 name TEXT NOT NULL,
                 event_type TEXT NOT NULL CHECK (event_type IN ('kokok', 'shotef')),
                 expected_requests INTEGER DEFAULT 0,
+                call_publication_date DATE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (vaadot_id) REFERENCES vaadot (vaadot_id) ON DELETE CASCADE,
                 FOREIGN KEY (maslul_id) REFERENCES maslulim (maslul_id) ON DELETE CASCADE
@@ -203,6 +204,7 @@ class DatabaseManager:
                 ],
                 'committee_types': [('is_active', 'INTEGER DEFAULT 1')],
                 'events': [
+                    ('call_publication_date', 'DATE'),
                     ('call_deadline_date', 'DATE'),
                     ('intake_deadline_date', 'DATE'),
                     ('review_deadline_date', 'DATE'),
@@ -778,10 +780,18 @@ class DatabaseManager:
                 'exception_type': row[14]} for row in rows]
     
     # Events operations
-    def add_event(self, vaadot_id: int, maslul_id: int, name: str, event_type: str, expected_requests: int = 0) -> int:
+    def add_event(self, vaadot_id: int, maslul_id: int, name: str, event_type: str,
+                  expected_requests: int = 0, call_publication_date: Optional[date] = None) -> int:
         """Add a new event"""
         conn = self.get_connection()
         cursor = conn.cursor()
+        
+        if call_publication_date in ("", None):
+            call_publication_date = None
+        elif isinstance(call_publication_date, str):
+            call_publication_date = datetime.strptime(call_publication_date, '%Y-%m-%d').date()
+        elif isinstance(call_publication_date, datetime):
+            call_publication_date = call_publication_date.date()
         
         # Validate that the route belongs to the same division as the committee and get stage data
         cursor.execute('''
@@ -804,6 +814,13 @@ class DatabaseManager:
         
         vaada_hativa_id, maslul_hativa_id, vaada_hativa_name, maslul_hativa_name, committee_name, maslul_name, vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days = result
         
+        if call_publication_date in ("", None):
+            call_publication_date = None
+        elif isinstance(call_publication_date, str):
+            call_publication_date = datetime.strptime(call_publication_date, '%Y-%m-%d').date()
+        elif isinstance(call_publication_date, datetime):
+            call_publication_date = call_publication_date.date()
+        
         if vaada_hativa_id != maslul_hativa_id:
             conn.close()
             raise ValueError(f'המסלול "{maslul_name}" מחטיבת "{maslul_hativa_name}" אינו יכול להיות משויך לועדה "{committee_name}" מחטיבת "{vaada_hativa_name}"')
@@ -813,11 +830,11 @@ class DatabaseManager:
         
         cursor.execute('''
             INSERT INTO events (vaadot_id, maslul_id, name, event_type, expected_requests, 
-                              call_deadline_date, intake_deadline_date, review_deadline_date, response_deadline_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              call_publication_date, call_deadline_date, intake_deadline_date, review_deadline_date, response_deadline_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (vaadot_id, maslul_id, name, event_type, expected_requests,
-              stage_dates['call_deadline_date'], stage_dates['intake_deadline_date'], stage_dates['review_deadline_date'],
-              stage_dates['response_deadline_date']))
+              call_publication_date, stage_dates['call_deadline_date'], stage_dates['intake_deadline_date'],
+              stage_dates['review_deadline_date'], stage_dates['response_deadline_date']))
         event_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -836,6 +853,7 @@ class DatabaseManager:
                 e.name,
                 e.event_type,
                 e.expected_requests,
+                e.call_publication_date,
                 e.scheduled_date,
                 e.status,
                 e.created_at,
@@ -867,15 +885,16 @@ class DatabaseManager:
         conn.close()
         
         return [{'event_id': row[0], 'vaadot_id': row[1], 'maslul_id': row[2], 'name': row[3],
-                'event_type': row[4], 'expected_requests': row[5], 'scheduled_date': row[6],
-                'status': row[7], 'created_at': row[8], 
-                'call_deadline_date': row[9], 'intake_deadline_date': row[10], 'review_deadline_date': row[11],
-                'response_deadline_date': row[12], 'committee_name': row[13], 'vaada_date': row[14], 
-                'vaada_hativa_name': row[15], 'maslul_name': row[16], 'hativa_name': row[17],
-                'hativa_id': row[18] if len(row) > 18 else None,
-                'committee_type_id': row[19] if len(row) > 19 else None} for row in rows]
+                'event_type': row[4], 'expected_requests': row[5], 'call_publication_date': row[6],
+                'scheduled_date': row[7], 'status': row[8], 'created_at': row[9], 
+                'call_deadline_date': row[10], 'intake_deadline_date': row[11], 'review_deadline_date': row[12],
+                'response_deadline_date': row[13], 'committee_name': row[14], 'vaada_date': row[15], 
+                'vaada_hativa_name': row[16], 'maslul_name': row[17], 'hativa_name': row[18],
+                'hativa_id': row[19] if len(row) > 19 else None,
+                'committee_type_id': row[20] if len(row) > 20 else None} for row in rows]
     
-    def update_event(self, event_id: int, vaadot_id: int, maslul_id: int, name: str, event_type: str, expected_requests: int = 0) -> bool:
+    def update_event(self, event_id: int, vaadot_id: int, maslul_id: int, name: str, event_type: str,
+                     expected_requests: int = 0, call_publication_date: Optional[date] = None) -> bool:
         """Update an existing event"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -901,6 +920,13 @@ class DatabaseManager:
         
         vaada_hativa_id, maslul_hativa_id, vaada_hativa_name, maslul_hativa_name, committee_name, maslul_name, vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days = result
         
+        if call_publication_date in ("", None):
+            call_publication_date = None
+        elif isinstance(call_publication_date, str):
+            call_publication_date = datetime.strptime(call_publication_date, '%Y-%m-%d').date()
+        elif isinstance(call_publication_date, datetime):
+            call_publication_date = call_publication_date.date()
+        
         if vaada_hativa_id != maslul_hativa_id:
             conn.close()
             raise ValueError(f'המסלול "{maslul_name}" מחטיבת "{maslul_hativa_name}" אינו יכול להיות משויך לועדה "{committee_name}" מחטיבת "{vaada_hativa_name}"')
@@ -911,11 +937,12 @@ class DatabaseManager:
         cursor.execute('''
             UPDATE events 
             SET vaadot_id = ?, maslul_id = ?, name = ?, event_type = ?, expected_requests = ?,
-                call_deadline_date = ?, intake_deadline_date = ?, review_deadline_date = ?, response_deadline_date = ?
+                call_publication_date = ?, call_deadline_date = ?, intake_deadline_date = ?,
+                review_deadline_date = ?, response_deadline_date = ?
             WHERE event_id = ?
         ''', (vaadot_id, maslul_id, name, event_type, expected_requests,
-              stage_dates['call_deadline_date'], stage_dates['intake_deadline_date'], stage_dates['review_deadline_date'],
-              stage_dates['response_deadline_date'], event_id))
+              call_publication_date, stage_dates['call_deadline_date'], stage_dates['intake_deadline_date'],
+              stage_dates['review_deadline_date'], stage_dates['response_deadline_date'], event_id))
         
         success = cursor.rowcount > 0
         conn.commit()
