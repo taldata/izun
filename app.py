@@ -1632,6 +1632,54 @@ def move_event():
         app.logger.error(f"Error moving event: {str(e)}")
         return jsonify({'success': False, 'message': f'שגיאה: {str(e)}'}), 500
 
+@app.route('/events_table')
+@login_required
+def events_table():
+    """Events table view with advanced filtering"""
+    try:
+        # Get all events with extended information
+        events = db.get_events()
+
+        # Normalize date fields for consistent formatting in the template
+        from datetime import datetime
+        for event in events:
+            created_at = event.get('created_at')
+            if isinstance(created_at, str):
+                for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d'):
+                    try:
+                        event['created_at'] = datetime.strptime(created_at, fmt)
+                        break
+                    except ValueError:
+                        continue
+
+            for date_field in ['call_deadline_date', 'intake_deadline_date', 'review_deadline_date', 'vaada_date']:
+                value = event.get(date_field)
+                if isinstance(value, str):
+                    for fmt in ('%Y-%m-%d', '%Y-%m-%d %H:%M:%S'):
+                        try:
+                            event[date_field] = datetime.strptime(value, fmt).date()
+                            break
+                        except ValueError:
+                            continue
+
+        # Get filter options
+        hativot = db.get_hativot()
+        maslulim = db.get_maslulim()
+        committee_types = db.get_committee_types()
+
+        # Get unique event types
+        event_types = list(set([event.get('event_type', '') for event in events if event.get('event_type')]))
+
+        return render_template('events_table.html', 
+                             events=events,
+                             hativot=hativot,
+                             maslulim=maslulim,
+                             committee_types=committee_types,
+                             event_types=event_types)
+    except Exception as e:
+        flash(f'שגיאה בטעינת נתוני האירועים: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
 if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5001))

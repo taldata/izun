@@ -1,0 +1,492 @@
+{% extends "base.html" %}
+
+{% block title %}טבלת אירועים - איזון עומסים{% endblock %}
+
+{% block extra_head %}
+<style>
+    .events-table-container {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    
+    .filter-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+    }
+    
+    .filter-row {
+        margin-bottom: 1rem;
+    }
+    
+    .filter-row:last-child {
+        margin-bottom: 0;
+    }
+    
+    .events-table {
+        font-size: 0.9rem;
+    }
+    
+    .events-table th {
+        background-color: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .events-table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .badge-event-type {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    
+    .badge-kokok {
+        background-color: #dc3545;
+    }
+    
+    .badge-shotef {
+        background-color: #28a745;
+    }
+    
+    .date-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        white-space: nowrap;
+    }
+    
+    .date-call {
+        background-color: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeaa7;
+    }
+    
+    .date-intake {
+        background-color: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+    }
+    
+    .date-review {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+    
+    .date-committee {
+        background-color: #e2e3e5;
+        color: #383d41;
+        border: 1px solid #d6d8db;
+    }
+    
+    .table-responsive {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    
+    .stats-summary {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .clear-filters-btn {
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+    }
+    
+    .clear-filters-btn:hover {
+        background: rgba(255,255,255,0.3);
+        border: 1px solid rgba(255,255,255,0.5);
+        color: white;
+    }
+    
+    .export-btn {
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+    }
+    
+    .export-btn:hover {
+        background: rgba(255,255,255,0.3);
+        border: 1px solid rgba(255,255,255,0.5);
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="events-table-container">
+                <!-- Filter Section -->
+                <div class="filter-section">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3 class="mb-0">
+                            <i class="bi bi-table me-2"></i>טבלת אירועים ותאריכים
+                        </h3>
+                        <div class="d-flex gap-2">
+                            <button class="btn clear-filters-btn btn-sm" onclick="clearAllFilters()">
+                                <i class="bi bi-x-circle me-1"></i>נקה פילטרים
+                            </button>
+                            <button class="btn export-btn btn-sm" onclick="exportToCSV()">
+                                <i class="bi bi-download me-1"></i>ייצא ל-CSV
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Filters Row 1 -->
+                    <div class="filter-row">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">חטיבה</label>
+                                <select class="form-select form-select-sm" id="filterHativa" onchange="filterTable()">
+                                    <option value="">כל החטיבות</option>
+                                    {% for hativa in hativot %}
+                                        <option value="{{ hativa.hativa_id }}">{{ hativa.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">מסלול</label>
+                                <select class="form-select form-select-sm" id="filterMaslul" onchange="filterTable()">
+                                    <option value="">כל המסלולים</option>
+                                    {% for maslul in maslulim %}
+                                        <option value="{{ maslul.maslul_id }}" data-hativa="{{ maslul.hativa_id }}">{{ maslul.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">סוג ועדה</label>
+                                <select class="form-select form-select-sm" id="filterCommitteeType" onchange="filterTable()">
+                                    <option value="">כל סוגי הועדות</option>
+                                    {% for committee_type in committee_types %}
+                                        <option value="{{ committee_type.committee_type_id }}">{{ committee_type.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">סוג אירוע</label>
+                                <select class="form-select form-select-sm" id="filterEventType" onchange="filterTable()">
+                                    <option value="">כל סוגי האירועים</option>
+                                    {% for event_type in event_types %}
+                                        <option value="{{ event_type }}">
+                                            {% if event_type == 'kokok' %}קו"ק{% elif event_type == 'shotef' %}שוטף{% else %}{{ event_type }}{% endif %}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Filters Row 2 -->
+                    <div class="filter-row">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">תאריך ועדה מ-</label>
+                                <input type="date" class="form-control form-control-sm" id="filterDateFrom" onchange="filterTable()">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">תאריך ועדה עד</label>
+                                <input type="date" class="form-control form-control-sm" id="filterDateTo" onchange="filterTable()">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">חיפוש טקסט</label>
+                                <input type="text" class="form-control form-control-sm" id="filterText" placeholder="שם אירוע..." onkeyup="filterTable()">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">מספר בקשות מ-</label>
+                                <input type="number" class="form-control form-control-sm" id="filterMinRequests" placeholder="0" onchange="filterTable()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Table Section -->
+                <div class="table-responsive">
+                    <table class="table table-hover events-table mb-0" id="eventsTable">
+                        <thead>
+                            <tr>
+                                <th>שם האירוע</th>
+                                <th>סוג</th>
+                                <th>חטיבה</th>
+                                <th>מסלול</th>
+                                <th>ועדה</th>
+                                <th>תאריך ועדה</th>
+                                <th>סיום קול קורא</th>
+                                <th>סיום קליטה</th>
+                                <th>סיום בדיקה</th>
+                                <th>בקשות צפויות</th>
+                                <th>נוצר</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for event in events %}
+                            <tr data-event-id="{{ event.event_id }}"
+                                data-hativa-id="{{ event.get('hativa_id', '') }}"
+                                data-maslul-id="{{ event.maslul_id }}"
+                                data-committee-type="{{ event.get('committee_type_id', '') }}"
+                                data-event-type="{{ event.event_type or '' }}"
+                                data-committee-date="{{ event.vaada_date or '' }}"
+                                data-expected-requests="{{ event.expected_requests or 0 }}"
+                                data-event-name="{{ event.name.lower() }}">
+                                <td>
+                                    <strong>{{ event.name }}</strong>
+                                </td>
+                                <td>
+                                    {% if event.event_type %}
+                                        <span class="badge badge-event-type {% if event.event_type == 'kokok' %}badge-kokok{% elif event.event_type == 'shotef' %}badge-shotef{% endif %}">
+                                            {% if event.event_type == 'kokok' %}קו"ק{% elif event.event_type == 'shotef' %}שוטף{% else %}{{ event.event_type }}{% endif %}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ event.hativa_name or '-' }}</td>
+                                <td>{{ event.maslul_name or '-' }}</td>
+                                <td>{{ event.committee_name or '-' }}</td>
+                                <td>
+                                    {% if event.vaada_date %}
+                                        <span class="date-badge date-committee">{{ event.vaada_date }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if event.call_deadline_date %}
+                                        <span class="date-badge date-call">{{ event.call_deadline_date }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if event.intake_deadline_date %}
+                                        <span class="date-badge date-intake">{{ event.intake_deadline_date }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if event.review_deadline_date %}
+                                        <span class="date-badge date-review">{{ event.review_deadline_date }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ event.expected_requests or 0 }}</span>
+                                </td>
+                                <td>
+                                    <small class="text-muted">{{ event.created_at.strftime('%d/%m/%Y') if event.created_at else '-' }}</small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Stats Summary -->
+                <div class="stats-summary">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <strong id="totalEvents">{{ events|length }}</strong>
+                            <div class="text-muted small">סה"כ אירועים</div>
+                        </div>
+                        <div class="col-md-3">
+                            <strong id="visibleEvents">{{ events|length }}</strong>
+                            <div class="text-muted small">אירועים מוצגים</div>
+                        </div>
+                        <div class="col-md-3">
+                            <strong id="totalRequests">
+                                {% set total_requests = events|sum(attribute='expected_requests') %}
+                                {{ total_requests or 0 }}
+                            </strong>
+                            <div class="text-muted small">סה"כ בקשות צפויות</div>
+                        </div>
+                        <div class="col-md-3">
+                            <strong id="avgRequests">
+                                {% if events|length > 0 %}
+                                    {{ "%.1f"|format((events|sum(attribute='expected_requests') or 0) / events|length) }}
+                                {% else %}
+                                    0
+                                {% endif %}
+                            </strong>
+                            <div class="text-muted small">ממוצע בקשות לאירוע</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function filterTable() {
+    const hativaFilter = document.getElementById('filterHativa').value;
+    const maslulFilter = document.getElementById('filterMaslul').value;
+    const committeeTypeFilter = document.getElementById('filterCommitteeType').value;
+    const eventTypeFilter = document.getElementById('filterEventType').value;
+    const dateFromFilter = document.getElementById('filterDateFrom').value;
+    const dateToFilter = document.getElementById('filterDateTo').value;
+    const textFilter = document.getElementById('filterText').value.toLowerCase();
+    const minRequestsFilter = document.getElementById('filterMinRequests').value;
+    
+    const rows = document.querySelectorAll('#eventsTable tbody tr');
+    let visibleCount = 0;
+    let visibleRequests = 0;
+    
+    rows.forEach(row => {
+        let show = true;
+        
+        // Filter by hativa
+        if (hativaFilter && row.dataset.hativaId !== hativaFilter) {
+            show = false;
+        }
+        
+        // Filter by maslul
+        if (maslulFilter && row.dataset.maslulId !== maslulFilter) {
+            show = false;
+        }
+        
+        // Filter by committee type
+        if (committeeTypeFilter && row.dataset.committeeType !== committeeTypeFilter) {
+            show = false;
+        }
+        
+        // Filter by event type
+        if (eventTypeFilter && row.dataset.eventType !== eventTypeFilter) {
+            show = false;
+        }
+        
+        // Filter by date range
+        if (dateFromFilter || dateToFilter) {
+            const eventDate = row.dataset.committeeDate;
+            if (eventDate) {
+                if (dateFromFilter && eventDate < dateFromFilter) {
+                    show = false;
+                }
+                if (dateToFilter && eventDate > dateToFilter) {
+                    show = false;
+                }
+            } else if (dateFromFilter || dateToFilter) {
+                show = false;
+            }
+        }
+        
+        // Filter by text
+        if (textFilter && !row.dataset.eventName.includes(textFilter)) {
+            show = false;
+        }
+        
+        // Filter by minimum requests
+        if (minRequestsFilter) {
+            const requests = parseInt(row.dataset.expectedRequests) || 0;
+            if (requests < parseInt(minRequestsFilter)) {
+                show = false;
+            }
+        }
+        
+        // Show/hide row
+        row.style.display = show ? '' : 'none';
+        
+        if (show) {
+            visibleCount++;
+            visibleRequests += parseInt(row.dataset.expectedRequests) || 0;
+        }
+    });
+    
+    // Update stats
+    document.getElementById('visibleEvents').textContent = visibleCount;
+    document.getElementById('totalRequests').textContent = visibleRequests;
+    document.getElementById('avgRequests').textContent = visibleCount > 0 ? (visibleRequests / visibleCount).toFixed(1) : '0';
+    
+    // Update maslul filter based on hativa selection
+    updateMaslulFilter();
+}
+
+function updateMaslulFilter() {
+    const hativaFilter = document.getElementById('filterHativa').value;
+    const maslulSelect = document.getElementById('filterMaslul');
+    const currentMaslul = maslulSelect.value;
+    
+    // Show/hide maslul options based on hativa selection
+    Array.from(maslulSelect.options).forEach(option => {
+        if (option.value === '') {
+            option.style.display = '';
+            return;
+        }
+        
+        if (!hativaFilter || option.dataset.hativa === hativaFilter) {
+            option.style.display = '';
+        } else {
+            option.style.display = 'none';
+            if (option.value === currentMaslul) {
+                maslulSelect.value = '';
+            }
+        }
+    });
+}
+
+function clearAllFilters() {
+    document.getElementById('filterHativa').value = '';
+    document.getElementById('filterMaslul').value = '';
+    document.getElementById('filterCommitteeType').value = '';
+    document.getElementById('filterEventType').value = '';
+    document.getElementById('filterDateFrom').value = '';
+    document.getElementById('filterDateTo').value = '';
+    document.getElementById('filterText').value = '';
+    document.getElementById('filterMinRequests').value = '';
+    
+    filterTable();
+}
+
+function exportToCSV() {
+    const table = document.getElementById('eventsTable');
+    const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.style.display !== 'none');
+    
+    let csv = 'שם האירוע,סוג,חטיבה,מסלול,ועדה,תאריך ועדה,סיום קול קורא,סיום קליטה,סיום בדיקה,בקשות צפויות,נוצר\n';
+    
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const rowData = Array.from(cells).map(cell => {
+            let text = cell.textContent.trim();
+            // Remove extra whitespace and normalize
+            text = text.replace(/\s+/g, ' ');
+            // Escape quotes and wrap in quotes if contains comma
+            if (text.includes(',') || text.includes('"')) {
+                text = '"' + text.replace(/"/g, '""') + '"';
+            }
+            return text;
+        });
+        csv += rowData.join(',') + '\n';
+    });
+    
+    // Download CSV
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `events_table_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Initialize filters on page load
+document.addEventListener('DOMContentLoaded', function() {
+    filterTable();
+});
+</script>
+{% endblock %}

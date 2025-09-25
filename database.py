@@ -766,7 +766,7 @@ class DatabaseManager:
         if vaadot_id:
             cursor.execute('''
                 SELECT e.*, ct.name as committee_name, v.vaada_date, vh.name as vaada_hativa_name, 
-                       m.name as maslul_name, h.name as hativa_name
+                       m.name as maslul_name, h.name as hativa_name, h.hativa_id, ct.committee_type_id
                 FROM events e
                 JOIN vaadot v ON e.vaadot_id = v.vaadot_id
                 JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
@@ -779,7 +779,7 @@ class DatabaseManager:
         else:
             cursor.execute('''
                 SELECT e.*, ct.name as committee_name, v.vaada_date, vh.name as vaada_hativa_name,
-                       m.name as maslul_name, h.name as hativa_name
+                       m.name as maslul_name, h.name as hativa_name, h.hativa_id, ct.committee_type_id
                 FROM events e
                 JOIN vaadot v ON e.vaadot_id = v.vaadot_id
                 JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
@@ -797,7 +797,9 @@ class DatabaseManager:
                 'status': row[7], 'created_at': row[8], 
                 'call_deadline_date': row[9], 'intake_deadline_date': row[10], 'review_deadline_date': row[11],
                 'committee_name': row[12], 'vaada_date': row[13], 
-                'vaada_hativa_name': row[14], 'maslul_name': row[15], 'hativa_name': row[16]} for row in rows]
+                'vaada_hativa_name': row[14], 'maslul_name': row[15], 'hativa_name': row[16],
+                'hativa_id': row[17] if len(row) > 17 else None,
+                'committee_type_id': row[18] if len(row) > 18 else None} for row in rows]
     
     def update_event(self, event_id: int, vaadot_id: int, maslul_id: int, name: str, event_type: str, expected_requests: int = 0) -> bool:
         """Update an existing event"""
