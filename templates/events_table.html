@@ -92,6 +92,12 @@
         border: 1px solid #bbdefb;
     }
     
+    .date-publication {
+        background-color: #f0f4c3;
+        color: #558b2f;
+        border: 1px solid #dce775;
+    }
+    
     .table-responsive {
         max-height: 70vh;
         overflow-y: auto;
@@ -228,6 +234,7 @@
                                 <th>מסלול</th>
                                 <th>ועדה</th>
                                 <th>תאריך ועדה</th>
+                                <th>פרסום קול קורא</th>
                                 <th>סיום קול קורא</th>
                                 <th>סיום קליטה</th>
                                 <th>סיום בדיקה</th>
@@ -264,6 +271,13 @@
                                 <td>
                                     {% if event.vaada_date %}
                                         <span class="date-badge date-committee">{{ event.vaada_date }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if event.call_publication_date %}
+                                        <span class="date-badge date-publication">{{ event.call_publication_date }}</span>
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
