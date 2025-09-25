@@ -4,36 +4,6 @@
 
 {% block content %}
 
-<style>
-    #addEventModal .modal-dialog,
-    #editEventModal .modal-dialog {
-        max-width: 820px;
-    }
-
-    .deadline-cards-row {
-        flex-wrap: nowrap;
-        gap: 1rem;
-    }
-
-    .deadline-card {
-        min-width: 200px;
-        flex: 1 1 0;
-    }
-
-    .deadline-card .card-body {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
-        white-space: nowrap;
-    }
-
-    .deadline-card .card-body small,
-    .deadline-card .card-body strong {
-        white-space: nowrap;
-    }
-</style>
-
 
 <!-- Calendar Section -->
 <div class="row">
@@ -366,36 +336,36 @@
                         <h6 class="text-primary">
                             <i class="bi bi-calendar-range me-2"></i>תאריכי דדליין נגזרים
                         </h6>
-                        <div class="row g-2 flex-nowrap deadline-cards-row">
-                            <div class="col-md-3">
-                                <div class="card border-warning deadline-card">
-                                    <div class="card-body p-2 text-center">
-                                        <small class="text-muted">סיום קול קורא</small>
-                                        <strong class="text-warning" id="callDeadlineDate">-</strong>
+                        <div class="row g-2">
+                            <div class="col-12 col-md-6">
+                                <div class="card border-warning">
+                                    <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center flex-nowrap gap-2">
+                                        <small class="text-muted mb-0 text-nowrap">סיום קול קורא</small>
+                                        <strong class="text-warning ms-2 text-nowrap" id="callDeadlineDate">-</strong>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="card border-info deadline-card">
-                                    <div class="card-body p-2 text-center">
-                                        <small class="text-muted">סיום קליטה</small>
-                                        <strong class="text-info" id="intakeDeadlineDate">-</strong>
+                            <div class="col-12 col-md-6">
+                                <div class="card border-info">
+                                    <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center flex-nowrap gap-2">
+                                        <small class="text-muted mb-0 text-nowrap">סיום קליטה</small>
+                                        <strong class="text-info ms-2 text-nowrap" id="intakeDeadlineDate">-</strong>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="card border-success deadline-card">
-                                    <div class="card-body p-2 text-center">
-                                        <small class="text-muted">סיום בדיקה</small>
-                                        <strong class="text-success" id="reviewDeadlineDate">-</strong>
+                            <div class="col-12 col-md-6">
+                                <div class="card border-success">
+                                    <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center flex-nowrap gap-2">
+                                        <small class="text-muted mb-0 text-nowrap">סיום בדיקה</small>
+                                        <strong class="text-success ms-2 text-nowrap" id="reviewDeadlineDate">-</strong>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="card border-primary deadline-card">
-                                    <div class="card-body p-2 text-center">
-                                        <small class="text-muted">הגשת תשובת ועדה</small>
-                                        <strong class="text-primary" id="responseDeadlineDate">-</strong>
+                            <div class="col-12 col-md-6">
+                                <div class="card border-primary">
+                                    <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center flex-nowrap gap-2">
+                                        <small class="text-muted mb-0 text-nowrap">הגשת תשובת ועדה</small>
+                                        <strong class="text-primary ms-2 text-nowrap" id="responseDeadlineDate">-</strong>
                                     </div>
                                 </div>
                             </div>
