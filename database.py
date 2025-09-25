@@ -555,6 +555,69 @@ class DatabaseManager:
                 'exception_date': row[10], 'exception_description': row[11], 
                 'exception_type': row[12]} for row in rows]
     
+    def update_vaada(self, vaadot_id: int, committee_type_id: int, hativa_id: int,
+                     vaada_date: date, status: str = 'planned',
+                     exception_date_id: Optional[int] = None, notes: str = "") -> bool:
+        """Update committee meeting details including date, type, division, and notes"""
+        conn = None
+        try:
+            if not self.is_work_day(vaada_date):
+                raise ValueError(f"התאריך {vaada_date} אינו יום עסקים חוקי לועדות")
+
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            # Ensure committee type belongs to the same division as selected hativa
+            cursor.execute('SELECT hativa_id FROM committee_types WHERE committee_type_id = ?', (committee_type_id,))
+            ct_row = cursor.fetchone()
+            if not ct_row:
+                raise ValueError("סוג הועדה לא נמצא")
+            if ct_row[0] != hativa_id:
+                raise ValueError("סוג הועדה שנבחר אינו שייך לחטיבה שנבחרה")
+
+            # Check constraints (per-day and per-week limits) excluding current meeting
+            constraint_settings = self.get_constraint_settings()
+
+            max_per_day = constraint_settings['max_meetings_per_day']
+            cursor.execute('''
+                SELECT COUNT(*) FROM vaadot 
+                WHERE vaada_date = ? AND vaadot_id != ?
+            ''', (vaada_date, vaadot_id))
+            existing_count = cursor.fetchone()[0]
+            if existing_count >= max_per_day:
+                if max_per_day == 1:
+                    raise ValueError(f"כבר קיימת ועדה בתאריך {vaada_date}. לא ניתן לקבוע יותר מועדה אחת ביום.")
+                raise ValueError(f"כבר קיימות {existing_count} ועדות בתאריך {vaada_date}. המגבלה הנוכחית מאפשרת עד {max_per_day} ועדות ביום.")
+
+            week_start, week_end = self._get_week_bounds(vaada_date)
+            weekly_count = self._count_meetings_in_week(cursor, week_start, week_end, exclude_vaada_id=vaadot_id)
+            weekly_limit = self._get_weekly_limit(vaada_date, constraint_settings)
+            if weekly_count >= weekly_limit:
+                raise ValueError(f"השבוע של {vaada_date} כבר מכיל {weekly_count} ועדות (המגבלה היא {weekly_limit})")
+
+            cursor.execute('''
+                UPDATE vaadot
+                SET committee_type_id = ?, hativa_id = ?, vaada_date = ?, status = ?,
+                    exception_date_id = ?, notes = ?
+                WHERE vaadot_id = ?
+            ''', (committee_type_id, hativa_id, vaada_date, status, exception_date_id, notes, vaadot_id))
+
+            success = cursor.rowcount > 0
+            conn.commit()
+            return success
+        except ValueError:
+            if conn:
+                conn.rollback()
+            raise
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            print(f"Error updating vaada: {e}")
+            raise
+        finally:
+            if conn:
+                conn.close()
+
     def update_vaada_date(self, vaadot_id: int, vaada_date: date, exception_date_id: Optional[int] = None) -> bool:
         """Update the actual meeting date for a committee and optionally link to exception date"""
         conn = None
