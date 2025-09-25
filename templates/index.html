@@ -322,6 +322,42 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- תאריכים נגזרים -->
+                    <div class="mb-3" id="derivedDatesSection" style="display: none;">
+                        <h6 class="text-primary">
+                            <i class="bi bi-calendar-range me-2"></i>תאריכי דדליין נגזרים
+                        </h6>
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <div class="card border-warning">
+                                    <div class="card-body p-2 text-center">
+                                        <small class="text-muted d-block">סיום קול קורא</small>
+                                        <strong class="text-warning" id="callDeadlineDate">-</strong>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card border-info">
+                                    <div class="card-body p-2 text-center">
+                                        <small class="text-muted d-block">סיום קליטה</small>
+                                        <strong class="text-info" id="intakeDeadlineDate">-</strong>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card border-success">
+                                    <div class="card-body p-2 text-center">
+                                        <small class="text-muted d-block">סיום בדיקה</small>
+                                        <strong class="text-success" id="reviewDeadlineDate">-</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-muted mt-2">
+                            <small><i class="bi bi-info-circle me-1"></i>התאריכים מחושבים אוטומטית בהתבסס על תאריך הועדה ושלבי ה-SLA של המסלול</small>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
@@ -1059,6 +1095,16 @@ function editEvent(event) {
     document.getElementById('edit_event_name').value = event.name;
     document.getElementById('edit_event_type').value = event.event_type;
     document.getElementById('edit_expected_requests').value = event.expected_requests;
+    
+    // הצג תאריכים נגזרים אם קיימים
+    if (event.call_deadline_date || event.intake_deadline_date || event.review_deadline_date) {
+        document.getElementById('derivedDatesSection').style.display = 'block';
+        document.getElementById('callDeadlineDate').textContent = event.call_deadline_date || '-';
+        document.getElementById('intakeDeadlineDate').textContent = event.intake_deadline_date || '-';
+        document.getElementById('reviewDeadlineDate').textContent = event.review_deadline_date || '-';
+    } else {
+        document.getElementById('derivedDatesSection').style.display = 'none';
+    }
     
     // Set form action with the event ID
     document.getElementById('editEventForm').action = '/events/edit/' + event.event_id;

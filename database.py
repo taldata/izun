@@ -201,7 +201,12 @@ class DatabaseManager:
                     ('stage_c_days', 'INTEGER DEFAULT 10'),
                     ('stage_d_days', 'INTEGER DEFAULT 10')
                 ],
-                'committee_types': [('is_active', 'INTEGER DEFAULT 1')]
+                'committee_types': [('is_active', 'INTEGER DEFAULT 1')],
+                'events': [
+                    ('call_deadline_date', 'DATE'),
+                    ('intake_deadline_date', 'DATE'),
+                    ('review_deadline_date', 'DATE')
+                ]
             }
             
             for table_name, columns in tables_columns.items():
@@ -714,11 +719,12 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Validate that the route belongs to the same division as the committee
+        # Validate that the route belongs to the same division as the committee and get stage data
         cursor.execute('''
             SELECT v.hativa_id as vaada_hativa_id, m.hativa_id as maslul_hativa_id,
                    h1.name as vaada_hativa_name, h2.name as maslul_hativa_name,
-                   ct.name as committee_name, m.name as maslul_name
+                   ct.name as committee_name, m.name as maslul_name,
+                   v.vaada_date, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days
             FROM vaadot v
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
             JOIN hativot h1 ON v.hativa_id = h1.hativa_id
@@ -732,16 +738,21 @@ class DatabaseManager:
             conn.close()
             raise ValueError("ועדה או מסלול לא נמצאו במערכת")
         
-        vaada_hativa_id, maslul_hativa_id, vaada_hativa_name, maslul_hativa_name, committee_name, maslul_name = result
+        vaada_hativa_id, maslul_hativa_id, vaada_hativa_name, maslul_hativa_name, committee_name, maslul_name, vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days = result
         
         if vaada_hativa_id != maslul_hativa_id:
             conn.close()
             raise ValueError(f'המסלול "{maslul_name}" מחטיבת "{maslul_hativa_name}" אינו יכול להיות משויך לועדה "{committee_name}" מחטיבת "{vaada_hativa_name}"')
         
+        # Calculate derived dates based on stage durations
+        stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
+        
         cursor.execute('''
-            INSERT INTO events (vaadot_id, maslul_id, name, event_type, expected_requests)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (vaadot_id, maslul_id, name, event_type, expected_requests))
+            INSERT INTO events (vaadot_id, maslul_id, name, event_type, expected_requests, 
+                              call_deadline_date, intake_deadline_date, review_deadline_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (vaadot_id, maslul_id, name, event_type, expected_requests,
+              stage_dates['call_deadline_date'], stage_dates['intake_deadline_date'], stage_dates['review_deadline_date']))
         event_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -783,19 +794,22 @@ class DatabaseManager:
         
         return [{'event_id': row[0], 'vaadot_id': row[1], 'maslul_id': row[2], 'name': row[3],
                 'event_type': row[4], 'expected_requests': row[5], 'scheduled_date': row[6],
-                'status': row[7], 'created_at': row[8], 'committee_name': row[9], 'vaada_date': row[10], 
-                'vaada_hativa_name': row[11], 'maslul_name': row[12], 'hativa_name': row[13]} for row in rows]
+                'status': row[7], 'created_at': row[8], 
+                'call_deadline_date': row[9], 'intake_deadline_date': row[10], 'review_deadline_date': row[11],
+                'committee_name': row[12], 'vaada_date': row[13], 
+                'vaada_hativa_name': row[14], 'maslul_name': row[15], 'hativa_name': row[16]} for row in rows]
     
     def update_event(self, event_id: int, vaadot_id: int, maslul_id: int, name: str, event_type: str, expected_requests: int = 0) -> bool:
         """Update an existing event"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Validate that the route belongs to the same division as the committee
+        # Validate that the route belongs to the same division as the committee and get stage data
         cursor.execute('''
             SELECT v.hativa_id as vaada_hativa_id, m.hativa_id as maslul_hativa_id,
                    h1.name as vaada_hativa_name, h2.name as maslul_hativa_name,
-                   ct.name as committee_name, m.name as maslul_name
+                   ct.name as committee_name, m.name as maslul_name,
+                   v.vaada_date, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days
             FROM vaadot v
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
             JOIN hativot h1 ON v.hativa_id = h1.hativa_id
@@ -809,17 +823,22 @@ class DatabaseManager:
             conn.close()
             raise ValueError("ועדה או מסלול לא נמצאו במערכת")
         
-        vaada_hativa_id, maslul_hativa_id, vaada_hativa_name, maslul_hativa_name, committee_name, maslul_name = result
+        vaada_hativa_id, maslul_hativa_id, vaada_hativa_name, maslul_hativa_name, committee_name, maslul_name, vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days = result
         
         if vaada_hativa_id != maslul_hativa_id:
             conn.close()
             raise ValueError(f'המסלול "{maslul_name}" מחטיבת "{maslul_hativa_name}" אינו יכול להיות משויך לועדה "{committee_name}" מחטיבת "{vaada_hativa_name}"')
         
+        # Calculate derived dates based on stage durations
+        stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
+        
         cursor.execute('''
             UPDATE events 
-            SET vaadot_id = ?, maslul_id = ?, name = ?, event_type = ?, expected_requests = ?
+            SET vaadot_id = ?, maslul_id = ?, name = ?, event_type = ?, expected_requests = ?,
+                call_deadline_date = ?, intake_deadline_date = ?, review_deadline_date = ?
             WHERE event_id = ?
-        ''', (vaadot_id, maslul_id, name, event_type, expected_requests, event_id))
+        ''', (vaadot_id, maslul_id, name, event_type, expected_requests,
+              stage_dates['call_deadline_date'], stage_dates['intake_deadline_date'], stage_dates['review_deadline_date'], event_id))
         
         success = cursor.rowcount > 0
         conn.commit()
@@ -1328,6 +1347,33 @@ class DatabaseManager:
                 days_subtracted += 1
         
         return current_date
+    
+    def calculate_stage_dates(self, committee_date, stage_a_days: int, stage_b_days: int, stage_c_days: int, stage_d_days: int) -> Dict:
+        """Calculate stage deadline dates based on committee meeting date and stage durations"""
+        
+        # המר את תאריך הועדה לאובייקט date אם הוא מחרוזת
+        if isinstance(committee_date, str):
+            from datetime import datetime
+            committee_date = datetime.strptime(committee_date, '%Y-%m-%d').date()
+        
+        # חישוב התאריכים אחורה מתאריך הועדה
+        # שלב ד: מהועדה להגשת תשובה (לא רלוונטי לחישוב התאריכים הנגזרים)
+        
+        # תאריך סיום שלב בדיקה = תאריך ועדה - שלב ג
+        review_deadline = self.subtract_business_days(committee_date, stage_c_days)
+        
+        # תאריך סיום שלב קליטה = תאריך סיום בדיקה - שלב ב  
+        intake_deadline = self.subtract_business_days(review_deadline, stage_b_days)
+        
+        # תאריך סיום קול קורא = תאריך סיום קליטה - שלב א
+        call_deadline = self.subtract_business_days(intake_deadline, stage_a_days)
+        
+        return {
+            'call_deadline_date': call_deadline,      # תאריך סיום קול קורא
+            'intake_deadline_date': intake_deadline,  # תאריך סיום קליטה
+            'review_deadline_date': review_deadline,  # תאריך סיום בדיקה
+            'committee_date': committee_date          # תאריך הועדה
+        }
     
     def calculate_sla_dates(self, committee_date: date, sla_days: Optional[int] = None) -> Dict:
         """Calculate SLA dates based on committee meeting date"""
