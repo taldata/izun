@@ -486,6 +486,10 @@ def add_maslul():
         name = request.form.get('name', '').strip()
         description = request.form.get('description', '').strip()
         sla_days = request.form.get('sla_days', 45)
+        stage_a_days = request.form.get('stage_a_days', 10)
+        stage_b_days = request.form.get('stage_b_days', 15)
+        stage_c_days = request.form.get('stage_c_days', 10)
+        stage_d_days = request.form.get('stage_d_days', 10)
         
         # Enhanced validation
         if not hativa_id:
@@ -512,18 +516,38 @@ def add_maslul():
             flash(f'מסלול בשם "{name}" כבר קיים בחטיבה זו', 'error')
             return redirect(url_for('maslulim'))
         
-        # Validate SLA
+        # Validate SLA and stage days
         try:
             sla_days = int(sla_days)
+            stage_a_days = int(stage_a_days)
+            stage_b_days = int(stage_b_days)
+            stage_c_days = int(stage_c_days)
+            stage_d_days = int(stage_d_days)
+            
             if sla_days < 1 or sla_days > 365:
                 flash('SLA חייב להיות בין 1 ל-365 ימים', 'error')
                 return redirect(url_for('maslulim'))
+                
+            # Validate stage days
+            for stage_name, days in [('שלב א', stage_a_days), ('שלב ב', stage_b_days), 
+                                   ('שלב ג', stage_c_days), ('שלב ד', stage_d_days)]:
+                if days < 1 or days > 365:
+                    flash(f'{stage_name} חייב להיות בין 1 ל-365 ימים', 'error')
+                    return redirect(url_for('maslulim'))
+            
+            # Check if sum of stages equals SLA
+            total_stages = stage_a_days + stage_b_days + stage_c_days + stage_d_days
+            if total_stages != sla_days:
+                flash(f'סכום השלבים ({total_stages}) חייב להיות שווה ל-SLA ({sla_days})', 'error')
+                return redirect(url_for('maslulim'))
+                
         except (ValueError, TypeError):
-            flash('SLA חייב להיות מספר תקין', 'error')
+            flash('כל השדות חייבים להיות מספרים תקינים', 'error')
             return redirect(url_for('maslulim'))
         
         # Add the maslul
-        maslul_id = db.add_maslul(int(hativa_id), name, description, sla_days)
+        maslul_id = db.add_maslul(int(hativa_id), name, description, sla_days, 
+                                 stage_a_days, stage_b_days, stage_c_days, stage_d_days)
         hativa_name = next(h['name'] for h in hativot if h['hativa_id'] == int(hativa_id))
         flash(f'מסלול "{name}" נוסף בהצלחה לחטיבת {hativa_name}', 'success')
         
@@ -541,6 +565,10 @@ def edit_maslul(maslul_id):
         name = request.form.get('name', '').strip()
         description = request.form.get('description', '').strip()
         sla_days = request.form.get('sla_days', 45)
+        stage_a_days = request.form.get('stage_a_days', 10)
+        stage_b_days = request.form.get('stage_b_days', 15)
+        stage_c_days = request.form.get('stage_c_days', 10)
+        stage_d_days = request.form.get('stage_d_days', 10)
         
         if not name:
             flash('שם המסלול הוא שדה חובה', 'error')
@@ -550,18 +578,38 @@ def edit_maslul(maslul_id):
             flash('שם המסלול חייב להכיל לפחות 2 תווים', 'error')
             return redirect(url_for('maslulim'))
         
-        # Validate SLA
+        # Validate SLA and stage days
         try:
             sla_days = int(sla_days)
+            stage_a_days = int(stage_a_days)
+            stage_b_days = int(stage_b_days)
+            stage_c_days = int(stage_c_days)
+            stage_d_days = int(stage_d_days)
+            
             if sla_days < 1 or sla_days > 365:
                 flash('SLA חייב להיות בין 1 ל-365 ימים', 'error')
                 return redirect(url_for('maslulim'))
+                
+            # Validate stage days
+            for stage_name, days in [('שלב א', stage_a_days), ('שלב ב', stage_b_days), 
+                                   ('שלב ג', stage_c_days), ('שלב ד', stage_d_days)]:
+                if days < 1 or days > 365:
+                    flash(f'{stage_name} חייב להיות בין 1 ל-365 ימים', 'error')
+                    return redirect(url_for('maslulim'))
+            
+            # Check if sum of stages equals SLA
+            total_stages = stage_a_days + stage_b_days + stage_c_days + stage_d_days
+            if total_stages != sla_days:
+                flash(f'סכום השלבים ({total_stages}) חייב להיות שווה ל-SLA ({sla_days})', 'error')
+                return redirect(url_for('maslulim'))
+                
         except (ValueError, TypeError):
-            flash('SLA חייב להיות מספר תקין', 'error')
+            flash('כל השדות חייבים להיות מספרים תקינים', 'error')
             return redirect(url_for('maslulim'))
         
         # Update the maslul
-        success = db.update_maslul(maslul_id, name, description, sla_days)
+        success = db.update_maslul(maslul_id, name, description, sla_days, 
+                                 stage_a_days, stage_b_days, stage_c_days, stage_d_days)
         if success:
             flash(f'מסלול "{name}" עודכן בהצלחה', 'success')
         else:

@@ -138,8 +138,30 @@
                         {% endif %}
                         
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <small class="text-muted">SLA:</small>
+                            <small class="text-muted">SLA כולל:</small>
                             <span class="badge bg-info">{{ maslul.sla_days or 45 }} ימים</span>
+                        </div>
+                        
+                        <div class="row g-1 mb-2">
+                            <div class="col-6">
+                                <small class="text-muted">שלב א:</small>
+                                <span class="badge bg-secondary ms-1">{{ maslul.stage_a_days or 10 }}</span>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">שלב ב:</small>
+                                <span class="badge bg-secondary ms-1">{{ maslul.stage_b_days or 15 }}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="row g-1 mb-2">
+                            <div class="col-6">
+                                <small class="text-muted">שלב ג:</small>
+                                <span class="badge bg-secondary ms-1">{{ maslul.stage_c_days or 10 }}</span>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">שלב ד:</small>
+                                <span class="badge bg-secondary ms-1">{{ maslul.stage_d_days or 10 }}</span>
+                            </div>
                         </div>
                         
                         <div class="action-buttons mt-3">
@@ -148,7 +170,11 @@
                                         data-maslul-id="{{ maslul.maslul_id }}" 
                                         data-name="{{ maslul.name }}" 
                                         data-description="{{ maslul.description or '' }}"
-                                        data-sla-days="{{ maslul.sla_days or 45 }}">
+                                        data-sla-days="{{ maslul.sla_days or 45 }}"
+                                        data-stage-a-days="{{ maslul.stage_a_days or 10 }}"
+                                        data-stage-b-days="{{ maslul.stage_b_days or 15 }}"
+                                        data-stage-c-days="{{ maslul.stage_c_days or 10 }}"
+                                        data-stage-d-days="{{ maslul.stage_d_days or 10 }}">
                                     <i class="bi bi-pencil"></i>
                                 </button>
                                 <button class="btn btn-outline-danger btn-sm delete-btn" 
@@ -221,10 +247,31 @@
                         <textarea class="form-control" id="description" name="description" rows="3" placeholder="תיאור אופציונלי למסלול"></textarea>
                     </div>
                     <div class="mb-3">
-                        <label for="sla_days" class="form-label">SLA (ימים) <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control" id="sla_days" name="sla_days" value="45" min="1" max="365" required>
-                        <div class="form-text">מספר הימים המקסימלי לטיפול במסלול זה</div>
-                        <div class="invalid-feedback">SLA חייב להיות בין 1 ל-365 ימים</div>
+                        <label for="sla_days" class="form-label">SLA כולל (ימים) <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="sla_days" name="sla_days" value="45" min="1" max="365" required readonly>
+                        <div class="form-text">סכום כל השלבים - יחושב אוטומטית</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="stage_a_days" class="form-label">שלב א - סיום קול קורא לסיום קליטה <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control stage-input" id="stage_a_days" name="stage_a_days" value="10" min="1" max="365" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="stage_b_days" class="form-label">שלב ב - סיום קליטה לסיום בדיקה <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control stage-input" id="stage_b_days" name="stage_b_days" value="15" min="1" max="365" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="stage_c_days" class="form-label">שלב ג - סיום בדיקה עד ועדה <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control stage-input" id="stage_c_days" name="stage_c_days" value="10" min="1" max="365" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="stage_d_days" class="form-label">שלב ד - ועדה להגשת תשובה <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control stage-input" id="stage_d_days" name="stage_d_days" value="10" min="1" max="365" required>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -259,10 +306,31 @@
                         <textarea class="form-control" id="edit_description" name="description" rows="3"></textarea>
                     </div>
                     <div class="mb-3">
-                        <label for="edit_sla_days" class="form-label">SLA (ימים) <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control" id="edit_sla_days" name="sla_days" min="1" max="365" required>
-                        <div class="form-text">מספר הימים המקסימלי לטיפול במסלול זה</div>
-                        <div class="invalid-feedback">SLA חייב להיות בין 1 ל-365 ימים</div>
+                        <label for="edit_sla_days" class="form-label">SLA כולל (ימים) <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="edit_sla_days" name="sla_days" min="1" max="365" required readonly>
+                        <div class="form-text">סכום כל השלבים - יחושב אוטומטית</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_stage_a_days" class="form-label">שלב א - סיום קול קורא לסיום קליטה <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control stage-input-edit" id="edit_stage_a_days" name="stage_a_days" min="1" max="365" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_stage_b_days" class="form-label">שלב ב - סיום קליטה לסיום בדיקה <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control stage-input-edit" id="edit_stage_b_days" name="stage_b_days" min="1" max="365" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_stage_c_days" class="form-label">שלב ג - סיום בדיקה עד ועדה <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control stage-input-edit" id="edit_stage_c_days" name="stage_c_days" min="1" max="365" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_stage_d_days" class="form-label">שלב ד - ועדה להגשת תשובה <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control stage-input-edit" id="edit_stage_d_days" name="stage_d_days" min="1" max="365" required>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -364,6 +432,13 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_name').value = name;
             document.getElementById('edit_description').value = description;
             document.getElementById('edit_sla_days').value = slaDays;
+            
+            // Set stage values (default if not available)
+            document.getElementById('edit_stage_a_days').value = this.dataset.stageADays || 10;
+            document.getElementById('edit_stage_b_days').value = this.dataset.stageBDays || 15;
+            document.getElementById('edit_stage_c_days').value = this.dataset.stageCDays || 10;
+            document.getElementById('edit_stage_d_days').value = this.dataset.stageDDays || 10;
+            
             document.getElementById('editMaslulForm').action = `/maslulim/edit/${maslulId}`;
             new bootstrap.Modal(document.getElementById('editMaslulModal')).show();
         });
@@ -434,6 +509,36 @@ document.addEventListener('DOMContentLoaded', function() {
             
             new bootstrap.Modal(document.getElementById('detailsMaslulModal')).show();
         });
+    });
+
+    // Auto-calculate SLA for add form
+    function calculateSLA() {
+        const stageA = parseInt(document.getElementById('stage_a_days').value) || 0;
+        const stageB = parseInt(document.getElementById('stage_b_days').value) || 0;
+        const stageC = parseInt(document.getElementById('stage_c_days').value) || 0;
+        const stageD = parseInt(document.getElementById('stage_d_days').value) || 0;
+        const total = stageA + stageB + stageC + stageD;
+        document.getElementById('sla_days').value = total;
+    }
+
+    // Auto-calculate SLA for edit form
+    function calculateEditSLA() {
+        const stageA = parseInt(document.getElementById('edit_stage_a_days').value) || 0;
+        const stageB = parseInt(document.getElementById('edit_stage_b_days').value) || 0;
+        const stageC = parseInt(document.getElementById('edit_stage_c_days').value) || 0;
+        const stageD = parseInt(document.getElementById('edit_stage_d_days').value) || 0;
+        const total = stageA + stageB + stageC + stageD;
+        document.getElementById('edit_sla_days').value = total;
+    }
+
+    // Add event listeners for stage inputs in add form
+    document.querySelectorAll('.stage-input').forEach(input => {
+        input.addEventListener('input', calculateSLA);
+    });
+
+    // Add event listeners for stage inputs in edit form
+    document.querySelectorAll('.stage-input-edit').forEach(input => {
+        input.addEventListener('input', calculateEditSLA);
     });
 
     // Form validation

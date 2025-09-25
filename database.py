@@ -193,7 +193,14 @@ class DatabaseManager:
             
             tables_columns = {
                 'hativot': [('is_active', 'INTEGER DEFAULT 1')],
-                'maslulim': [('is_active', 'INTEGER DEFAULT 1'), ('sla_days', 'INTEGER DEFAULT 45')],
+                'maslulim': [
+                    ('is_active', 'INTEGER DEFAULT 1'), 
+                    ('sla_days', 'INTEGER DEFAULT 45'),
+                    ('stage_a_days', 'INTEGER DEFAULT 10'),
+                    ('stage_b_days', 'INTEGER DEFAULT 15'),
+                    ('stage_c_days', 'INTEGER DEFAULT 10'),
+                    ('stage_d_days', 'INTEGER DEFAULT 10')
+                ],
                 'committee_types': [('is_active', 'INTEGER DEFAULT 1')]
             }
             
@@ -254,12 +261,14 @@ class DatabaseManager:
         return success
     
     # Maslulim operations
-    def add_maslul(self, hativa_id: int, name: str, description: str = "", sla_days: int = 45) -> int:
+    def add_maslul(self, hativa_id: int, name: str, description: str = "", sla_days: int = 45, 
+                   stage_a_days: int = 10, stage_b_days: int = 15, stage_c_days: int = 10, stage_d_days: int = 10) -> int:
         """Add a new route to a division"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('INSERT INTO maslulim (hativa_id, name, description, sla_days) VALUES (?, ?, ?, ?)', 
-                      (hativa_id, name, description, sla_days))
+        cursor.execute('''INSERT INTO maslulim (hativa_id, name, description, sla_days, stage_a_days, stage_b_days, stage_c_days, stage_d_days) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
+                      (hativa_id, name, description, sla_days, stage_a_days, stage_b_days, stage_c_days, stage_d_days))
         maslul_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -291,19 +300,24 @@ class DatabaseManager:
         
         return [{'maslul_id': row[0], 'hativa_id': row[1], 'name': row[2], 
                 'description': row[3], 'created_at': row[4], 'is_active': row[5], 
-                'sla_days': row[6] if len(row) > 6 else 45, 
-                'hativa_name': row[7] if len(row) > 7 else 'לא ידוע'} for row in rows]
+                'sla_days': row[6] if len(row) > 6 else 45,
+                'stage_a_days': row[7] if len(row) > 7 else 10,
+                'stage_b_days': row[8] if len(row) > 8 else 15,
+                'stage_c_days': row[9] if len(row) > 9 else 10,
+                'stage_d_days': row[10] if len(row) > 10 else 10,
+                'hativa_name': row[11] if len(row) > 11 else 'לא ידוע'} for row in rows]
     
-    def update_maslul(self, maslul_id: int, name: str, description: str = "", sla_days: int = 45) -> bool:
+    def update_maslul(self, maslul_id: int, name: str, description: str = "", sla_days: int = 45,
+                      stage_a_days: int = 10, stage_b_days: int = 15, stage_c_days: int = 10, stage_d_days: int = 10) -> bool:
         """Update an existing route"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
             UPDATE maslulim 
-            SET name = ?, description = ?, sla_days = ? 
+            SET name = ?, description = ?, sla_days = ?, stage_a_days = ?, stage_b_days = ?, stage_c_days = ?, stage_d_days = ?
             WHERE maslul_id = ?
-        ''', (name, description, sla_days, maslul_id))
+        ''', (name, description, sla_days, stage_a_days, stage_b_days, stage_c_days, stage_d_days, maslul_id))
         
         success = cursor.rowcount > 0
         conn.commit()
@@ -1205,8 +1219,12 @@ class DatabaseManager:
         conn.close()
         return [{'maslul_id': row[0], 'hativa_id': row[1], 'name': row[2], 
                 'description': row[3], 'created_at': row[4], 'is_active': row[5], 
-                'sla_days': row[6] if len(row) > 6 else 45, 
-                'hativa_name': row[7] if len(row) > 7 else 'לא ידוע'} for row in rows]
+                'sla_days': row[6] if len(row) > 6 else 45,
+                'stage_a_days': row[7] if len(row) > 7 else 10,
+                'stage_b_days': row[8] if len(row) > 8 else 15,
+                'stage_c_days': row[9] if len(row) > 9 else 10,
+                'stage_d_days': row[10] if len(row) > 10 else 10,
+                'hativa_name': row[11] if len(row) > 11 else 'לא ידוע'} for row in rows]
     
     def get_committee_types_active_only(self, hativa_id: Optional[int] = None) -> List[Dict]:
         """Get only active committee types"""
