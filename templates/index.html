@@ -197,6 +197,12 @@
                                 <input type="number" class="form-control" name="expected_requests" min="0" value="0">
                             </div>
                         </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="actual_submissions" class="form-label">הגשות בפועל</label>
+                                <input type="number" class="form-control" name="actual_submissions" min="0" value="0">
+                            </div>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="call_publication_date" class="form-label">תאריך פרסום קול קורא</label>
@@ -323,6 +329,12 @@
                             <div class="mb-3">
                                 <label for="edit_expected_requests" class="form-label">בקשות צפויות</label>
                                 <input type="number" class="form-control" name="expected_requests" id="edit_expected_requests" min="0" value="0">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_actual_submissions" class="form-label">הגשות בפועל</label>
+                                <input type="number" class="form-control" name="actual_submissions" id="edit_actual_submissions" min="0" value="0">
                             </div>
                         </div>
                     </div>
@@ -1111,6 +1123,7 @@ function editEvent(event) {
     document.getElementById('edit_event_name').value = event.name;
     document.getElementById('edit_event_type').value = event.event_type;
     document.getElementById('edit_expected_requests').value = event.expected_requests;
+    document.getElementById('edit_actual_submissions').value = event.actual_submissions || 0;
     
     // הצג תאריכים נגזרים אם קיימים
     if (event.call_deadline_date || event.intake_deadline_date || event.review_deadline_date || event.response_deadline_date) {

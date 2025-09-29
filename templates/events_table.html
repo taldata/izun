@@ -240,6 +240,7 @@
                                 <th>סיום בדיקה</th>
                                 <th>תשובת ועדה</th>
                                 <th>בקשות צפויות</th>
+                                <th>הגשות בפועל</th>
                                 <th>נוצר</th>
                             </tr>
                         </thead>
@@ -314,6 +315,9 @@
                                     <span class="badge bg-secondary">{{ event.expected_requests or 0 }}</span>
                                 </td>
                                 <td>
+                                    <span class="badge bg-info">{{ event.actual_submissions or 0 }}</span>
+                                </td>
+                                <td>
                                     <small class="text-muted">{{ event.created_at.strftime('%d/%m/%Y') if event.created_at else '-' }}</small>
                                 </td>
                             </tr>
@@ -325,22 +329,29 @@
                 <!-- Stats Summary -->
                 <div class="stats-summary">
                     <div class="row text-center">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <strong id="totalEvents">{{ events|length }}</strong>
                             <div class="text-muted small">סה"כ אירועים</div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <strong id="visibleEvents">{{ events|length }}</strong>
                             <div class="text-muted small">אירועים מוצגים</div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <strong id="totalRequests">
                                 {% set total_requests = events|sum(attribute='expected_requests') %}
                                 {{ total_requests or 0 }}
                             </strong>
                             <div class="text-muted small">סה"כ בקשות צפויות</div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
+                            <strong id="totalSubmissions">
+                                {% set total_submissions = events|sum(attribute='actual_submissions') %}
+                                {{ total_submissions or 0 }}
+                            </strong>
+                            <div class="text-muted small">סה"כ הגשות בפועל</div>
+                        </div>
+                        <div class="col-md-2">
                             <strong id="avgRequests">
                                 {% if events|length > 0 %}
                                     {{ "%.1f"|format((events|sum(attribute='expected_requests') or 0) / events|length) }}
@@ -349,6 +360,18 @@
                                 {% endif %}
                             </strong>
                             <div class="text-muted small">ממוצע בקשות לאירוע</div>
+                        </div>
+                        <div class="col-md-2">
+                            <strong id="accuracyRate">
+                                {% set total_expected = events|sum(attribute='expected_requests') or 0 %}
+                                {% set total_actual = events|sum(attribute='actual_submissions') or 0 %}
+                                {% if total_expected > 0 %}
+                                    {{ "%.0f"|format((total_actual / total_expected) * 100) }}%
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </strong>
+                            <div class="text-muted small">דיוק צפי</div>
                         </div>
                     </div>
                 </div>

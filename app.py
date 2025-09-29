@@ -769,6 +769,7 @@ def add_event():
     name = request.form.get('name', '').strip()
     event_type = request.form.get('event_type')
     expected_requests = request.form.get('expected_requests', '0')
+    actual_submissions = request.form.get('actual_submissions', '0')
     call_publication_date = request.form.get('call_publication_date')
     
     if not all([vaadot_id, maslul_id, name, event_type]):
@@ -777,6 +778,7 @@ def add_event():
     
     try:
         expected_requests = int(expected_requests) if expected_requests else 0
+        actual_submissions = int(actual_submissions) if actual_submissions else 0
         
         # Validate that committee and route are from the same division
         vaada = db.get_vaadot()[0] if db.get_vaadot() else None
@@ -809,7 +811,7 @@ def add_event():
             'call_publication_date': call_publication_date
         }
         
-        event_id = db.add_event(int(vaadot_id), int(maslul_id), name, event_type, expected_requests, call_publication_date)
+        event_id = db.add_event(int(vaadot_id), int(maslul_id), name, event_type, expected_requests, actual_submissions, call_publication_date)
         flash(f'אירוע "{name}" נוצר בהצלחה', 'success')
         
     except Exception as e:
@@ -825,6 +827,7 @@ def edit_event(event_id):
     name = request.form.get('name', '').strip()
     event_type = request.form.get('event_type')
     expected_requests = request.form.get('expected_requests', '0')
+    actual_submissions = request.form.get('actual_submissions', '0')
     call_publication_date = request.form.get('call_publication_date')
 
     if not all([vaadot_id, maslul_id, name, event_type]):
@@ -833,6 +836,7 @@ def edit_event(event_id):
     
     try:
         expected_requests = int(expected_requests) if expected_requests else 0
+        actual_submissions = int(actual_submissions) if actual_submissions else 0
         
         # Validate that committee and route are from the same division
         vaada = None
@@ -855,7 +859,7 @@ def edit_event(event_id):
             flash(f'שגיאה: המסלול "{maslul["name"]}" מחטיבת "{maslul["hativa_name"]}" אינו יכול להיות משויך לועדה מחטיבת "{vaada["hativa_name"]}"', 'error')
             return redirect(url_for('index'))
         
-        success = db.update_event(event_id, int(vaadot_id), int(maslul_id), name, event_type, expected_requests, call_publication_date)
+        success = db.update_event(event_id, int(vaadot_id), int(maslul_id), name, event_type, expected_requests, actual_submissions, call_publication_date)
         if success:
             flash(f'אירוע "{name}" עודכן בהצלחה', 'success')
         else:
