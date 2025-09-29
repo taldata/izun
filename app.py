@@ -445,13 +445,16 @@ def maslulim():
         maslulim_list = db.get_maslulim()
         hativot_list = db.get_hativot()
         
-        # Group maslulim by hativa for better organization
-        maslulim_by_hativa = {}
-        for maslul in maslulim_list:
-            hativa_name = maslul['hativa_name']
-            if hativa_name not in maslulim_by_hativa:
-                maslulim_by_hativa[hativa_name] = []
-            maslulim_by_hativa[hativa_name].append(maslul)
+        # Group maslulim by hativa for better organization and display control
+        maslulim_by_hativa = []
+        for hativa in hativot_list:
+            grouped_maslulim = [m for m in maslulim_list if m['hativa_id'] == hativa['hativa_id']]
+            maslulim_by_hativa.append({
+                'hativa_id': hativa['hativa_id'],
+                'hativa_name': hativa['name'],
+                'color': hativa.get('color'),
+                'maslulim': grouped_maslulim
+            })
         
         # Calculate statistics with colors
         maslulim_per_hativa_with_colors = {}

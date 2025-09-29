@@ -6,7 +6,7 @@
 <style>
     .maslul-card {
         transition: all 0.3s ease;
-        border-left: 4px solid #007bff;
+        border-left: 4px solid var(--hativa-color, #007bff);
     }
     .maslul-card:hover {
         transform: translateY(-2px);
@@ -56,12 +56,17 @@
     }
     .hativa-section {
         margin-bottom: 2rem;
+        --hativa-color: #667eea;
+        --hativa-color-light: #667eeacc;
     }
     .hativa-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, var(--hativa-color) 0%, var(--hativa-color-light) 100%);
         color: white;
         padding: 1rem;
         border-radius: 10px 10px 0 0;
+    }
+    .hativa-empty-card {
+        border-color: var(--hativa-color, #dee2e6) !important;
     }
 </style>
 {% endblock %}
@@ -112,17 +117,18 @@
 
 <!-- Maslulim by Hativa -->
 {% if maslulim_by_hativa %}
-    {% for hativa_name, hativa_maslulim in maslulim_by_hativa.items() %}
-    <div class="hativa-section">
+    {% for hativa in maslulim_by_hativa %}
+    <div class="hativa-section" data-color="{{ hativa.color or '#667eea' }}">
         <div class="hativa-header">
             <h4 class="mb-0">
-                <i class="bi bi-diagram-3 me-2"></i>{{ hativa_name }}
-                <span class="badge bg-light text-dark ms-2">{{ hativa_maslulim|length }} מסלולים</span>
+                <i class="bi bi-diagram-3 me-2"></i>{{ hativa.hativa_name }}
+                <span class="badge bg-light text-dark ms-2">{{ hativa.maslulim|length }} מסלולים</span>
             </h4>
         </div>
         
+        {% if hativa.maslulim %}
         <div class="row">
-            {% for maslul in hativa_maslulim %}
+            {% for maslul in hativa.maslulim %}
             <div class="col-md-6 col-lg-4 mb-3">
                 <div class="card maslul-card h-100">
                     <div class="card-body">
@@ -193,6 +199,13 @@
             </div>
             {% endfor %}
         </div>
+        {% else %}
+        <div class="card border-0 border-top rounded-0 hativa-empty-card">
+            <div class="card-body text-center text-muted">
+                אין מסלולים משויכים לחטיבה זו עדיין
+            </div>
+        </div>
+        {% endif %}
     </div>
     {% endfor %}
 {% else %}
@@ -394,27 +407,57 @@
 {% block extra_scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const hexToRgba = (hex, alpha = 1) => {
+        if (!hex) {
+            return `rgba(102, 126, 234, ${alpha})`;
+        }
+        let normalized = hex.trim();
+        if (!normalized.startsWith('#')) {
+            return normalized;
+        }
+        if (normalized.length === 4) {
+            normalized = `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`;
+        }
+        if (normalized.length !== 7) {
+            return normalized;
+        }
+        const r = parseInt(normalized.slice(1, 3), 16);
+        const g = parseInt(normalized.slice(3, 5), 16);
+        const b = parseInt(normalized.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+
+    // Apply colors to each hativa section
+    document.querySelectorAll('.hativa-section').forEach(section => {
+        const color = section.dataset.color;
+        if (!color) {
+            return;
+        }
+        const lightColor = hexToRgba(color, 0.75);
+        section.style.setProperty('--hativa-color', color);
+        section.style.setProperty('--hativa-color-light', lightColor);
+
+        section.querySelectorAll('.maslul-card').forEach(card => {
+            card.style.setProperty('--hativa-color', color);
+        });
+
+        const emptyCard = section.querySelector('.hativa-empty-card');
+        if (emptyCard) {
+            emptyCard.style.borderColor = hexToRgba(color, 0.4);
+        }
+    });
+
     // Set dynamic colors for statistics cards
     document.querySelectorAll('.stats-card-dynamic').forEach(card => {
         const color = card.dataset.color;
         if (color) {
-            // Convert hex to rgba for transparency
-            const hexToRgba = (hex, alpha) => {
-                const r = parseInt(hex.slice(1, 3), 16);
-                const g = parseInt(hex.slice(3, 5), 16);
-                const b = parseInt(hex.slice(5, 7), 16);
-                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-            };
-            
-            // Set background gradient
-            card.style.background = `linear-gradient(135deg, ${color} 0%, ${color}dd 100%)`;
+            card.style.background = `linear-gradient(135deg, ${color} 0%, ${hexToRgba(color, 0.85)} 100%)`;
             card.style.boxShadow = `0 4px 15px ${hexToRgba(color, 0.2)}`;
-            
-            // Set hover effect
+
             card.addEventListener('mouseenter', function() {
                 this.style.boxShadow = `0 8px 25px ${hexToRgba(color, 0.35)}`;
             });
-            
+
             card.addEventListener('mouseleave', function() {
                 this.style.boxShadow = `0 4px 15px ${hexToRgba(color, 0.2)}`;
             });
