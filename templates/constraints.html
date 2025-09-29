@@ -96,6 +96,14 @@
                                 <div class="invalid-feedback d-block">{{ errors.get('sla_days_before') }}</div>
                                 {% endif %}
                             </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">מקסימום בקשות ביום</label>
+                                <input type="number" min="1" max="1000" class="form-control {% if errors and errors.get('max_requests_per_day') %}is-invalid{% endif %}" name="max_requests_per_day" value="{{ settings.limits.max_requests_per_day }}">
+                                {% if errors and errors.get('max_requests_per_day') %}
+                                <div class="invalid-feedback d-block">{{ errors.get('max_requests_per_day') }}</div>
+                                {% endif %}
+                                <small class="form-text text-muted">סך כל הבקשות הצפויות בכל האירועים באותו יום</small>
+                            </div>
                         </div>
                     </div>
 
@@ -138,9 +146,13 @@
                         <span class="text-muted">מקסימום בשבוע השלישי:</span>
                         <span class="fw-semibold">{{ settings.limits.max_third_week_meetings }}</span>
                     </li>
-                    <li class="mb-0">
+                    <li class="mb-2">
                         <span class="text-muted">ימי SLA לפני ישיבה:</span>
                         <span class="fw-semibold">{{ settings.sla_days_before }}</span>
+                    </li>
+                    <li class="mb-0">
+                        <span class="text-muted">מקסימום בקשות ביום:</span>
+                        <span class="fw-semibold">{{ settings.limits.max_requests_per_day }}</span>
                     </li>
                 </ul>
             </div>

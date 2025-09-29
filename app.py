@@ -1625,13 +1625,18 @@ def move_event():
         if route['hativa_id'] != target_committee['hativa_id']:
             return jsonify({'success': False, 'message': 'לא ניתן להעביר אירוע לועדה מחטיבה אחרת'}), 400
         
-        # Update event's committee meeting
+        # Update event's committee meeting (includes max requests validation)
         success = db.update_event_vaada(event_id, target_vaada_id)
         
         if success:
             return jsonify({'success': True, 'message': 'האירוע הועבר בהצלחה'})
         else:
             return jsonify({'success': False, 'message': 'שגיאה בהעברת האירוע'}), 500
+    
+    except ValueError as e:
+        # Handle constraint violations
+        app.logger.warning(f"Event move blocked by constraint: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)}), 400
             
     except Exception as e:
         app.logger.error(f"Error moving event: {str(e)}")

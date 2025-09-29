@@ -68,6 +68,7 @@ class ConstraintsService:
         work_start = self.db.get_system_setting('work_start_time') or '08:00'
         work_end = self.db.get_system_setting('work_end_time') or '17:00'
         sla_days_before = self.db.get_int_setting('sla_days_before', 14)
+        max_requests_per_day = self.db.get_int_setting('max_requests_per_day', 100)
 
         constraint_settings = self.db.get_constraint_settings()
         formatted_days = self._format_day_options(work_days)
@@ -86,7 +87,8 @@ class ConstraintsService:
             'limits': {
                 'max_meetings_per_day': constraint_settings['max_meetings_per_day'],
                 'max_weekly_meetings': constraint_settings['max_weekly_meetings'],
-                'max_third_week_meetings': constraint_settings['max_third_week_meetings']
+                'max_third_week_meetings': constraint_settings['max_third_week_meetings'],
+                'max_requests_per_day': max_requests_per_day
             },
             'sla_days_before': sla_days_before
         }
@@ -111,7 +113,7 @@ class ConstraintsService:
         merged['business_hours']['range'] = f"{merged['business_hours']['start']} - {merged['business_hours']['end']}"
 
         limits = merged.get('limits', {})
-        for key in ('max_meetings_per_day', 'max_weekly_meetings', 'max_third_week_meetings'):
+        for key in ('max_meetings_per_day', 'max_weekly_meetings', 'max_third_week_meetings', 'max_requests_per_day'):
             if form_values.get(key) not in (None, ''):
                 try:
                     limits[key] = int(form_values[key])
@@ -140,7 +142,8 @@ class ConstraintsService:
             'sla_days_before': data.get('sla_days_before', '').strip(),
             'max_meetings_per_day': data.get('max_meetings_per_day', '').strip(),
             'max_weekly_meetings': data.get('max_weekly_meetings', '').strip(),
-            'max_third_week_meetings': data.get('max_third_week_meetings', '').strip()
+            'max_third_week_meetings': data.get('max_third_week_meetings', '').strip(),
+            'max_requests_per_day': data.get('max_requests_per_day', '').strip()
         }
         logger.debug("Parsed constraint request payload: %s", payload)
         return payload
@@ -186,6 +189,7 @@ class ConstraintsService:
         self._validate_int(payload['max_meetings_per_day'], 'max_meetings_per_day', errors, minimum=1, maximum=10)
         self._validate_int(payload['max_weekly_meetings'], 'max_weekly_meetings', errors, minimum=1, maximum=30)
         self._validate_int(payload['max_third_week_meetings'], 'max_third_week_meetings', errors, minimum=1, maximum=30)
+        self._validate_int(payload['max_requests_per_day'], 'max_requests_per_day', errors, minimum=1, maximum=1000)
 
         if not errors:
             max_day = int(payload['max_meetings_per_day'])
@@ -218,7 +222,8 @@ class ConstraintsService:
             'sla_days_before': payload['sla_days_before'],
             'max_meetings_per_day': payload['max_meetings_per_day'],
             'max_weekly_meetings': payload['max_weekly_meetings'],
-            'max_third_week_meetings': payload['max_third_week_meetings']
+            'max_third_week_meetings': payload['max_third_week_meetings'],
+            'max_requests_per_day': payload['max_requests_per_day']
         }
 
         for key, value in updates.items():
