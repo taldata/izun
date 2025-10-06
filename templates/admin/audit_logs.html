@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+
+{% block title %}יומן ביקורת - Audit Logs{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-clipboard-list"></i> יומן ביקורת מערכת</h2>
+                <div>
+                    <button class="btn btn-outline-secondary" onclick="toggleFilters()">
+                        <i class="fas fa-filter"></i> סינון
+                    </button>
+                    <button class="btn btn-outline-primary" onclick="exportLogs()">
+                        <i class="fas fa-download"></i> ייצוא
+                    </button>
+                </div>
+            </div>
+
+            <!-- Statistics Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">סה"כ רשומות</h5>
+                            <h3>{{ stats.total_logs }}</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">פעילות ב-24 השעות האחרונות</h5>
+                            <h3>{{ stats.last_24h }}</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-danger text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">פעולות שנכשלו</h5>
+                            <h3>{{ stats.failed_ops }}</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">משתמשים פעילים</h5>
+                            <h3>{{ stats.active_users|length }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filters Panel -->
+            <div id="filtersPanel" class="card mb-4" style="display: none;">
+                <div class="card-body">
+                    <form method="get" action="{{ url_for('admin_audit_logs') }}">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label>משתמש</label>
+                                <input type="text" name="username" class="form-control" 
+                                       value="{{ request.args.get('username', '') }}" placeholder="שם משתמש">
+                            </div>
+                            <div class="col-md-3">
+                                <label>סוג פעולה</label>
+                                <select name="action" class="form-control">
+                                    <option value="">הכל</option>
+                                    <option value="create" {% if request.args.get('action') == 'create' %}selected{% endif %}>יצירה</option>
+                                    <option value="update" {% if request.args.get('action') == 'update' %}selected{% endif %}>עדכון</option>
+                                    <option value="delete" {% if request.args.get('action') == 'delete' %}selected{% endif %}>מחיקה</option>
+                                    <option value="login" {% if request.args.get('action') == 'login' %}selected{% endif %}>התחברות</option>
+                                    <option value="logout" {% if request.args.get('action') == 'logout' %}selected{% endif %}>התנתקות</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label>סוג ישות</label>
+                                <select name="entity_type" class="form-control">
+                                    <option value="">הכל</option>
+                                    <option value="hativa" {% if request.args.get('entity_type') == 'hativa' %}selected{% endif %}>חטיבה</option>
+                                    <option value="maslul" {% if request.args.get('entity_type') == 'maslul' %}selected{% endif %}>מסלול</option>
+                                    <option value="committee_type" {% if request.args.get('entity_type') == 'committee_type' %}selected{% endif %}>סוג ועדה</option>
+                                    <option value="vaada" {% if request.args.get('entity_type') == 'vaada' %}selected{% endif %}>ועדה</option>
+                                    <option value="event" {% if request.args.get('entity_type') == 'event' %}selected{% endif %}>אירוע</option>
+                                    <option value="user" {% if request.args.get('entity_type') == 'user' %}selected{% endif %}>משתמש</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label>סטטוס</label>
+                                <select name="status" class="form-control">
+                                    <option value="">הכל</option>
+                                    <option value="success" {% if request.args.get('status') == 'success' %}selected{% endif %}>הצלחה</option>
+                                    <option value="error" {% if request.args.get('status') == 'error' %}selected{% endif %}>שגיאה</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-3">
+                                <label>מתאריך</label>
+                                <input type="date" name="start_date" class="form-control" 
+                                       value="{{ request.args.get('start_date', '') }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label>עד תאריך</label>
+                                <input type="date" name="end_date" class="form-control" 
+                                       value="{{ request.args.get('end_date', '') }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label>&nbsp;</label><br>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search"></i> חפש
+                                </button>
+                                <a href="{{ url_for('admin_audit_logs') }}" class="btn btn-secondary">
+                                    <i class="fas fa-times"></i> נקה
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Logs Table -->
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>זמן</th>
+                                    <th>משתמש</th>
+                                    <th>פעולה</th>
+                                    <th>ישות</th>
+                                    <th>פרטים</th>
+                                    <th>כתובת IP</th>
+                                    <th>סטטוס</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in logs %}
+                                <tr class="{% if log.status == 'error' %}table-danger{% endif %}">
+                                    <td dir="ltr" class="text-end">{{ log.timestamp }}</td>
+                                    <td>{{ log.username or '-' }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if log.action == 'create' %}bg-success
+                                            {% elif log.action == 'update' %}bg-warning
+                                            {% elif log.action == 'delete' %}bg-danger
+                                            {% elif log.action == 'login' %}bg-primary
+                                            {% elif log.action == 'logout' %}bg-secondary
+                                            {% else %}bg-info{% endif %}">
+                                            {{ log.action }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <strong>{{ log.entity_type }}</strong>
+                                        {% if log.entity_name %}: {{ log.entity_name }}{% endif %}
+                                    </td>
+                                    <td>
+                                        {% if log.details %}
+                                            <small class="text-muted">{{ log.details }}</small>
+                                        {% endif %}
+                                        {% if log.error_message %}
+                                            <div class="text-danger small">
+                                                <i class="fas fa-exclamation-triangle"></i> {{ log.error_message }}
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                    <td><small>{{ log.ip_address or '-' }}</small></td>
+                                    <td>
+                                        {% if log.status == 'success' %}
+                                            <span class="badge bg-success">הצלחה</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">שגיאה</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    {% if total_pages > 1 %}
+                    <nav aria-label="Page navigation" class="mt-3">
+                        <ul class="pagination justify-content-center">
+                            {% if current_page > 1 %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ current_page - 1 }}{% if request.args.get('username') %}&username={{ request.args.get('username') }}{% endif %}{% if request.args.get('action') %}&action={{ request.args.get('action') }}{% endif %}{% if request.args.get('entity_type') %}&entity_type={{ request.args.get('entity_type') }}{% endif %}">הקודם</a>
+                            </li>
+                            {% endif %}
+                            
+                            {% for i in range(1, total_pages + 1) %}
+                                {% if i == current_page %}
+                                    <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                                {% elif i >= current_page - 2 and i <= current_page + 2 %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ i }}{% if request.args.get('username') %}&username={{ request.args.get('username') }}{% endif %}{% if request.args.get('action') %}&action={{ request.args.get('action') }}{% endif %}{% if request.args.get('entity_type') %}&entity_type={{ request.args.get('entity_type') }}{% endif %}">{{ i }}</a>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if current_page < total_pages %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ current_page + 1 }}{% if request.args.get('username') %}&username={{ request.args.get('username') }}{% endif %}{% if request.args.get('action') %}&action={{ request.args.get('action') }}{% endif %}{% if request.args.get('entity_type') %}&entity_type={{ request.args.get('entity_type') }}{% endif %}">הבא</a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Most Active Users -->
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-user-friends"></i> משתמשים פעילים ביותר</h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group">
+                                {% for user in stats.active_users %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ user.username }}
+                                    <span class="badge bg-primary rounded-pill">{{ user.count }}</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-chart-bar"></i> פעולות נפוצות</h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group">
+                                {% for action in stats.actions[:5] %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ action.action }}
+                                    <span class="badge bg-secondary rounded-pill">{{ action.count }}</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleFilters() {
+    const panel = document.getElementById('filtersPanel');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+function exportLogs() {
+    // Build query string from current filters
+    const params = new URLSearchParams(window.location.search);
+    window.location.href = '/admin/audit_logs/export?' + params.toString();
+}
+</script>
+{% endblock %}
+

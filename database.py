@@ -133,6 +133,37 @@ class DatabaseManager:
             )
         ''')
         
+        # Create audit logs table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                user_id INTEGER,
+                username TEXT,
+                action TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                entity_id INTEGER,
+                entity_name TEXT,
+                details TEXT,
+                ip_address TEXT,
+                user_agent TEXT,
+                status TEXT DEFAULT 'success',
+                error_message TEXT,
+                FOREIGN KEY (user_id) REFERENCES users (user_id)
+            )
+        ''')
+        
+        # Create index for faster log queries
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs (timestamp DESC)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs (user_id)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs (entity_type, entity_id)
+        ''')
+        
         cursor.execute('''
             INSERT OR IGNORE INTO system_settings (setting_key, setting_value, description)
             VALUES 
@@ -680,6 +711,25 @@ class DatabaseManager:
             if conn:
                 conn.close()
 
+    def delete_vaada(self, vaadot_id: int) -> bool:
+        """Delete a committee meeting"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # Delete the vaada (events will be cascade deleted due to foreign key)
+            cursor.execute('DELETE FROM vaadot WHERE vaadot_id = ?', (vaadot_id,))
+            success = cursor.rowcount > 0
+            
+            conn.commit()
+            conn.close()
+            return success
+        except Exception as e:
+            print(f"Error deleting vaada: {e}")
+            if 'conn' in locals():
+                conn.close()
+            return False
+    
     def _get_week_bounds(self, check_date: date) -> Tuple[date, date]:
         """Return start (Sunday) and end (Saturday) dates for the week of the given date."""
         days_since_sunday = (check_date.weekday() + 1) % 7
@@ -1670,6 +1720,191 @@ class DatabaseManager:
             if 'conn' in locals():
                 conn.close()
             return None
+    
+    # Audit Log Methods
+    def add_audit_log(self, user_id: Optional[int], username: str, action: str, 
+                     entity_type: str, entity_id: Optional[int] = None, 
+                     entity_name: Optional[str] = None, details: Optional[str] = None,
+                     ip_address: Optional[str] = None, user_agent: Optional[str] = None,
+                     status: str = 'success', error_message: Optional[str] = None) -> int:
+        """Add an audit log entry"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO audit_logs 
+            (user_id, username, action, entity_type, entity_id, entity_name, details, 
+             ip_address, user_agent, status, error_message)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (user_id, username, action, entity_type, entity_id, entity_name, details,
+              ip_address, user_agent, status, error_message))
+        log_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return log_id
+    
+    def get_audit_logs(self, limit: int = 100, offset: int = 0, 
+                       user_id: Optional[int] = None, 
+                       entity_type: Optional[str] = None,
+                       action: Optional[str] = None,
+                       start_date: Optional[date] = None,
+                       end_date: Optional[date] = None) -> List[Dict]:
+        """Get audit logs with optional filters"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        query = '''
+            SELECT log_id, timestamp, user_id, username, action, entity_type, 
+                   entity_id, entity_name, details, ip_address, user_agent, status, error_message
+            FROM audit_logs
+            WHERE 1=1
+        '''
+        params = []
+        
+        if user_id:
+            query += ' AND user_id = ?'
+            params.append(user_id)
+        
+        if entity_type:
+            query += ' AND entity_type = ?'
+            params.append(entity_type)
+        
+        if action:
+            query += ' AND action = ?'
+            params.append(action)
+        
+        if start_date:
+            query += ' AND DATE(timestamp) >= ?'
+            params.append(start_date)
+        
+        if end_date:
+            query += ' AND DATE(timestamp) <= ?'
+            params.append(end_date)
+        
+        query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?'
+        params.extend([limit, offset])
+        
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [{
+            'log_id': row[0],
+            'timestamp': row[1],
+            'user_id': row[2],
+            'username': row[3],
+            'action': row[4],
+            'entity_type': row[5],
+            'entity_id': row[6],
+            'entity_name': row[7],
+            'details': row[8],
+            'ip_address': row[9],
+            'user_agent': row[10],
+            'status': row[11],
+            'error_message': row[12]
+        } for row in rows]
+    
+    def get_audit_logs_count(self, user_id: Optional[int] = None,
+                            entity_type: Optional[str] = None,
+                            action: Optional[str] = None,
+                            start_date: Optional[date] = None,
+                            end_date: Optional[date] = None) -> int:
+        """Get total count of audit logs matching filters"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        query = 'SELECT COUNT(*) FROM audit_logs WHERE 1=1'
+        params = []
+        
+        if user_id:
+            query += ' AND user_id = ?'
+            params.append(user_id)
+        
+        if entity_type:
+            query += ' AND entity_type = ?'
+            params.append(entity_type)
+        
+        if action:
+            query += ' AND action = ?'
+            params.append(action)
+        
+        if start_date:
+            query += ' AND DATE(timestamp) >= ?'
+            params.append(start_date)
+        
+        if end_date:
+            query += ' AND DATE(timestamp) <= ?'
+            params.append(end_date)
+        
+        cursor.execute(query, params)
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+    
+    def get_audit_statistics(self) -> Dict:
+        """Get audit log statistics"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Total logs
+        cursor.execute('SELECT COUNT(*) FROM audit_logs')
+        total_logs = cursor.fetchone()[0]
+        
+        # Logs by action
+        cursor.execute('''
+            SELECT action, COUNT(*) as count 
+            FROM audit_logs 
+            GROUP BY action 
+            ORDER BY count DESC 
+            LIMIT 10
+        ''')
+        actions = [{'action': row[0], 'count': row[1]} for row in cursor.fetchall()]
+        
+        # Logs by entity type
+        cursor.execute('''
+            SELECT entity_type, COUNT(*) as count 
+            FROM audit_logs 
+            GROUP BY entity_type 
+            ORDER BY count DESC
+        ''')
+        entities = [{'entity_type': row[0], 'count': row[1]} for row in cursor.fetchall()]
+        
+        # Recent activity (last 24 hours)
+        cursor.execute('''
+            SELECT COUNT(*) 
+            FROM audit_logs 
+            WHERE timestamp >= datetime('now', '-1 day')
+        ''')
+        last_24h = cursor.fetchone()[0]
+        
+        # Failed operations
+        cursor.execute('''
+            SELECT COUNT(*) 
+            FROM audit_logs 
+            WHERE status = 'error'
+        ''')
+        failed_ops = cursor.fetchone()[0]
+        
+        # Most active users
+        cursor.execute('''
+            SELECT username, COUNT(*) as count 
+            FROM audit_logs 
+            WHERE username IS NOT NULL
+            GROUP BY username 
+            ORDER BY count DESC 
+            LIMIT 5
+        ''')
+        active_users = [{'username': row[0], 'count': row[1]} for row in cursor.fetchall()]
+        
+        conn.close()
+        
+        return {
+            'total_logs': total_logs,
+            'actions': actions,
+            'entities': entities,
+            'last_24h': last_24h,
+            'failed_ops': failed_ops,
+            'active_users': active_users
+        }
     
     def update_event_vaada(self, event_id: int, new_vaada_id: int) -> bool:
         """Update event's committee meeting with max requests constraint validation"""

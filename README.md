@@ -9,6 +9,7 @@
 - **ניהול מסלולים** הקשורים לחטיבות עם היררכיה ברורה
 - **מערכת הרשאות** מבוססת תפקידים (Admin, Manager, User)
 - **הרשאות מבוססות חטיבה** - משתמשים יכולים לגשת רק לחטיבה שלהם
+- **📋 יומן ביקורת מקיף** - תיעוד מלא של כל הפעולות במערכת
 
 ### 📅 ניהול סוגי ועדות גמיש
 - **יצירה דינמית** של סוגי ועדות לכל חטיבה
@@ -119,6 +120,7 @@ izun/
 - **exception_dates** - חגים ותאריכי חריגים
 - **users** - משתמשים עם הרשאות
 - **system_settings** - הגדרות מערכת גלובליות
+- **audit_logs** - יומן ביקורת מקיף לכל הפעולות
 
 ## שימוש במערכת
 
@@ -152,6 +154,7 @@ izun/
 - **ניהול מסלולים**: קישור לחטיבות
 - **ניהול משתמשים**: הרשאות והקצאת חטיבות
 - **תאריכי חריגים**: חגים וימי שבתון
+- **📋 יומן ביקורת**: צפייה, סינון וייצוא של כל הפעולות במערכת
 
 ## אילוצי תזמון מתקדמים
 
@@ -254,4 +257,5 @@ gunicorn -w 4 -b 0.0.0.0:5001 wsgi:app
 ### קבלת עזרה
 - בדוק את [ERD.md](ERD.md) למבנה מסד הנתונים
 - בדוק את [USER_GUIDE.md](USER_GUIDE.md) למדריך מפורט
+- בדוק את [AUDIT_LOGGING_GUIDE.md](AUDIT_LOGGING_GUIDE.md) למדריך יומן הביקורת
 - הרץ בדיקות מערכת עם `python -m pytest` (אם מותקן)
