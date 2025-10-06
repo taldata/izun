@@ -2,23 +2,8 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}איזון עומסים{% endblock %}</title>
-    
-    <!-- PWA Meta Tags -->
-    <meta name="description" content="מערכת ניהול ועדות ותזמון אוטומטי - רשות החדשנות">
-    <meta name="theme-color" content="#667eea">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="איזון עומסים">
-    <meta name="format-detection" content="telephone=no">
-    
-    <!-- iOS Splash Screens -->
-    <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg">
-    <link rel="apple-touch-startup-image" href="https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg">
-    
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg">
@@ -214,11 +199,58 @@
         </div>
     </footer>
 
+    <!-- Mobile Device Block Overlay -->
+    <div id="mobileBlockOverlay" class="mobile-block-overlay" style="display: none;">
+        <div class="mobile-block-content">
+            <i class="bi bi-exclamation-triangle-fill text-warning mb-3" style="font-size: 4rem;"></i>
+            <h2>גישה ממכשיר נייד אינה נתמכת</h2>
+            <p class="lead">מערכת איזון עומסים מיועדת לעבודה ממחשב שולחני בלבד.</p>
+            <p>אנא היכנס למערכת ממחשב נייח או נייד (לא טאבלט או סמארטפון).</p>
+            <div class="mt-4">
+                <i class="bi bi-laptop me-2"></i>
+                <span>יש להשתמש במסך ברזולוציה מינימלית של 1024px</span>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    <!-- Mobile Enhancements -->
-    <script src="{{ url_for('static', filename='js/mobile.js') }}"></script>
+    
+    <script>
+    // Block mobile devices
+    function isMobileDevice() {
+        const userAgent = navigator.userAgent.toLowerCase();
+        const mobileKeywords = ['android', 'webos', 'iphone', 'ipad', 'ipod', 'blackberry', 'windows phone', 'mobile'];
+        const isMobileUA = mobileKeywords.some(keyword => userAgent.includes(keyword));
+        const isSmallScreen = window.innerWidth < 1024 || window.innerHeight < 768;
+        const isTouchOnly = navigator.maxTouchPoints > 0 && !window.matchMedia('(pointer: fine)').matches;
+        
+        return isMobileUA || (isSmallScreen && isTouchOnly);
+    }
+
+    function blockMobileAccess() {
+        if (isMobileDevice()) {
+            document.getElementById('mobileBlockOverlay').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            return true;
+        }
+        return false;
+    }
+
+    // Check on page load
+    document.addEventListener('DOMContentLoaded', blockMobileAccess);
+    
+    // Check on window resize
+    window.addEventListener('resize', function() {
+        if (isMobileDevice()) {
+            blockMobileAccess();
+        } else {
+            document.getElementById('mobileBlockOverlay').style.display = 'none';
+            document.body.style.overflow = '';
+        }
+    });
+    </script>
     
     <script>
     // Admin functions

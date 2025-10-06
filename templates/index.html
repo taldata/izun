@@ -13,8 +13,8 @@
                 <i class="bi bi-calendar3 me-2"></i>יומן ועדות ואירועים
             </h2>
             <div class="d-flex flex-column flex-md-row gap-2 align-items-stretch align-items-md-center w-100 w-md-auto">
-                <!-- Calendar Controls - Hidden on mobile -->
-                <div class="d-none d-md-flex gap-2 align-items-center">
+                <!-- Calendar Controls -->
+                <div class="d-flex gap-2 align-items-center">
                     <label class="form-label mb-0 me-2">תצוגה:</label>
                     <select class="form-select form-select-sm" id="monthsToShow" onchange="updateCalendarView()" style="width: auto;">
                         <option value="1">חודש אחד</option>
@@ -453,57 +453,9 @@
     </div>
 </div>
 
-<!-- Floating Action Button for Mobile -->
-<button class="fab d-md-none" onclick="showMobileQuickActions()" aria-label="פעולות מהירות">
-    <i class="bi bi-plus-lg"></i>
-</button>
-
-<!-- Mobile Quick Actions Bottom Sheet -->
-<div class="modal fade" id="mobileQuickActionsModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-bottom">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-lightning me-2"></i>פעולות מהירות</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-3">
-                <div class="d-grid gap-2">
-                    <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#addCommitteeModal" data-bs-dismiss="modal">
-                        <i class="bi bi-people me-2"></i>הוסף ישיבת ועדה
-                    </button>
-                    <button class="btn btn-info btn-lg" data-bs-toggle="modal" data-bs-target="#addEventModal" data-bs-dismiss="modal">
-                        <i class="bi bi-calendar-plus me-2"></i>הוסף אירוע חדש
-                    </button>
-                    <a href="{{ url_for('auto_schedule') }}" class="btn btn-success btn-lg">
-                        <i class="bi bi-robot me-2"></i>תזמון אוטומטי
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
-// Mobile Quick Actions
-function showMobileQuickActions() {
-    const modal = new bootstrap.Modal(document.getElementById('mobileQuickActionsModal'));
-    modal.show();
-}
-
-// Force single month view on mobile
-document.addEventListener('DOMContentLoaded', function() {
-    if (window.innerWidth <= 768) {
-        const monthsToShowSelect = document.getElementById('monthsToShow');
-        if (monthsToShowSelect) {
-            monthsToShowSelect.value = '1';
-            monthsToShow = 1;
-        }
-    }
-});
-</script>
 <script>
 // Calendar functionality
 let currentDate = new Date();

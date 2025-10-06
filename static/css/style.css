@@ -144,326 +144,6 @@ footer {
     opacity: 0.6;
 }
 
-/* ===========================
-   MOBILE RESPONSIVE IMPROVEMENTS
-   =========================== */
-
-/* Touch-friendly buttons and interactions */
-@media (hover: none) and (pointer: coarse) {
-    .btn, .nav-link, .dropdown-item {
-        min-height: 44px;
-        min-width: 44px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-    
-    /* Remove hover effects on touch devices */
-    .card:hover {
-        transform: none;
-    }
-}
-
-/* Tablet styles */
-@media (max-width: 992px) {
-    .navbar-brand img {
-        height: 45px !important;
-    }
-    
-    .jumbotron {
-        padding: 2rem 1.5rem !important;
-    }
-    
-    .stats-card {
-        margin-bottom: 1rem;
-    }
-}
-
-/* Mobile styles */
-@media (max-width: 768px) {
-    /* Container and spacing */
-    .container {
-        padding-left: 10px;
-        padding-right: 10px;
-    }
-    
-    body {
-        font-size: 14px;
-    }
-    
-    /* Navigation improvements */
-    .navbar {
-        padding: 0.5rem 0 !important;
-    }
-    
-    .navbar-brand {
-        font-size: 1.1rem;
-        padding: 0.5rem 0;
-    }
-    
-    .navbar-brand img {
-        height: 40px !important;
-        margin-left: 6px !important;
-    }
-    
-    .navbar-collapse {
-        background: rgba(102, 126, 234, 0.98);
-        margin: 0.5rem -15px;
-        padding: 1rem 15px;
-        border-radius: 10px;
-        margin-top: 1rem;
-    }
-    
-    .navbar-nav .nav-item {
-        margin: 0.25rem 0;
-    }
-    
-    .nav-link {
-        padding: 0.75rem 1rem !important;
-        border-radius: 8px;
-    }
-    
-    .dropdown-menu {
-        border: none;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-    
-    /* Card improvements */
-    .card {
-        margin-bottom: 1rem;
-        border-radius: 12px;
-    }
-    
-    .card-body {
-        padding: 1rem;
-    }
-    
-    .card-title {
-        font-size: 1.1rem;
-    }
-    
-    /* Button improvements */
-    .btn {
-        padding: 0.65rem 1.25rem;
-        font-size: 0.95rem;
-        margin-bottom: 0.5rem;
-    }
-    
-    .btn-group {
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .btn-group .btn {
-        width: 100%;
-        margin: 0.25rem 0;
-        border-radius: 8px !important;
-    }
-    
-    /* Table to cards conversion */
-    .table-responsive {
-        border: none;
-    }
-    
-    .table-mobile-cards {
-        display: none;
-    }
-    
-    @media (max-width: 768px) {
-        .table-desktop {
-            display: none;
-        }
-        
-        .table-mobile-cards {
-            display: block;
-        }
-        
-        .mobile-card {
-            background: white;
-            border-radius: 12px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-        }
-        
-        .mobile-card-header {
-            font-weight: 600;
-            font-size: 1.1rem;
-            margin-bottom: 0.75rem;
-            padding-bottom: 0.75rem;
-            border-bottom: 2px solid #f0f0f0;
-        }
-        
-        .mobile-card-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid #f8f9fa;
-        }
-        
-        .mobile-card-label {
-            font-weight: 600;
-            color: #666;
-            font-size: 0.9rem;
-        }
-        
-        .mobile-card-value {
-            text-align: left;
-            font-size: 0.95rem;
-        }
-        
-        .mobile-card-actions {
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 2px solid #f0f0f0;
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-        }
-    }
-    
-    /* Modal improvements */
-    .modal-dialog {
-        margin: 0.5rem;
-        max-width: calc(100% - 1rem);
-    }
-    
-    .modal-content {
-        border-radius: 12px;
-    }
-    
-    .modal-header {
-        padding: 1rem;
-    }
-    
-    .modal-body {
-        padding: 1rem;
-    }
-    
-    .modal-footer {
-        padding: 1rem;
-        flex-wrap: wrap;
-    }
-    
-    .modal-footer .btn {
-        flex: 1;
-        min-width: 120px;
-    }
-    
-    /* Form improvements */
-    .form-label {
-        font-size: 0.95rem;
-        margin-bottom: 0.4rem;
-    }
-    
-    .form-control, .form-select {
-        font-size: 16px; /* Prevents zoom on iOS */
-        padding: 0.75rem;
-        border-radius: 8px;
-    }
-    
-    .input-group {
-        flex-wrap: nowrap;
-    }
-    
-    /* Alert improvements */
-    .alert {
-        padding: 0.75rem 1rem;
-        font-size: 0.9rem;
-        border-radius: 10px;
-    }
-    
-    /* Calendar improvements */
-    .calendar-day {
-        min-height: 80px;
-        font-size: 0.85rem;
-    }
-    
-    /* Stats cards */
-    .stats-card {
-        margin-bottom: 1rem;
-    }
-    
-    .stats-card .display-6 {
-        font-size: 1.5rem;
-    }
-    
-    /* Footer */
-    footer {
-        padding: 1.5rem 0 !important;
-        font-size: 0.85rem;
-    }
-    
-    footer img {
-        height: 24px !important;
-    }
-    
-    /* Jumbotron */
-    .jumbotron {
-        padding: 1.5rem 1rem !important;
-        border-radius: 12px;
-    }
-    
-    .jumbotron h1 {
-        font-size: 1.5rem;
-    }
-    
-    .jumbotron p {
-        font-size: 0.9rem;
-    }
-    
-    /* Badge improvements */
-    .badge {
-        font-size: 0.8rem;
-        padding: 0.4em 0.65em;
-    }
-    
-    /* Section titles */
-    .section-title {
-        font-size: 1.2rem;
-        margin-bottom: 1rem;
-    }
-}
-
-/* Small mobile devices */
-@media (max-width: 576px) {
-    .container {
-        padding-left: 8px;
-        padding-right: 8px;
-    }
-    
-    .card-body {
-        padding: 0.75rem;
-    }
-    
-    .btn {
-        font-size: 0.9rem;
-        padding: 0.6rem 1rem;
-    }
-    
-    h1 {
-        font-size: 1.5rem;
-    }
-    
-    h2 {
-        font-size: 1.3rem;
-    }
-    
-    h3 {
-        font-size: 1.15rem;
-    }
-    
-    .modal-dialog {
-        margin: 0.25rem;
-        max-width: calc(100% - 0.5rem);
-    }
-    
-    /* Stack columns on very small screens */
-    .row > [class*="col-"] {
-        margin-bottom: 1rem;
-    }
-}
-
 /* Dark mode support (optional) */
 @media (prefers-color-scheme: dark) {
     body {
@@ -546,334 +226,86 @@ footer {
     font-size: 0.875rem;
 }
 
-/* ===========================
-   MOBILE-SPECIFIC FEATURES
-   =========================== */
-
-/* Pull to Refresh Indicator */
-.pull-to-refresh-indicator {
+/* Mobile Device Block Overlay */
+.mobile-block-overlay {
     position: fixed;
     top: 0;
-    left: 50%;
-    transform: translateX(-50%) translateY(-100px);
-    z-index: 9999;
-    background: white;
-    padding: 15px 30px;
-    border-radius: 25px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transition: all 0.3s ease;
-    opacity: 0;
-}
-
-.pull-to-refresh-indicator.ready {
-    background: #198754;
-    color: white;
-}
-
-.pull-to-refresh-indicator.refreshing .refresh-spinner {
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-.refresh-spinner {
-    font-size: 1.5rem;
-}
-
-.refresh-text {
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-/* Bottom Navigation */
-.bottom-navigation {
-    position: fixed;
-    bottom: 0;
     left: 0;
     right: 0;
-    background: white;
-    border-top: 1px solid #e0e0e0;
+    bottom: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    z-index: 99999;
     display: flex;
-    justify-content: space-around;
-    align-items: center;
-    padding: 8px 0;
-    z-index: 1000;
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-}
-
-.bottom-nav-item {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 8px;
-    color: #666;
-    text-decoration: none;
-    transition: all 0.3s ease;
-    background: none;
-    border: none;
-    font-size: 0.75rem;
-    cursor: pointer;
+    padding: 2rem;
 }
 
-.bottom-nav-item i {
-    font-size: 1.5rem;
-    margin-bottom: 4px;
+.mobile-block-content {
+    background: white;
+    border-radius: 20px;
+    padding: 3rem 2rem;
+    max-width: 600px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: slideIn 0.5s ease-out;
 }
 
-.bottom-nav-item.active {
-    color: #667eea;
-    font-weight: 600;
+.mobile-block-content h2 {
+    color: #2c3e50;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
 }
 
-.bottom-nav-item:active {
-    transform: scale(0.95);
-    background: #f8f9fa;
-}
-
-/* Mobile Notification */
-.mobile-notification {
-    position: fixed;
-    bottom: 80px;
-    left: 50%;
-    transform: translateX(-50%) translateY(100px);
-    background: #333;
-    color: white;
-    padding: 12px 24px;
-    border-radius: 25px;
-    font-size: 0.9rem;
-    z-index: 9999;
-    transition: transform 0.3s ease;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-}
-
-.mobile-notification.show {
-    transform: translateX(-50%) translateY(0);
-}
-
-.mobile-notification.info {
-    background: #0dcaf0;
-}
-
-.mobile-notification.success {
-    background: #198754;
-}
-
-.mobile-notification.error {
-    background: #dc3545;
-}
-
-/* Swipe Actions */
-.mobile-card.swiped {
-    position: relative;
-}
-
-.mobile-card.swiped::after {
-    content: '⋯';
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 1.5rem;
-    color: #667eea;
-}
-
-/* Bottom Sheet Modal */
-.mobile-bottom-sheet .modal-dialog {
-    margin: 0 !important;
-    max-width: 100% !important;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-}
-
-.mobile-bottom-sheet .modal-content {
-    border-radius: 20px 20px 0 0;
-    border: none;
-    max-height: 85vh;
-    overflow-y: auto;
-}
-
-.mobile-bottom-sheet .modal-header {
-    border-radius: 20px 20px 0 0;
-    padding: 1.5rem 1rem 1rem;
-    position: relative;
-}
-
-.mobile-bottom-sheet .modal-header::before {
-    content: '';
-    position: absolute;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 40px;
-    height: 4px;
-    background: #ddd;
-    border-radius: 2px;
-}
-
-/* Touch Feedback */
-.mobile-device .btn:active,
-.mobile-device .card:active,
-.mobile-device .nav-link:active {
-    opacity: 0.7;
-    transform: scale(0.98);
-}
-
-/* Loading Skeleton for Mobile */
-.skeleton {
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-    background-size: 200% 100%;
-    animation: loading 1.5s infinite;
-}
-
-@keyframes loading {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
-
-.skeleton-card {
-    height: 120px;
-    border-radius: 12px;
+.mobile-block-content .lead {
+    color: #34495e;
+    font-size: 1.2rem;
     margin-bottom: 1rem;
 }
 
-/* Floating Action Button */
-.fab {
-    position: fixed;
-    bottom: 80px;
-    left: 20px;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border: none;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    z-index: 999;
-    transition: all 0.3s ease;
+.mobile-block-content p {
+    color: #7f8c8d;
+    font-size: 1rem;
+    line-height: 1.6;
 }
 
-.fab:active {
-    transform: scale(0.95);
+.mobile-block-content .text-warning {
+    color: #f39c12 !important;
 }
 
-.fab:hover {
-    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
-}
-
-/* Improved Touch Targets */
-@media (max-width: 768px) {
-    input[type="checkbox"],
-    input[type="radio"] {
-        width: 24px;
-        height: 24px;
-        cursor: pointer;
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-30px);
     }
-    
-    .form-check-label {
-        padding-right: 8px;
-        cursor: pointer;
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 
-/* Safe Area for Notch Devices */
-@supports (padding: max(0px)) {
-    .navbar,
-    .bottom-navigation {
-        padding-left: max(15px, env(safe-area-inset-left));
-        padding-right: max(15px, env(safe-area-inset-right));
+/* Responsive text for the mobile block message */
+@media (max-width: 480px) {
+    .mobile-block-content {
+        padding: 2rem 1.5rem;
     }
     
-    .bottom-navigation {
-        padding-bottom: max(8px, env(safe-area-inset-bottom));
+    .mobile-block-content h2 {
+        font-size: 1.5rem;
     }
     
-    body {
-        padding-bottom: max(70px, calc(70px + env(safe-area-inset-bottom)));
-    }
-}
-
-/* ===========================
-   CALENDAR MOBILE OPTIMIZATIONS
-   =========================== */
-
-@media (max-width: 768px) {
-    /* Calendar cells */
-    .calendar-cell {
-        height: 60px !important;
-        font-size: 0.75rem;
-        padding: 4px !important;
+    .mobile-block-content .lead {
+        font-size: 1rem;
     }
     
-    .calendar-cell .fw-bold {
-        font-size: 0.9rem;
+    .mobile-block-content i {
+        font-size: 3rem !important;
     }
-    
-    /* Calendar table */
-    .table {
-        font-size: 0.75rem;
-    }
-    
-    .table th {
-        padding: 0.5rem 0.25rem;
-        font-size: 0.7rem;
-    }
-    
-    /* Committee badges in calendar */
-    .calendar-cell .badge {
-        font-size: 0.65rem;
-        padding: 0.15rem 0.35rem;
-        display: block;
-        margin-bottom: 2px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    
-    /* Calendar navigation */
-    .calendar-cell:hover {
-        cursor: pointer;
-        background-color: #f8f9fa;
-    }
-    
-    /* Hide drag handles on mobile */
-    .drag-handle {
-        display: none !important;
-    }
-}
-
-/* Modal bottom sheet style */
-.modal-dialog-bottom {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    margin: 0;
-    width: 100%;
-    max-width: 100%;
-}
-
-.modal-dialog-bottom .modal-content {
-    border-radius: 20px 20px 0 0;
-    border: none;
 }
 
 /* Print styles */
 @media print {
-    .navbar, .btn, .modal, footer, .bottom-navigation, .fab, .pull-to-refresh-indicator {
+    .navbar, .btn, .modal, footer {
         display: none !important;
     }
     

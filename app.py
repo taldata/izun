@@ -22,6 +22,26 @@ constraints_service = ConstraintsService(db)
 committee_types_service = CommitteeTypesService(db)
 auth_manager = AuthManager(db)
 
+# Mobile device detection middleware
+def is_mobile_device():
+    """Detect if the request is from a mobile device"""
+    user_agent = request.headers.get('User-Agent', '').lower()
+    mobile_keywords = ['android', 'webos', 'iphone', 'ipad', 'ipod', 'blackberry', 'windows phone', 'mobile']
+    return any(keyword in user_agent for keyword in mobile_keywords)
+
+@app.before_request
+def check_mobile_access():
+    """Block mobile device access (optional - can be disabled)"""
+    # Skip check for static files and API endpoints
+    if request.path.startswith('/static/') or request.path.startswith('/api/'):
+        return None
+    
+    # Uncomment the following lines to enable server-side mobile blocking
+    # if is_mobile_device():
+    #     return render_template('mobile_blocked.html'), 403
+    
+    return None
+
 # Authentication routes
 @app.route('/login', methods=['GET', 'POST'])
 def login():
