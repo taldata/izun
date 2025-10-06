@@ -8,63 +8,94 @@
 <!-- Calendar Section -->
 <div class="row">
     <div class="col-12">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
-            <h2 class="section-title mb-0">
-                <i class="bi bi-calendar3 me-2"></i>יומן ועדות ואירועים
-            </h2>
-            <div class="d-flex flex-column flex-md-row gap-2 align-items-stretch align-items-md-center w-100 w-md-auto">
-                <!-- Calendar Controls -->
-                <div class="d-flex gap-2 align-items-center">
-                    <label class="form-label mb-0 me-2">תצוגה:</label>
-                    <select class="form-select form-select-sm" id="monthsToShow" onchange="updateCalendarView()" style="width: auto;">
-                        <option value="1">חודש אחד</option>
-                        <option value="2">2 חודשים</option>
-                        <option value="3">3 חודשים</option>
-                    </select>
-                </div>
+        <!-- Calendar Header -->
+        <div class="calendar-header-section mb-4">
+            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3">
+                <h2 class="section-title mb-0 text-primary">
+                    <i class="bi bi-calendar3 me-2"></i>יומן ועדות ואירועים
+                </h2>
                 
-                <!-- Deadline Dates Toggle -->
-                <div class="d-flex gap-2 align-items-center">
-                    <div class="form-check form-switch mb-0">
-                        <input class="form-check-input" type="checkbox" id="showDeadlineDatesToggle" 
-                               onchange="toggleDeadlineDates()" 
-                               {% if show_deadline_dates %}checked{% endif %}>
-                        <label class="form-check-label" for="showDeadlineDatesToggle" style="white-space: nowrap;">
-                            <i class="bi bi-calendar-check me-1"></i>תאריכי דדליין
-                        </label>
+                <!-- Enhanced Calendar Controls Bar -->
+                <div class="calendar-controls-wrapper">
+                    <div class="calendar-controls-container">
+                        <!-- View Options Group -->
+                        <div class="control-group view-group">
+                            <div class="control-header">
+                                <i class="bi bi-grid-3x3-gap me-1"></i>
+                                <span>תצוגה</span>
+                            </div>
+                            <select class="form-select control-select" id="monthsToShow" onchange="updateCalendarView()">
+                                <option value="1">חודש אחד</option>
+                                <option value="2">חודשיים</option>
+                                <option value="3">שלושה חודשים</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Display Options Group -->
+                        <div class="control-group options-group">
+                            <div class="control-header">
+                                <i class="bi bi-toggles"></i>
+                                <span>אפשרויות</span>
+                            </div>
+                            <div class="form-check form-switch deadline-toggle">
+                                <label class="form-check-label" for="showDeadlineDatesToggle">
+                                    <i class="bi bi-calendar-check"></i>
+                                    <span class="d-none d-md-inline">תאריכי דדליין</span>
+                                    <span class="d-inline d-md-none">דדליין</span>
+                                </label>
+                                <input class="form-check-input" type="checkbox" id="showDeadlineDatesToggle" 
+                                       onchange="toggleDeadlineDates()" 
+                                       {% if show_deadline_dates %}checked{% endif %}>
+                            </div>
+                        </div>
+                        
+                        <!-- Date Selection Group -->
+                        <div class="control-group date-group">
+                            <div class="control-header">
+                                <i class="bi bi-calendar-date me-1"></i>
+                                <span>תאריך</span>
+                            </div>
+                            <div class="date-selectors">
+                                <select class="form-select control-select month-select" id="monthSelect" onchange="goToSelectedMonth()">
+                                    <option value="0">ינואר</option>
+                                    <option value="1">פברואר</option>
+                                    <option value="2">מרץ</option>
+                                    <option value="3">אפריל</option>
+                                    <option value="4">מאי</option>
+                                    <option value="5">יוני</option>
+                                    <option value="6">יולי</option>
+                                    <option value="7">אוגוסט</option>
+                                    <option value="8">ספטמבר</option>
+                                    <option value="9">אוקטובר</option>
+                                    <option value="10">נובמבר</option>
+                                    <option value="11">דצמבר</option>
+                                </select>
+                                <select class="form-select control-select year-select" id="yearSelect" onchange="goToSelectedMonth()">
+                                    <!-- Years will be populated by JavaScript -->
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Navigation Group -->
+                        <div class="control-group navigation-group">
+                            <div class="control-header">
+                                <i class="bi bi-arrow-left-right me-1"></i>
+                                <span>ניווט</span>
+                            </div>
+                            <div class="btn-group navigation-buttons" role="group">
+                                <button class="btn btn-navigation" onclick="previousPeriod()" title="תקופה קודמת">
+                                    <i class="bi bi-chevron-right"></i>
+                                </button>
+                                <button class="btn btn-navigation btn-today" onclick="goToToday()" title="חזור להיום">
+                                    <i class="bi bi-house-door me-1 d-none d-sm-inline"></i>
+                                    <span>היום</span>
+                                </button>
+                                <button class="btn btn-navigation" onclick="nextPeriod()" title="תקופה הבאה">
+                                    <i class="bi bi-chevron-left"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                
-                <!-- Month/Year Selector -->
-                <div class="d-flex gap-2 align-items-center flex-fill flex-md-grow-0">
-                    <select class="form-select form-select-sm flex-fill" id="monthSelect" onchange="goToSelectedMonth()">
-                        <option value="0">ינואר</option>
-                        <option value="1">פברואר</option>
-                        <option value="2">מרץ</option>
-                        <option value="3">אפריל</option>
-                        <option value="4">מאי</option>
-                        <option value="5">יוני</option>
-                        <option value="6">יולי</option>
-                        <option value="7">אוגוסט</option>
-                        <option value="8">ספטמבר</option>
-                        <option value="9">אוקטובר</option>
-                        <option value="10">נובמבר</option>
-                        <option value="11">דצמבר</option>
-                    </select>
-                    <select class="form-select form-select-sm" id="yearSelect" onchange="goToSelectedMonth()" style="min-width: 90px;">
-                        <!-- Years will be populated by JavaScript -->
-                    </select>
-                </div>
-                
-                <!-- Navigation Buttons -->
-                <div class="btn-group flex-fill flex-md-grow-0" role="group">
-                    <button class="btn btn-outline-primary btn-sm" onclick="previousPeriod()">
-                        <i class="bi bi-chevron-right"></i>
-                    </button>
-                    <button class="btn btn-outline-primary btn-sm" onclick="goToToday()">היום</button>
-                    <button class="btn btn-outline-primary btn-sm" onclick="nextPeriod()">
-                        <i class="bi bi-chevron-left"></i>
-                    </button>
                 </div>
             </div>
         </div>
@@ -2622,6 +2653,294 @@ function showAlert(message, type) {
 
 .deadline-badge {
     animation: deadlineSlideIn 0.3s ease-out;
+}
+
+/* Clean Calendar Controls Styling */
+.calendar-header-section {
+    background: #ffffff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+    margin-bottom: 20px;
+}
+
+.calendar-controls-wrapper {
+    width: 100%;
+    max-width: 100%;
+}
+
+.calendar-controls-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: center;
+    justify-content: flex-end;
+    background: #f8f9fa;
+    padding: 16px 20px;
+    border-radius: 10px;
+    border: 1px solid #dee2e6;
+}
+
+/* Control Groups - Clean */
+.control-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 120px;
+    gap: 6px;
+}
+
+.control-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.control-header i {
+    color: #007bff;
+    font-size: 0.8rem;
+}
+
+/* Control Select - Clean */
+.control-select {
+    font-size: 0.875rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    padding: 7px 12px;
+    transition: all 0.2s ease;
+    background: #ffffff;
+    color: #495057;
+    font-weight: 500;
+    min-width: 100px;
+    cursor: pointer;
+}
+
+.control-select:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+    outline: none;
+}
+
+.control-select:hover:not(:focus) {
+    border-color: #80bdff;
+}
+
+/* Date Selectors */
+.date-selectors {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.month-select {
+    min-width: 90px;
+}
+
+.year-select {
+    min-width: 70px;
+}
+
+/* Deadline Toggle - Clean & Aligned */
+.deadline-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 0;
+    padding: 7px 12px;
+    background: #ffffff;
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+    transition: all 0.2s ease;
+    height: 38px;
+}
+
+.deadline-toggle:hover {
+    border-color: #80bdff;
+    background: #f8f9fa;
+}
+
+.deadline-toggle .form-check-input {
+    cursor: pointer;
+    border: 2px solid #6c757d;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.deadline-toggle .form-check-input:focus {
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.15);
+}
+
+.deadline-toggle .form-check-input:checked {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.deadline-toggle .form-check-label {
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    user-select: none;
+    margin: 0;
+    line-height: 1;
+}
+
+.deadline-toggle .form-check-label i {
+    color: #007bff;
+    font-size: 0.9rem;
+}
+
+/* Navigation Buttons - Clean */
+.navigation-buttons {
+    display: flex;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.btn-navigation {
+    padding: 8px 14px;
+    border: none;
+    background: #007bff;
+    color: white;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    font-size: 0.875rem;
+}
+
+.btn-navigation:hover {
+    background: #0056b3;
+    color: white;
+}
+
+.btn-navigation:active {
+    background: #004085;
+}
+
+.btn-navigation:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.25);
+}
+
+.btn-today {
+    border-left: 1px solid rgba(255,255,255,0.2);
+    border-right: 1px solid rgba(255,255,255,0.2);
+    min-width: 65px;
+}
+
+/* Responsive Design */
+@media (max-width: 1199.98px) {
+    .calendar-controls-container {
+        justify-content: center;
+        gap: 15px;
+    }
+    
+    .control-group {
+        min-width: 100px;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .calendar-controls-container {
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+    }
+    
+    .control-group {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        min-width: unset;
+        width: 100%;
+        padding: 8px 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .control-group:last-child {
+        border-bottom: none;
+    }
+    
+    .control-header {
+        margin-right: 12px;
+        min-width: 80px;
+    }
+    
+    .date-selectors {
+        flex: 1;
+        justify-content: flex-end;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .calendar-header-section {
+        padding: 16px;
+    }
+    
+    .calendar-controls-container {
+        padding: 12px;
+        gap: 12px;
+    }
+    
+    .control-header span {
+        display: none;
+    }
+    
+    .control-header {
+        min-width: 30px;
+    }
+    
+    .control-header i {
+        font-size: 0.9rem;
+    }
+    
+    .date-selectors {
+        gap: 6px;
+    }
+    
+    .month-select, .year-select {
+        min-width: 70px;
+        font-size: 0.8rem;
+        padding: 6px 10px;
+    }
+    
+    .btn-navigation {
+        padding: 7px 10px;
+        font-size: 0.8rem;
+    }
+    
+    .btn-today {
+        min-width: 55px;
+    }
+    
+    .deadline-toggle {
+        padding: 7px 12px;
+    }
+    
+    .section-title {
+        font-size: 1.3rem;
+    }
+}
+
+/* Section title - Clean */
+.section-title {
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: #212529;
+}
+
+.section-title i {
+    color: #007bff;
 }
 
 /* Drop zone styles */
