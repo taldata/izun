@@ -51,8 +51,13 @@ Thumbs.db
 logs/
 
 # Database
+*.db
 *.db-journal
+*.sqlite
+*.sqlite3
 *.sqlite3-journal
+committee_system.db
+database.sqlite
 
 # Temporary files
 *.tmp

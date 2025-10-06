@@ -3,6 +3,11 @@ services:
     name: committee-management-izun
     env: python
     plan: free
+    # Persistent disk for production database
+    disk:
+      name: committee-data
+      mountPath: /var/data
+      sizeGB: 1
     buildCommand: pip install -r requirements.txt && python migrate_db.py
     startCommand: gunicorn --bind 0.0.0.0:$PORT app:app
     envVars:
@@ -10,3 +15,5 @@ services:
         value: 3.11
       - key: FLASK_ENV
         value: production
+      - key: DATABASE_PATH
+        value: /var/data/committee_system.db

@@ -4,8 +4,15 @@ from datetime import datetime, date, timedelta
 from typing import List, Dict, Optional, Tuple, Any
 
 class DatabaseManager:
-    def __init__(self, db_path: str = "committee_system.db"):
+    def __init__(self, db_path: str = None):
+        # Use environment variable for database path, with fallback to local development path
+        if db_path is None:
+            db_path = os.environ.get('DATABASE_PATH', 'committee_system.db')
         self.db_path = db_path
+        # Ensure directory exists for database file
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
         self.init_database()
     
     def get_connection(self):

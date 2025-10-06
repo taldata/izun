@@ -108,6 +108,8 @@ izun/
 
 המערכת משתמשת ב-SQLite עם ארכיטקטורה מתקדמת. לפרטים מלאים ראה [ERD.md](ERD.md).
 
+**⚠️ חשוב**: מסד הנתונים מופרד בין סביבת פיתוח לייצור. ראה [DATABASE_SETUP.md](DATABASE_SETUP.md) להוראות התקנה.
+
 ### טבלאות עיקריות:
 - **hativot** - חטיבות ארגוניות עם צבעים מותאמים
 - **committee_types** - הגדרות סוגי ועדות לכל חטיבה
@@ -181,6 +183,8 @@ izun/
 
 ## פריסה (Deployment)
 
+**⚠️ חשוב**: קרא את [DATABASE_SETUP.md](DATABASE_SETUP.md) לפני פריסה ראשונה!
+
 ### Netlify (מומלץ לפיתוח)
 ```bash
 # קישור לחשבון Netlify
@@ -189,10 +193,14 @@ netlify deploy --prod
 ```
 
 ### Render (מומלץ לייצור)
+המערכת מגיעה עם הגדרות Render מוכנות כולל דיסק קבוע למסד נתונים:
 ```bash
 # העלאה ל-Render עם render.yaml
+git add .
+git commit -m "Setup persistent database storage"
 git push origin main
 ```
+מסד הנתונים יישמר ב-`/var/data/committee_system.db` ולא יוחלף בעת פריסה.
 
 ### שרת מקומי
 ```bash
