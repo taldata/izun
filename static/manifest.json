@@ -1,0 +1,77 @@
+{
+  "name": "מערכת איזון עומסים",
+  "short_name": "איזון עומסים",
+  "description": "מערכת ניהול ועדות ותזמון אוטומטי",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#667eea",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "dir": "rtl",
+  "lang": "he",
+  "icons": [
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "screenshots": [
+    {
+      "src": "/static/images/screenshot-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    },
+    {
+      "src": "/static/images/screenshot-mobile.png",
+      "sizes": "750x1334",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "תזמון אוטומטי",
+      "short_name": "תזמון",
+      "description": "פתח מסך תזמון אוטומטי",
+      "url": "/auto_schedule",
+      "icons": [
+        {
+          "src": "https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "אירועים",
+      "short_name": "אירועים",
+      "description": "צפה בטבלת אירועים",
+      "url": "/events_table",
+      "icons": [
+        {
+          "src": "https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+}
