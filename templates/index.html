@@ -23,6 +23,18 @@
                     </select>
                 </div>
                 
+                <!-- Deadline Dates Toggle -->
+                <div class="d-flex gap-2 align-items-center">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="showDeadlineDatesToggle" 
+                               onchange="toggleDeadlineDates()" 
+                               {% if show_deadline_dates %}checked{% endif %}>
+                        <label class="form-check-label" for="showDeadlineDatesToggle" style="white-space: nowrap;">
+                            <i class="bi bi-calendar-check me-1"></i>תאריכי דדליין
+                        </label>
+                    </div>
+                </div>
+                
                 <!-- Month/Year Selector -->
                 <div class="d-flex gap-2 align-items-center flex-fill flex-md-grow-0">
                     <select class="form-select form-select-sm flex-fill" id="monthSelect" onchange="goToSelectedMonth()">
@@ -460,8 +472,17 @@
 // Calendar functionality
 let currentDate = new Date();
 let monthsToShow = 1; // Default to showing 1 month
+let showDeadlineDates = {{ 'true' if show_deadline_dates else 'false' }}; // Track deadline dates display
 const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
                    'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+
+// Deadline date types configuration
+const deadlineTypes = {
+    'call_deadline_date': { label: 'דדליין קול קורא', icon: 'bi-megaphone', color: '#FF6B6B' },
+    'intake_deadline_date': { label: 'דדליין קליטה', icon: 'bi-inbox', color: '#4ECDC4' },
+    'review_deadline_date': { label: 'דדליין בדיקה', icon: 'bi-search', color: '#45B7D1' },
+    'response_deadline_date': { label: 'דדליין תשובה', icon: 'bi-reply', color: '#96CEB4' }
+};
 
 // Calendar data from server - using script tags to avoid Jinja2 conflicts
 </script>
@@ -784,6 +805,47 @@ function createMonthCalendar(year, month, isCompact = false) {
                     cell.appendChild(committeeContainer);
                 });
                 
+                // Add deadline dates if enabled
+                if (showDeadlineDates) {
+                    const deadlines = getDeadlineDatesForDate(currentDateStr);
+                    if (deadlines.length > 0) {
+                        const deadlinesContainer = document.createElement('div');
+                        deadlinesContainer.className = 'deadline-dates-container mt-2';
+                        deadlinesContainer.style.borderTop = '1px dashed #dee2e6';
+                        deadlinesContainer.style.paddingTop = '4px';
+                        
+                        deadlines.forEach(deadline => {
+                            const deadlineDiv = document.createElement('div');
+                            deadlineDiv.className = 'deadline-badge d-flex align-items-center mb-1';
+                            deadlineDiv.style.fontSize = isCompact ? '0.5rem' : '0.6rem';
+                            deadlineDiv.style.padding = isCompact ? '2px 4px' : '3px 6px';
+                            deadlineDiv.style.borderRadius = '4px';
+                            deadlineDiv.style.backgroundColor = `${deadline.config.color}20`;
+                            deadlineDiv.style.borderRight = `3px solid ${deadline.config.color}`;
+                            deadlineDiv.style.color = deadline.config.color;
+                            deadlineDiv.style.fontWeight = '500';
+                            
+                            deadlineDiv.innerHTML = `
+                                <i class="${deadline.config.icon} me-1" style="font-size: ${isCompact ? '0.4rem' : '0.5rem'};"></i>
+                                <span class="text-truncate">${deadline.config.label}</span>
+                            `;
+                            
+                            deadlineDiv.title = `${deadline.config.label} - ${deadline.event.name} (${deadline.event.maslul_name})`;
+                            deadlineDiv.style.cursor = 'pointer';
+                            
+                            // Click to view event details
+                            deadlineDiv.onclick = function(e) {
+                                e.stopPropagation();
+                                editEvent(deadline.event);
+                            };
+                            
+                            deadlinesContainer.appendChild(deadlineDiv);
+                        });
+                        
+                        cell.appendChild(deadlinesContainer);
+                    }
+                }
+                
                 // Add data attribute for drag & drop
                 cell.setAttribute('data-date', currentDateStr);
                 
@@ -951,6 +1013,59 @@ document.addEventListener('DOMContentLoaded', function() {
 
     setupAvailableDatesFinder();
 });
+
+// Toggle deadline dates display
+function toggleDeadlineDates() {
+    const toggleElement = document.getElementById('showDeadlineDatesToggle');
+    showDeadlineDates = toggleElement.checked;
+    
+    // Save preference to server
+    fetch('/api/toggle_deadline_dates', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('Deadline dates display toggled:', showDeadlineDates);
+            // Re-render calendar to show/hide deadline dates
+            renderCalendar();
+        } else {
+            console.error('Failed to toggle deadline dates:', data.error);
+            // Revert toggle if failed
+            toggleElement.checked = !showDeadlineDates;
+            showDeadlineDates = toggleElement.checked;
+        }
+    })
+    .catch(error => {
+        console.error('Error toggling deadline dates:', error);
+        // Revert toggle if failed
+        toggleElement.checked = !showDeadlineDates;
+        showDeadlineDates = toggleElement.checked;
+    });
+}
+
+// Get deadline dates for a specific date
+function getDeadlineDatesForDate(dateStr) {
+    const deadlines = [];
+    
+    eventsData.forEach(event => {
+        // Check each deadline type
+        Object.keys(deadlineTypes).forEach(deadlineKey => {
+            if (event[deadlineKey] && event[deadlineKey] === dateStr) {
+                deadlines.push({
+                    type: deadlineKey,
+                    event: event,
+                    config: deadlineTypes[deadlineKey]
+                });
+            }
+        });
+    });
+    
+    return deadlines;
+}
 
 function setupAvailableDatesFinder() {
     const button = document.getElementById('findAvailableDatesBtn');
@@ -2476,6 +2591,37 @@ function showAlert(message, type) {
     cursor: grabbing;
     cursor: -webkit-grabbing;
     cursor: -moz-grabbing;
+}
+
+/* Deadline dates styling */
+.deadline-dates-container {
+    margin-top: 8px;
+}
+
+.deadline-badge {
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.deadline-badge:hover {
+    transform: translateX(2px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    filter: brightness(1.05);
+}
+
+@keyframes deadlineSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.deadline-badge {
+    animation: deadlineSlideIn 0.3s ease-out;
 }
 
 /* Drop zone styles */

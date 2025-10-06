@@ -89,6 +89,26 @@ def toggle_editing_period():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/toggle_deadline_dates', methods=['POST'])
+@login_required
+def toggle_deadline_dates():
+    """Toggle display of deadline dates in calendar"""
+    try:
+        current_status = db.get_system_setting('show_deadline_dates_in_calendar')
+        new_status = '0' if current_status == '1' else '1'
+        
+        user_id = session['user_id']
+        db.update_system_setting('show_deadline_dates_in_calendar', new_status, user_id)
+        
+        status_text = "מוצגים" if new_status == '1' else "מוסתרים"
+        return jsonify({
+            'success': True,
+            'message': f'תאריכי דדליין עכשיו {status_text}',
+            'show_deadline_dates': new_status == '1'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/editing_status')
 @login_required
 def get_editing_status():
@@ -395,6 +415,9 @@ def index():
     # Get current user info
     current_user = auth_manager.get_current_user()
     
+    # Get deadline dates display setting
+    show_deadline_dates = db.get_system_setting('show_deadline_dates_in_calendar') == '1'
+    
     return render_template('index.html', 
                          hativot=hativot, 
                          maslulim=maslulim, 
@@ -403,7 +426,8 @@ def index():
                          events=events,
                          exception_dates=exception_dates,
                          stats=stats,
-                         current_user=current_user)
+                         current_user=current_user,
+                         show_deadline_dates=show_deadline_dates)
 
 @app.route('/hativot')
 @login_required

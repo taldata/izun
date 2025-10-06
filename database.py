@@ -139,7 +139,8 @@ class DatabaseManager:
                 ('max_meetings_per_day', '1', 'Maximum number of committee meetings per calendar day'),
                 ('max_weekly_meetings', '3', 'Maximum number of committee meetings per standard week'),
                 ('max_third_week_meetings', '4', 'Maximum number of committee meetings during the third week of a month'),
-                ('max_requests_per_day', '100', 'Maximum total expected requests per day across all events')
+                ('max_requests_per_day', '100', 'Maximum total expected requests per day across all events'),
+                ('show_deadline_dates_in_calendar', '1', 'Show derived deadline dates in calendar (1=yes, 0=no)')
         ''')
         
         conn.commit()
