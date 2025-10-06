@@ -806,6 +806,71 @@ footer {
     }
 }
 
+/* ===========================
+   CALENDAR MOBILE OPTIMIZATIONS
+   =========================== */
+
+@media (max-width: 768px) {
+    /* Calendar cells */
+    .calendar-cell {
+        height: 60px !important;
+        font-size: 0.75rem;
+        padding: 4px !important;
+    }
+    
+    .calendar-cell .fw-bold {
+        font-size: 0.9rem;
+    }
+    
+    /* Calendar table */
+    .table {
+        font-size: 0.75rem;
+    }
+    
+    .table th {
+        padding: 0.5rem 0.25rem;
+        font-size: 0.7rem;
+    }
+    
+    /* Committee badges in calendar */
+    .calendar-cell .badge {
+        font-size: 0.65rem;
+        padding: 0.15rem 0.35rem;
+        display: block;
+        margin-bottom: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    /* Calendar navigation */
+    .calendar-cell:hover {
+        cursor: pointer;
+        background-color: #f8f9fa;
+    }
+    
+    /* Hide drag handles on mobile */
+    .drag-handle {
+        display: none !important;
+    }
+}
+
+/* Modal bottom sheet style */
+.modal-dialog-bottom {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: 0;
+    width: 100%;
+    max-width: 100%;
+}
+
+.modal-dialog-bottom .modal-content {
+    border-radius: 20px 20px 0 0;
+    border: none;
+}
+
 /* Print styles */
 @media print {
     .navbar, .btn, .modal, footer, .bottom-navigation, .fab, .pull-to-refresh-indicator {

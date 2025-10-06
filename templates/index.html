@@ -8,13 +8,13 @@
 <!-- Calendar Section -->
 <div class="row">
     <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="section-title">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+            <h2 class="section-title mb-0">
                 <i class="bi bi-calendar3 me-2"></i>יומן ועדות ואירועים
             </h2>
-            <div class="d-flex gap-3 align-items-center">
-                <!-- Calendar Controls -->
-                <div class="d-flex gap-2 align-items-center">
+            <div class="d-flex flex-column flex-md-row gap-2 align-items-stretch align-items-md-center w-100 w-md-auto">
+                <!-- Calendar Controls - Hidden on mobile -->
+                <div class="d-none d-md-flex gap-2 align-items-center">
                     <label class="form-label mb-0 me-2">תצוגה:</label>
                     <select class="form-select form-select-sm" id="monthsToShow" onchange="updateCalendarView()" style="width: auto;">
                         <option value="1">חודש אחד</option>
@@ -24,8 +24,8 @@
                 </div>
                 
                 <!-- Month/Year Selector -->
-                <div class="d-flex gap-2 align-items-center">
-                    <select class="form-select form-select-sm" id="monthSelect" onchange="goToSelectedMonth()" style="width: auto;">
+                <div class="d-flex gap-2 align-items-center flex-fill flex-md-grow-0">
+                    <select class="form-select form-select-sm flex-fill" id="monthSelect" onchange="goToSelectedMonth()">
                         <option value="0">ינואר</option>
                         <option value="1">פברואר</option>
                         <option value="2">מרץ</option>
@@ -39,13 +39,13 @@
                         <option value="10">נובמבר</option>
                         <option value="11">דצמבר</option>
                     </select>
-                    <select class="form-select form-select-sm" id="yearSelect" onchange="goToSelectedMonth()" style="width: auto;">
+                    <select class="form-select form-select-sm" id="yearSelect" onchange="goToSelectedMonth()" style="min-width: 90px;">
                         <!-- Years will be populated by JavaScript -->
                     </select>
                 </div>
                 
                 <!-- Navigation Buttons -->
-                <div class="btn-group" role="group">
+                <div class="btn-group flex-fill flex-md-grow-0" role="group">
                     <button class="btn btn-outline-primary btn-sm" onclick="previousPeriod()">
                         <i class="bi bi-chevron-right"></i>
                     </button>
@@ -59,18 +59,19 @@
     </div>
 
         <div class="card">
-            <div class="card-header bg-gradient text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="card-header bg-gradient text-white d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 py-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                 <div>
-                    <h4 class="mb-0" id="currentMonthYear" style="color: #000000; font-weight: bold; text-shadow: 1px 1px 2px rgba(255,255,255,0.8);">
+                    <h4 class="mb-1" id="currentMonthYear" style="color: #000000; font-weight: bold; text-shadow: 1px 1px 2px rgba(255,255,255,0.8);">
                         <span id="monthsDisplay" style="color: #000000;">ספטמבר 2025</span>
                     </h4>
-                    <small class="opacity-75">לחץ על יום להוספה | גרור פריטים להעברה | לחץ על פריט לעריכה</small>
+                    <small class="opacity-75 d-none d-md-block">לחץ על יום להוספה | גרור פריטים להעברה | לחץ על פריט לעריכה</small>
+                    <small class="opacity-75 d-block d-md-none">לחץ על יום להוספה</small>
                 </div>
-                <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addCommitteeModal">
+                <div class="d-flex flex-column flex-sm-row gap-2 w-100 w-md-auto">
+                    <button type="button" class="btn btn-light btn-sm d-none d-md-inline-flex" data-bs-toggle="modal" data-bs-target="#addCommitteeModal">
                         <i class="bi bi-people me-1"></i>הוסף ישיבת ועדה
                     </button>
-                    <button type="button" class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addEventModal">
+                    <button type="button" class="btn btn-light btn-sm d-none d-md-inline-flex" data-bs-toggle="modal" data-bs-target="#addEventModal">
                         <i class="bi bi-calendar-plus me-1"></i>הוסף אירוע חדש
                     </button>
                 </div>
@@ -452,9 +453,57 @@
     </div>
 </div>
 
+<!-- Floating Action Button for Mobile -->
+<button class="fab d-md-none" onclick="showMobileQuickActions()" aria-label="פעולות מהירות">
+    <i class="bi bi-plus-lg"></i>
+</button>
+
+<!-- Mobile Quick Actions Bottom Sheet -->
+<div class="modal fade" id="mobileQuickActionsModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-bottom">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-lightning me-2"></i>פעולות מהירות</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#addCommitteeModal" data-bs-dismiss="modal">
+                        <i class="bi bi-people me-2"></i>הוסף ישיבת ועדה
+                    </button>
+                    <button class="btn btn-info btn-lg" data-bs-toggle="modal" data-bs-target="#addEventModal" data-bs-dismiss="modal">
+                        <i class="bi bi-calendar-plus me-2"></i>הוסף אירוע חדש
+                    </button>
+                    <a href="{{ url_for('auto_schedule') }}" class="btn btn-success btn-lg">
+                        <i class="bi bi-robot me-2"></i>תזמון אוטומטי
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
+<script>
+// Mobile Quick Actions
+function showMobileQuickActions() {
+    const modal = new bootstrap.Modal(document.getElementById('mobileQuickActionsModal'));
+    modal.show();
+}
+
+// Force single month view on mobile
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.innerWidth <= 768) {
+        const monthsToShowSelect = document.getElementById('monthsToShow');
+        if (monthsToShowSelect) {
+            monthsToShowSelect.value = '1';
+            monthsToShow = 1;
+        }
+    }
+});
+</script>
 <script>
 // Calendar functionality
 let currentDate = new Date();
