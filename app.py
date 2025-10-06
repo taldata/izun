@@ -492,14 +492,19 @@ def maslulim():
             'maslulim_per_hativa_with_colors': maslulim_per_hativa_with_colors
         }
         
+        # Get current user info
+        current_user = auth_manager.get_current_user()
+        
         return render_template('maslulim.html', 
                              maslulim=maslulim_list, 
                              hativot=hativot_list,
                              maslulim_by_hativa=maslulim_by_hativa,
-                             stats=stats)
+                             stats=stats,
+                             current_user=current_user)
     except Exception as e:
         flash(f'שגיאה בטעינת נתוני המסלולים: {str(e)}', 'error')
-        return render_template('maslulim.html', maslulim=[], hativot=[], maslulim_by_hativa={}, stats={})
+        current_user = auth_manager.get_current_user()
+        return render_template('maslulim.html', maslulim=[], hativot=[], maslulim_by_hativa={}, stats={}, current_user=current_user)
 
 @app.route('/maslulim/add', methods=['POST'])
 def add_maslul():
@@ -679,7 +684,8 @@ def delete_maslul(maslul_id):
 def exception_dates():
     """Manage exception dates"""
     dates_list = db.get_exception_dates()
-    return render_template('exception_dates.html', dates=dates_list)
+    current_user = auth_manager.get_current_user()
+    return render_template('exception_dates.html', dates=dates_list, current_user=current_user)
 
 @app.route('/exception_dates/add', methods=['POST'])
 def add_exception_date():
@@ -1073,11 +1079,15 @@ def auto_schedule():
     year = request.args.get('year', date.today().year, type=int)
     month = request.args.get('month', date.today().month, type=int)
     
+    # Get current user info
+    current_user = auth_manager.get_current_user()
+    
     return render_template('auto_schedule.html', 
                          hativot=hativot, 
                          committee_types=committee_types,
                          current_year=year,
-                         current_month=month)
+                         current_month=month,
+                         current_user=current_user)
 
 @app.route('/auto_schedule/generate', methods=['POST'])
 def generate_auto_schedule():
@@ -1213,10 +1223,14 @@ def review_auto_schedule():
                 validation_result['violations'].extend(month_validation.get('violations', []))
             validation_result['warnings'].extend(month_validation.get('warnings', []))
     
+    # Get current user info
+    current_user = auth_manager.get_current_user()
+    
     return render_template('review_auto_schedule.html',
                          suggestions=enriched_suggestions,
                          schedule_info=pending_schedule,
-                         validation=validation_result)
+                         validation=validation_result,
+                         current_user=current_user)
 
 @app.route('/auto_schedule/approve', methods=['POST'])
 def approve_auto_schedule():
@@ -1307,12 +1321,16 @@ def committee_types():
     if not response.success:
         flash(response.message, 'error')
     
+    # Get current user info
+    current_user = auth_manager.get_current_user()
+    
     return render_template('committee_types.html', 
                          committee_types=response.committee_types,
                          weekly_count=response.statistics['weekly_count'],
                          monthly_count=response.statistics['monthly_count'],
                          active_meetings_count=response.statistics['active_meetings_count'],
                          hativot=hativot,
+                         current_user=current_user,
                          selected_hativa_id=hativa_id)
 
 @app.route('/committee_types/add', methods=['POST'])
@@ -1704,12 +1722,16 @@ def events_table():
         # Get unique event types
         event_types = list(set([event.get('event_type', '') for event in events if event.get('event_type')]))
 
+        # Get current user info
+        current_user = auth_manager.get_current_user()
+
         return render_template('events_table.html', 
                              events=events,
                              hativot=hativot,
                              maslulim=maslulim,
                              committee_types=committee_types,
-                             event_types=event_types)
+                             event_types=event_types,
+                             current_user=current_user)
     except Exception as e:
         flash(f'שגיאה בטעינת נתוני האירועים: {str(e)}', 'error')
         return redirect(url_for('index'))
