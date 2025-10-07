@@ -3,6 +3,11 @@ import os
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Optional, Tuple, Any
 
+from zoneinfo import ZoneInfo
+
+
+ISRAEL_TZ = ZoneInfo('Asia/Jerusalem')
+
 class DatabaseManager:
     def __init__(self, db_path: str = None):
         # Use environment variable for database path, with fallback to local development path
@@ -1730,12 +1735,14 @@ class DatabaseManager:
         """Add an audit log entry"""
         conn = self.get_connection()
         cursor = conn.cursor()
+        timestamp = datetime.now(ISRAEL_TZ).strftime('%Y-%m-%d %H:%M:%S')
+
         cursor.execute('''
             INSERT INTO audit_logs 
-            (user_id, username, action, entity_type, entity_id, entity_name, details, 
+            (timestamp, user_id, username, action, entity_type, entity_id, entity_name, details, 
              ip_address, user_agent, status, error_message)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (user_id, username, action, entity_type, entity_id, entity_name, details,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (timestamp, user_id, username, action, entity_type, entity_id, entity_name, details,
               ip_address, user_agent, status, error_message))
         log_id = cursor.lastrowid
         conn.commit()
