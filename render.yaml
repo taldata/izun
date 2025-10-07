@@ -11,4 +11,8 @@ services:
       - key: FLASK_ENV
         value: production
       - key: DATABASE_PATH
-        value: committee_system.db
+        value: /var/data/committee_system.db
+    disk:
+      name: sqlite-data
+      mountPath: /var/data
+      sizeGB: 1
