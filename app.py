@@ -2054,6 +2054,68 @@ def move_event():
         )
         return jsonify({'success': False, 'message': f'שגיאה: {str(e)}'}), 500
 
+@app.route('/api/events_by_committee')
+@login_required
+def get_events_by_committee():
+    """API endpoint to get events grouped by committee meetings"""
+    try:
+        # Get all events
+        events = db.get_events()
+
+        # Group events by committee meeting (vaadot_id)
+        events_by_committee = {}
+        for event in events:
+            vaadot_id = event.get('vaadot_id')
+            if vaadot_id:
+                if vaadot_id not in events_by_committee:
+                    events_by_committee[vaadot_id] = {
+                        'committee_info': {
+                            'vaadot_id': vaadot_id,
+                            'committee_name': event.get('committee_name', ''),
+                            'hativa_name': event.get('hativa_name', ''),
+                            'vaada_date': event.get('vaada_date', ''),
+                            'committee_type': event.get('committee_type_name', '')
+                        },
+                        'events': [],
+                        'summary': {
+                            'total_events': 0,
+                            'total_expected_requests': 0,
+                            'total_actual_submissions': 0,
+                            'event_types': set()
+                        }
+                    }
+                events_by_committee[vaadot_id]['events'].append(event)
+
+                # Update summary
+                summary = events_by_committee[vaadot_id]['summary']
+                summary['total_events'] += 1
+                summary['total_expected_requests'] += event.get('expected_requests', 0) or 0
+                summary['total_actual_submissions'] += event.get('actual_submissions', 0) or 0
+                if event.get('event_type'):
+                    summary['event_types'].add(event.get('event_type'))
+
+        # Convert to list and format for JSON response
+        result = []
+        for vaadot_id, data in events_by_committee.items():
+            # Convert set to list for JSON serialization
+            data['summary']['event_types'] = list(data['summary']['event_types'])
+            result.append(data)
+
+        # Sort by committee date (newest first)
+        result.sort(key=lambda x: x['committee_info']['vaada_date'] or '', reverse=True)
+
+        return jsonify({
+            'success': True,
+            'events_by_committee': result,
+            'total_committees': len(result)
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/events_table')
 @login_required
 def events_table():

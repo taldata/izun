@@ -1614,8 +1614,60 @@ class DatabaseManager:
         
         return sla_dates
     
+    def get_events(self) -> List[Dict]:
+        """Get all events with extended information including committee types and divisions"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT e.event_id, e.vaadot_id, e.maslul_id, e.name, e.event_type,
+                   e.expected_requests, e.actual_submissions, e.call_publication_date,
+                   e.call_deadline_date, e.intake_deadline_date, e.review_deadline_date,
+                   e.response_deadline_date, e.created_at,
+                   m.name as maslul_name, m.hativa_id as maslul_hativa_id, m.sla_days,
+                   v.vaada_date, v.status as vaada_status,
+                   ct.name as committee_name, ct.committee_type_id,
+                   h.name as hativa_name, h.color as hativa_color,
+                   ht.name as committee_type_name
+            FROM events e
+            JOIN maslulim m ON e.maslul_id = m.maslul_id
+            JOIN vaadot v ON e.vaadot_id = v.vaadot_id
+            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+            JOIN hativot h ON m.hativa_id = h.hativa_id
+            JOIN hativot ht ON ct.hativa_id = ht.hativa_id
+            ORDER BY v.vaada_date DESC, e.created_at DESC
+        ''')
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [{
+            'event_id': row[0],
+            'vaadot_id': row[1],
+            'maslul_id': row[2],
+            'name': row[3],
+            'event_type': row[4],
+            'expected_requests': row[5],
+            'actual_submissions': row[6],
+            'call_publication_date': row[7],
+            'call_deadline_date': row[8],
+            'intake_deadline_date': row[9],
+            'review_deadline_date': row[10],
+            'response_deadline_date': row[11],
+            'created_at': row[12],
+            'maslul_name': row[13],
+            'maslul_hativa_id': row[14],
+            'sla_days': row[15],
+            'vaada_date': row[16],
+            'vaada_status': row[17],
+            'committee_name': row[18],
+            'committee_type_id': row[19],
+            'hativa_name': row[20],
+            'hativa_color': row[21],
+            'committee_type_name': row[22]
+        } for row in rows]
+
     def get_event_by_id(self, event_id: int) -> Optional[Dict]:
-        """Get event by ID"""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()

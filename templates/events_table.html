@@ -109,6 +109,142 @@
         border-top: 1px solid #dee2e6;
     }
     
+    /* Committee View Styles */
+    .committee-view-section {
+        padding: 1.5rem;
+    }
+    
+    .committee-table-container {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    
+    .committee-table {
+        margin-bottom: 0;
+    }
+    
+    .committee-table th {
+        background-color: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .committee-row {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    
+    .committee-row:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .committee-row.expanded {
+        background-color: #e3f2fd;
+    }
+    
+    .expand-button {
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        color: #6c757d;
+        transition: transform 0.2s;
+    }
+    
+    .expand-button:hover {
+        color: #495057;
+    }
+    
+    .expand-button.expanded {
+        transform: rotate(90deg);
+    }
+    
+    .events-row {
+        background-color: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .events-row td {
+        padding: 1rem;
+    }
+    
+    .event-item {
+        background: white;
+        margin-bottom: 0.5rem;
+        padding: 0.75rem;
+        border-radius: 5px;
+        border-left: 3px solid #007bff;
+        transition: box-shadow 0.2s;
+    }
+    
+    .event-item:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .event-name {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 0.25rem;
+    }
+    
+    .event-details {
+        font-size: 0.85rem;
+        color: #666;
+    }
+    
+    .event-badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        margin-right: 0.5rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .badge-kokok {
+        background-color: #dc3545;
+        color: white;
+    }
+    
+    .badge-shotef {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .no-committees {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
+    }
+    
+    .events-container {
+        max-height: 400px;
+        overflow-y: auto;
+        padding-right: 1rem;
+    }
+    
+    .events-container::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    .events-container::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+    }
+    
+    .events-container::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 3px;
+    }
+    
+    .events-container::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+    
     .clear-filters-btn {
         background: rgba(255,255,255,0.2);
         border: 1px solid rgba(255,255,255,0.3);
@@ -132,6 +268,29 @@
         border: 1px solid rgba(255,255,255,0.5);
         color: white;
     }
+    
+    .view-toggle .btn {
+        color: white;
+        background: rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        transition: background 0.2s, border-color 0.2s, color 0.2s;
+    }
+    
+    .view-toggle .btn:hover,
+    .view-toggle .btn:focus {
+        color: white;
+        background: rgba(255, 255, 255, 0.3);
+        border-color: rgba(255, 255, 255, 0.85);
+        box-shadow: none;
+    }
+    
+    .view-toggle .btn-check:checked + .btn,
+    .view-toggle .btn.active {
+        color: #4a3fa6;
+        background: #ffffff;
+        border-color: #ffffff;
+        box-shadow: none;
+    }
 </style>
 {% endblock %}
 
@@ -147,6 +306,18 @@
                             <i class="bi bi-table me-2"></i>טבלת אירועים ותאריכים
                         </h3>
                         <div class="d-flex gap-2">
+                            <!-- View Toggle Buttons -->
+                            <div class="btn-group view-toggle" role="group">
+                                <input type="radio" class="btn-check" name="viewToggle" id="eventsView" autocomplete="off" checked>
+                                <label class="btn btn-outline-primary btn-sm" for="eventsView">
+                                    <i class="bi bi-list-ul me-1"></i>תצוגת אירועים
+                                </label>
+
+                                <input type="radio" class="btn-check" name="viewToggle" id="committeesView" autocomplete="off">
+                                <label class="btn btn-outline-secondary btn-sm" for="committeesView">
+                                    <i class="bi bi-grid-3x2 me-1"></i>תצוגת ועדות
+                                </label>
+                            </div>
                             <button class="btn clear-filters-btn btn-sm" onclick="clearAllFilters()">
                                 <i class="bi bi-x-circle me-1"></i>נקה פילטרים
                             </button>
@@ -374,6 +545,28 @@
                             <div class="text-muted small">דיוק צפי</div>
                         </div>
                     </div>
+                <!-- Committee View Section -->
+                <div id="committeeView" class="committee-view-section" style="display: none;">
+                    <div class="committee-table-container">
+                        <table class="table table-hover committee-table" id="committeeTable">
+                            <thead>
+                                <tr>
+                                    <th width="5%"></th>
+                                    <th>שם ועדה</th>
+                                    <th>חטיבה</th>
+                                    <th>סוג ועדה</th>
+                                    <th>תאריך ועדה</th>
+                                    <th>אירועים</th>
+                                    <th>בקשות צפויות</th>
+                                    <th>הגשות בפועל</th>
+                                    <th>סוגי אירועים</th>
+                                </tr>
+                            </thead>
+                            <tbody id="committeeTableBody">
+                                <!-- Committee rows will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -539,6 +732,259 @@ function exportToCSV() {
 // Initialize filters on page load
 document.addEventListener('DOMContentLoaded', function() {
     filterTable();
+
+    // Initialize view toggle
+    initializeViewToggle();
 });
+
+// View Toggle Functions
+function initializeViewToggle() {
+    const eventsViewRadio = document.getElementById('eventsView');
+    const committeesViewRadio = document.getElementById('committeesView');
+    const eventsTable = document.getElementById('eventsTable').closest('.table-responsive');
+    const committeeView = document.getElementById('committeeView');
+
+    eventsViewRadio.addEventListener('change', function() {
+        if (this.checked) {
+            eventsTable.style.display = 'block';
+            committeeView.style.display = 'none';
+            // Re-apply filters to table
+            filterTable();
+        }
+    });
+
+    committeesViewRadio.addEventListener('change', function() {
+        if (this.checked) {
+            eventsTable.style.display = 'none';
+            committeeView.style.display = 'block';
+            // Load committee view
+            loadCommitteeView();
+        }
+    });
+}
+
+async function loadCommitteeView() {
+    const container = document.getElementById('committeeTableBody');
+
+    try {
+        // Show loading state
+        container.innerHTML = '<tr><td colspan="9" class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">טוען...</span></div></td></tr>';
+
+        // Fetch committee data from API
+        const response = await fetch('/api/events_by_committee');
+        const data = await response.json();
+
+        if (data.success) {
+            renderCommitteeTable(data.events_by_committee);
+        } else {
+            container.innerHTML = `<tr><td colspan="9" class="text-center">
+                <div class="no-committees">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <h5>שגיאה בטעינת נתוני הועדות</h5>
+                    <p>${data.error}</p>
+                </div>
+            </td></tr>`;
+        }
+    } catch (error) {
+        container.innerHTML = `<tr><td colspan="9" class="text-center">
+            <div class="no-committees">
+                <i class="bi bi-exclamation-triangle"></i>
+                <h5>שגיאה בחיבור לשרת</h5>
+                <p>אנא נסה שוב מאוחר יותר</p>
+            </div>
+        </td></tr>`;
+    }
+}
+
+function renderCommitteeTable(committees) {
+    const tbody = document.getElementById('committeeTableBody');
+
+    if (!committees || committees.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center">
+            <div class="no-committees">
+                <i class="bi bi-calendar-x"></i>
+                <h5>אין ועדות עם אירועים</h5>
+                <p>צור אירועים כדי לראות אותם מקובצים לפי ועדות</p>
+            </div>
+        </td></tr>`;
+        return;
+    }
+
+    let html = '';
+    committees.forEach(committee => {
+        const eventTypes = committee.summary.event_types.length > 0 ?
+            committee.summary.event_types.map(type => {
+                if (type === 'kokok') return '<span class="badge badge-kokok">קו"ק</span>';
+                if (type === 'shotef') return '<span class="badge badge-shotef">שוטף</span>';
+                return `<span class="badge bg-secondary">${type}</span>`;
+            }).join(' ') : '<span class="text-muted">אין סוגים</span>';
+
+        html += `
+            <tr class="committee-row" data-committee-id="${committee.committee_info.vaadot_id}">
+                <td>
+                    <button class="expand-button" onclick="toggleCommitteeRow('${committee.committee_info.vaadot_id}')" data-expanded="false">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </td>
+                <td>${committee.committee_info.committee_name}</td>
+                <td>${committee.committee_info.hativa_name}</td>
+                <td>${committee.committee_info.committee_type}</td>
+                <td>${formatDate(committee.committee_info.vaada_date)}</td>
+                <td><span class="badge bg-primary">${committee.summary.total_events}</span></td>
+                <td><strong>${committee.summary.total_expected_requests}</strong></td>
+                <td><strong>${committee.summary.total_actual_submissions}</strong></td>
+                <td>${eventTypes}</td>
+            </tr>
+            <tr class="events-row" id="events-${committee.committee_info.vaadot_id}" style="display: none;">
+                <td colspan="9">
+                    <div class="events-container">
+                        ${committee.events.map(event => `
+                            <div class="event-item">
+                                <div class="event-name">${event.name}</div>
+                                <div class="event-details">
+                                    <strong>מסלול:</strong> ${event.maslul_name} •
+                                    <strong>בקשות צפויות:</strong> ${event.expected_requests} •
+                                    <strong>הגשות בפועל:</strong> ${event.actual_submissions || 0}
+                                    ${event.event_type ? `• <span class="badge ${event.event_type === 'kokok' ? 'badge-kokok' : 'badge-shotef'}">${event.event_type === 'kokok' ? 'קו"ק' : 'שוטף'}</span>` : ''}
+                                </div>
+                                <div class="event-details mt-2">
+                                    <strong>תאריכים:</strong>
+                                    ${event.call_deadline_date ? `סיום קול קורא: ${formatDate(event.call_deadline_date)} • ` : ''}
+                                    ${event.intake_deadline_date ? `סיום קליטה: ${formatDate(event.intake_deadline_date)} • ` : ''}
+                                    ${event.review_deadline_date ? `סיום בדיקה: ${formatDate(event.review_deadline_date)}` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
+}
+
+function toggleCommitteeRow(committeeId) {
+    const button = document.querySelector(`[data-committee-id="${committeeId}"] .expand-button`);
+    const eventsRow = document.getElementById(`events-${committeeId}`);
+    const icon = button.querySelector('i');
+
+    const isExpanded = button.dataset.expanded === 'true';
+
+    if (isExpanded) {
+        // Collapse
+        eventsRow.style.display = 'none';
+        button.dataset.expanded = 'false';
+        icon.className = 'bi bi-chevron-right';
+        button.closest('.committee-row').classList.remove('expanded');
+    } else {
+        // Expand
+        eventsRow.style.display = 'table-row';
+        button.dataset.expanded = 'true';
+        icon.className = 'bi bi-chevron-down';
+        button.closest('.committee-row').classList.add('expanded');
+    }
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return 'תאריך לא ידוע';
+
+    try {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('he-IL', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+    } catch (e) {
+        return dateStr;
+    }
+}
+
+// Update export function to handle committee view
+function exportToCSV() {
+    const eventsViewRadio = document.getElementById('eventsView');
+    const committeesViewRadio = document.getElementById('committeesView');
+
+    if (committeesViewRadio.checked) {
+        exportCommitteeViewToCSV();
+    } else {
+        // Original export logic for events table
+        const table = document.getElementById('eventsTable');
+        const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.style.display !== 'none');
+
+        let csv = 'שם האירוע,סוג,חטיבה,מסלול,ועדה,תאריך ועדה,סיום קול קורא,סיום קליטה,סיום בדיקה,תשובת ועדה,בקשות צפויות,נוצר\n';
+
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            const rowData = Array.from(cells).map(cell => {
+                let text = cell.textContent.trim();
+                text = text.replace(/\s+/g, ' ');
+                if (text.includes(',') || text.includes('"')) {
+                    text = '"' + text.replace(/"/g, '""') + '"';
+                }
+                return text;
+            });
+            csv += rowData.join(',') + '\n';
+        });
+
+        downloadCSV(csv, `events_table_${new Date().toISOString().split('T')[0]}.csv`);
+    }
+}
+
+async function exportCommitteeViewToCSV() {
+    try {
+        const response = await fetch('/api/events_by_committee');
+        const data = await response.json();
+
+        if (!data.success) {
+            alert('שגיאה בטעינת נתוני הועדות לייצוא');
+            return;
+        }
+
+        let csv = 'שם ועדה,חטיבה,סוג ועדה,תאריך ועדה,מספר אירועים,בקשות צפויות,הגשות בפועל,סוגי אירועים,פרטי אירועים\n';
+
+        data.events_by_committee.forEach(committee => {
+            const eventTypes = committee.summary.event_types.join('; ');
+            const eventsDetails = committee.events.map(event =>
+                `"${event.name} (${event.maslul_name}, ${event.expected_requests} בקשות${event.event_type ? ', ' + (event.event_type === 'kokok' ? 'קו"ק' : 'שוטף') : ''})"`
+            ).join('; ');
+
+            const rowData = [
+                committee.committee_info.committee_name,
+                committee.committee_info.hativa_name,
+                committee.committee_info.committee_type,
+                committee.committee_info.vaada_date || '',
+                committee.summary.total_events,
+                committee.summary.total_expected_requests,
+                committee.summary.total_actual_submissions,
+                eventTypes,
+                eventsDetails
+            ];
+
+            csv += rowData.map(field => {
+                const text = String(field || '');
+                return text.includes(',') || text.includes('"') || text.includes('\n') ?
+                    '"' + text.replace(/"/g, '""') + '"' : text;
+            }).join(',') + '\n';
+        });
+
+        downloadCSV(csv, `committees_detailed_${new Date().toISOString().split('T')[0]}.csv`);
+    } catch (error) {
+        alert('שגיאה בייצוא נתוני הועדות');
+    }
+}
+
+function downloadCSV(csvContent, filename) {
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
 </script>
 {% endblock %}
