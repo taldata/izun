@@ -130,8 +130,20 @@ def import_database(json_file='db_export.json', db_path=None):
             if not records:
                 continue
             
+            # Get column names from the table schema (not from the JSON)
+            cursor.execute(f"PRAGMA table_info({table})")
+            table_columns = [col[1] for col in cursor.fetchall()]
+            
             # Get column names from first record
-            columns = list(records[0].keys())
+            record_columns = list(records[0].keys())
+            
+            # Only use columns that exist in both the record and the table
+            columns = [col for col in record_columns if col in table_columns]
+            
+            if not columns:
+                print(f"   ⚠️  {table}: No matching columns found, skipping")
+                continue
+            
             placeholders = ','.join(['?' for _ in columns])
             column_names = ','.join(columns)
             
@@ -140,7 +152,8 @@ def import_database(json_file='db_export.json', db_path=None):
             error_count = 0
             for record in records:
                 try:
-                    values = [record[col] for col in columns]
+                    # Only get values for columns that exist in the table
+                    values = [record.get(col) for col in columns]
                     cursor.execute(f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})", values)
                     imported_count += 1
                     success_count += 1
