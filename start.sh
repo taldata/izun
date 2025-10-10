@@ -1,11 +1,12 @@
 #!/bin/bash
 # Render startup script - runs migrations and starts the server
 
-set -e  # Exit on any error
-
 echo "==========================================="
 echo "🚀 Starting Izun Committee Management System"
 echo "==========================================="
+echo "Current directory: $(pwd)"
+echo "Files in directory:"
+ls -la | head -20
 
 # Step 1: Run database migrations
 echo ""
@@ -21,11 +22,14 @@ fi
 # Step 1.5: Import data if database is empty and export file exists
 echo ""
 echo "📥 Step 1.5: Checking for data import..."
+echo "Looking for db_export.json..."
 if [ -f "db_export.json" ]; then
-    echo "   Found db_export.json - checking if import needed..."
+    echo "   ✓ Found db_export.json - checking if import needed..."
     python upload_db.py import || echo "   ⚠️  Import skipped or failed (may not be needed)"
 else
-    echo "   No export file found - skipping import"
+    echo "   ✗ No export file found in $(pwd)"
+    echo "   Files here:"
+    ls -la *.json 2>/dev/null || echo "   No JSON files found"
 fi
 
 # Step 2: Verify persistence
