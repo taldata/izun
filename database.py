@@ -252,7 +252,16 @@ class DatabaseManager:
                     ('stage_a_days', 'INTEGER DEFAULT 10'),
                     ('stage_b_days', 'INTEGER DEFAULT 15'),
                     ('stage_c_days', 'INTEGER DEFAULT 10'),
-                    ('stage_d_days', 'INTEGER DEFAULT 10')
+                    ('stage_d_days', 'INTEGER DEFAULT 10'),
+                    ('stage_a_easy_days', 'INTEGER DEFAULT 5'),
+                    ('stage_a_review_days', 'INTEGER DEFAULT 5'),
+                    ('stage_b_easy_days', 'INTEGER DEFAULT 8'),
+                    ('stage_b_review_days', 'INTEGER DEFAULT 7'),
+                    ('stage_c_easy_days', 'INTEGER DEFAULT 5'),
+                    ('stage_c_review_days', 'INTEGER DEFAULT 5'),
+                    ('stage_d_easy_days', 'INTEGER DEFAULT 5'),
+                    ('stage_d_review_days', 'INTEGER DEFAULT 5'),
+                    ('call_publication_date', 'DATE')
                 ],
                 'committee_types': [
                     ('is_active', 'INTEGER DEFAULT 1'),
@@ -264,7 +273,9 @@ class DatabaseManager:
                     ('intake_deadline_date', 'DATE'),
                     ('review_deadline_date', 'DATE'),
                     ('response_deadline_date', 'DATE'),
-                    ('actual_submissions', 'INTEGER DEFAULT 0')
+                    ('actual_submissions', 'INTEGER DEFAULT 0'),
+                    ('scheduled_date', 'DATE'),
+                    ('status', 'TEXT DEFAULT "planned"')
                 ]
             }
             
