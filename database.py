@@ -17,7 +17,13 @@ class DatabaseManager:
         # Ensure directory exists for database file
         db_dir = os.path.dirname(self.db_path)
         if db_dir and not os.path.exists(db_dir):
-            os.makedirs(db_dir, exist_ok=True)
+            try:
+                os.makedirs(db_dir, exist_ok=True)
+            except OSError as e:
+                # On Render, /var/data might not be available during build phase
+                # This is okay - it will be available during runtime
+                print(f"Note: Could not create directory {db_dir}: {e}")
+                pass
         self.init_database()
     
     def get_connection(self):
