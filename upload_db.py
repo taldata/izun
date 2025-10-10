@@ -60,18 +60,29 @@ def import_database(json_file='db_export.json', db_path=None):
         print(f"📥 Importing data to: {db_path}")
         
         # Check if database already has data
+        # We'll import if ANY key tables are empty
         conn_check = sqlite3.connect(db_path)
         cursor_check = conn_check.cursor()
+        
         cursor_check.execute("SELECT COUNT(*) FROM hativot")
-        existing_count = cursor_check.fetchone()[0]
+        hativot_count = cursor_check.fetchone()[0]
+        cursor_check.execute("SELECT COUNT(*) FROM events")
+        events_count = cursor_check.fetchone()[0]
+        cursor_check.execute("SELECT COUNT(*) FROM maslulim")
+        maslulim_count = cursor_check.fetchone()[0]
+        
         conn_check.close()
         
-        if existing_count > 0:
-            print(f"   ℹ️  Database already contains {existing_count} hativot")
+        if hativot_count > 0 and events_count > 0 and maslulim_count > 0:
+            print(f"   ℹ️  Database already contains data:")
+            print(f"      - Hativot: {hativot_count}")
+            print(f"      - Maslulim: {maslulim_count}")
+            print(f"      - Events: {events_count}")
             print(f"   ⏭️  Skipping import to preserve existing data")
             return True
         
-        print(f"   Database is empty - proceeding with import...")
+        print(f"   Database is incomplete or empty - proceeding with import...")
+        print(f"   Current counts: hativot={hativot_count}, maslulim={maslulim_count}, events={events_count}")
         
         # Load JSON data
         with open(json_file, 'r', encoding='utf-8') as f:
