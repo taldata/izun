@@ -91,9 +91,31 @@ def import_database(json_file='db_export.json', db_path=None):
             except:
                 pass
         
-        # Import data
+        # Define import order to respect foreign key relationships
+        import_order = [
+            'users',           # No dependencies
+            'hativot',         # No dependencies
+            'system_settings', # Depends on users (optional FK)
+            'maslulim',        # Depends on hativot
+            'committee_types', # Depends on hativot
+            'exception_dates', # No dependencies
+            'vaadot',          # Depends on committee_types, hativot, exception_dates
+            'events',          # Depends on vaadot, maslulim
+            'audit_logs'       # Depends on users (optional FK)
+        ]
+        
+        # Add any tables not in the import order at the end
+        for table in data.keys():
+            if table not in import_order:
+                import_order.append(table)
+        
+        # Import data in the correct order
         imported_count = 0
-        for table, records in data.items():
+        for table in import_order:
+            if table not in data:
+                continue
+            
+            records = data[table]
             if not records:
                 continue
             
@@ -103,18 +125,28 @@ def import_database(json_file='db_export.json', db_path=None):
             column_names = ','.join(columns)
             
             # Insert records
+            success_count = 0
+            error_count = 0
             for record in records:
                 try:
                     values = [record[col] for col in columns]
                     cursor.execute(f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})", values)
                     imported_count += 1
+                    success_count += 1
                 except sqlite3.IntegrityError as e:
                     # Skip duplicates
-                    print(f"   ⚠️  Skipped duplicate in {table}: {e}")
+                    error_count += 1
+                    if error_count <= 3:  # Only show first 3 errors
+                        print(f"   ⚠️  Skipped duplicate in {table}: {e}")
                 except Exception as e:
-                    print(f"   ❌ Error importing to {table}: {e}")
+                    error_count += 1
+                    if error_count <= 3:  # Only show first 3 errors
+                        print(f"   ❌ Error importing to {table}: {e}")
             
-            print(f"   ✓ {table}: {len(records)} records imported")
+            if error_count > 0:
+                print(f"   ✓ {table}: {success_count}/{len(records)} records imported ({error_count} errors)")
+            else:
+                print(f"   ✓ {table}: {len(records)} records imported")
         
         # Re-enable foreign keys
         cursor.execute("PRAGMA foreign_keys = ON")
