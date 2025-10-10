@@ -254,7 +254,10 @@ class DatabaseManager:
                     ('stage_c_days', 'INTEGER DEFAULT 10'),
                     ('stage_d_days', 'INTEGER DEFAULT 10')
                 ],
-                'committee_types': [('is_active', 'INTEGER DEFAULT 1')],
+                'committee_types': [
+                    ('is_active', 'INTEGER DEFAULT 1'),
+                    ('description', 'TEXT')
+                ],
                 'events': [
                     ('call_publication_date', 'DATE'),
                     ('call_deadline_date', 'DATE'),
