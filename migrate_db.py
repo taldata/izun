@@ -21,6 +21,13 @@ def main():
         print(f"Starting database migration...")
         print(f"Database path: {db_path}")
         
+        # Ensure the directory exists before creating the database
+        db_dir = os.path.dirname(db_path)
+        if db_dir:
+            print(f"Ensuring directory exists: {db_dir}")
+            os.makedirs(db_dir, exist_ok=True)
+            print(f"✓ Directory ready: {db_dir}")
+        
         # Initialize database manager (this will create/migrate the database)
         db = DatabaseManager(db_path=db_path)
         
