@@ -107,6 +107,174 @@
                         </div>
                     </div>
 
+                    <div class="mb-4">
+                        <h6 class="text-primary fw-bold mb-3">
+                            <i class="bi bi-lightbulb me-2"></i>הגדרות המלצות לועדות
+                        </h6>
+                        <div class="accordion" id="recommendationsAccordion">
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#bonusesCollapse">
+                                        <i class="bi bi-plus-circle text-success me-2"></i>בונוסים
+                                    </button>
+                                </h2>
+                                <div id="bonusesCollapse" class="accordion-collapse collapse" data-bs-parent="#recommendationsAccordion">
+                                    <div class="accordion-body">
+                                        <div class="row g-3">
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label">ציון בסיס</label>
+                                                <input type="number" min="0" max="500" class="form-control {% if errors and errors.get('rec_base_score') %}is-invalid{% endif %}" name="rec_base_score" value="{{ settings.recommendations.base_score }}">
+                                                {% if errors and errors.get('rec_base_score') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_base_score') }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label">בונוס למומלצת ביותר</label>
+                                                <input type="number" min="0" max="100" class="form-control {% if errors and errors.get('rec_best_bonus') %}is-invalid{% endif %}" name="rec_best_bonus" value="{{ settings.recommendations.best_bonus }}">
+                                                {% if errors and errors.get('rec_best_bonus') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_best_bonus') }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label">בונוס למקום פנוי</label>
+                                                <input type="number" min="0" max="100" class="form-control {% if errors and errors.get('rec_space_bonus') %}is-invalid{% endif %}" name="rec_space_bonus" value="{{ settings.recommendations.space_bonus }}">
+                                                {% if errors and errors.get('rec_space_bonus') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_space_bonus') }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label">בונוס מקסימלי ל-SLA</label>
+                                                <input type="number" min="0" max="100" class="form-control {% if errors and errors.get('rec_sla_bonus') %}is-invalid{% endif %}" name="rec_sla_bonus" value="{{ settings.recommendations.sla_bonus }}">
+                                                {% if errors and errors.get('rec_sla_bonus') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_sla_bonus') }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label">בונוס לטווח אופטימלי</label>
+                                                <input type="number" min="0" max="100" class="form-control {% if errors and errors.get('rec_optimal_range_bonus') %}is-invalid{% endif %}" name="rec_optimal_range_bonus" value="{{ settings.recommendations.optimal_range_bonus }}">
+                                                {% if errors and errors.get('rec_optimal_range_bonus') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_optimal_range_bonus') }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label">בונוס לועדה ללא אירועים</label>
+                                                <input type="number" min="0" max="100" class="form-control {% if errors and errors.get('rec_no_events_bonus') %}is-invalid{% endif %}" name="rec_no_events_bonus" value="{{ settings.recommendations.no_events_bonus }}">
+                                                {% if errors and errors.get('rec_no_events_bonus') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_no_events_bonus') }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#penaltiesCollapse">
+                                        <i class="bi bi-dash-circle text-danger me-2"></i>קנסות
+                                    </button>
+                                </h2>
+                                <div id="penaltiesCollapse" class="accordion-collapse collapse" data-bs-parent="#recommendationsAccordion">
+                                    <div class="accordion-body">
+                                        <div class="row g-3">
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label">קנס לעומס גבוה (7+ אירועים)</label>
+                                                <input type="number" min="0" max="100" class="form-control {% if errors and errors.get('rec_high_load_penalty') %}is-invalid{% endif %}" name="rec_high_load_penalty" value="{{ settings.recommendations.high_load_penalty }}">
+                                                {% if errors and errors.get('rec_high_load_penalty') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_high_load_penalty') }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label">קנס לעומס בינוני (4-6 אירועים)</label>
+                                                <input type="number" min="0" max="100" class="form-control {% if errors and errors.get('rec_medium_load_penalty') %}is-invalid{% endif %}" name="rec_medium_load_penalty" value="{{ settings.recommendations.medium_load_penalty }}">
+                                                {% if errors and errors.get('rec_medium_load_penalty') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_medium_load_penalty') }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label">קנס לאין מקום</label>
+                                                <input type="number" min="0" max="200" class="form-control {% if errors and errors.get('rec_no_space_penalty') %}is-invalid{% endif %}" name="rec_no_space_penalty" value="{{ settings.recommendations.no_space_penalty }}">
+                                                {% if errors and errors.get('rec_no_space_penalty') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_no_space_penalty') }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label">קנס לאין זמן SLA</label>
+                                                <input type="number" min="0" max="200" class="form-control {% if errors and errors.get('rec_no_sla_penalty') %}is-invalid{% endif %}" name="rec_no_sla_penalty" value="{{ settings.recommendations.no_sla_penalty }}">
+                                                {% if errors and errors.get('rec_no_sla_penalty') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_no_sla_penalty') }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label">קנס ל-SLA צפוף</label>
+                                                <input type="number" min="0" max="100" class="form-control {% if errors and errors.get('rec_tight_sla_penalty') %}is-invalid{% endif %}" name="rec_tight_sla_penalty" value="{{ settings.recommendations.tight_sla_penalty }}">
+                                                {% if errors and errors.get('rec_tight_sla_penalty') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_tight_sla_penalty') }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label">קנס לרחוק מדי</label>
+                                                <input type="number" min="0" max="100" class="form-control {% if errors and errors.get('rec_far_future_penalty') %}is-invalid{% endif %}" name="rec_far_future_penalty" value="{{ settings.recommendations.far_future_penalty }}">
+                                                {% if errors and errors.get('rec_far_future_penalty') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_far_future_penalty') }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label">קנס לשבוע מלא</label>
+                                                <input type="number" min="0" max="100" class="form-control {% if errors and errors.get('rec_week_full_penalty') %}is-invalid{% endif %}" name="rec_week_full_penalty" value="{{ settings.recommendations.week_full_penalty }}">
+                                                {% if errors and errors.get('rec_week_full_penalty') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_week_full_penalty') }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#rangesCollapse">
+                                        <i class="bi bi-calendar-range text-info me-2"></i>טווחי זמן
+                                    </button>
+                                </h2>
+                                <div id="rangesCollapse" class="accordion-collapse collapse" data-bs-parent="#recommendationsAccordion">
+                                    <div class="accordion-body">
+                                        <div class="row g-3">
+                                            <div class="col-12 col-md-4">
+                                                <label class="form-label">טווח אופטימלי - התחלה (ימים אחרי SLA)</label>
+                                                <input type="number" min="0" max="365" class="form-control {% if errors and errors.get('rec_optimal_range_start') %}is-invalid{% endif %}" name="rec_optimal_range_start" value="{{ settings.recommendations.optimal_range_start }}">
+                                                {% if errors and errors.get('rec_optimal_range_start') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_optimal_range_start') }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-12 col-md-4">
+                                                <label class="form-label">טווח אופטימלי - סוף (ימים אחרי SLA)</label>
+                                                <input type="number" min="0" max="365" class="form-control {% if errors and errors.get('rec_optimal_range_end') %}is-invalid{% endif %}" name="rec_optimal_range_end" value="{{ settings.recommendations.optimal_range_end }}">
+                                                {% if errors and errors.get('rec_optimal_range_end') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_optimal_range_end') }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-12 col-md-4">
+                                                <label class="form-label">סף רחוק מדי (ימים)</label>
+                                                <input type="number" min="0" max="365" class="form-control {% if errors and errors.get('rec_far_future_threshold') %}is-invalid{% endif %}" name="rec_far_future_threshold" value="{{ settings.recommendations.far_future_threshold }}">
+                                                {% if errors and errors.get('rec_far_future_threshold') %}
+                                                <div class="invalid-feedback d-block">{{ errors.get('rec_far_future_threshold') }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="alert alert-info mt-3 mb-0">
+                                            <small>
+                                                <i class="bi bi-info-circle me-1"></i>
+                                                טווח אופטימלי: ועדות בין SLA+התחלה ל-SLA+סוף יקבלו בונוס.
+                                                ועדות רחוקות מעבר לסף יקבלו קנס.
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="d-flex justify-content-end gap-2">
                         <a href="{{ url_for('constraints') }}" class="btn btn-outline-secondary">
                             <i class="bi bi-arrow-counterclockwise me-1"></i>איפוס שינויים
@@ -150,9 +318,25 @@
                         <span class="text-muted">ימי SLA לפני ישיבה:</span>
                         <span class="fw-semibold">{{ settings.sla_days_before }}</span>
                     </li>
-                    <li class="mb-0">
+                    <li class="mb-2">
                         <span class="text-muted">מקסימום בקשות ביום:</span>
                         <span class="fw-semibold">{{ settings.limits.max_requests_per_day }}</span>
+                    </li>
+                    <li class="mb-0">
+                        <hr class="my-2">
+                        <strong class="text-primary"><i class="bi bi-lightbulb me-1"></i>הגדרות המלצות</strong>
+                    </li>
+                    <li class="mb-2">
+                        <span class="text-muted">ציון בסיס:</span>
+                        <span class="fw-semibold">{{ settings.recommendations.base_score }}</span>
+                    </li>
+                    <li class="mb-2">
+                        <span class="text-muted">בונוס מומלצת:</span>
+                        <span class="fw-semibold text-success">+{{ settings.recommendations.best_bonus }}</span>
+                    </li>
+                    <li class="mb-2">
+                        <span class="text-muted">טווח אופטימלי:</span>
+                        <span class="fw-semibold">{{ settings.recommendations.optimal_range_start }}-{{ settings.recommendations.optimal_range_end }} ימים</span>
                     </li>
                 </ul>
             </div>
@@ -160,12 +344,13 @@
 
         <div class="card shadow-sm border-0">
             <div class="card-header bg-light py-3">
-                <h6 class="mb-0 fw-bold"><i class="bi bi-lightbulb me-2"></i>טיפים</h6>
+                <h6 class="mb-0 fw-bold"><i class="bi bi-info-circle me-2"></i>טיפים</h6>
             </div>
             <div class="card-body small text-muted">
                 <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>הקפידו על התאמה בין מכסות יומיות ושבועיות כדי למנוע חסימות מיותרות.</p>
                 <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>ימי העבודה משפיעים על חישובי SLA, אירועים ותזמון אוטומטי.</p>
-                <p class="mb-0"><i class="bi bi-check-circle text-success me-1"></i>לאחר שינוי ההגדרות, הריצו מחדש את התזמון האוטומטי לבדיקת התוצאות.</p>
+                <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>לאחר שינוי ההגדרות, הריצו מחדש את התזמון האוטומטי לבדיקת התוצאות.</p>
+                <p class="mb-0"><i class="bi bi-star text-warning me-1"></i>הגדרות ההמלצות משפיעות על הציון שכל ועדה מקבלת במערכת ההמלצות.</p>
             </div>
         </div>
     </div>

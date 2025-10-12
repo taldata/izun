@@ -198,18 +198,6 @@
             <form method="POST" action="{{ url_for('add_event') }}">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="event_vaadot_id" class="form-label">ישיבת ועדה</label>
-                        <select class="form-select" name="vaadot_id" id="event_vaadot_id" required>
-                            <option value="">בחר ישיבת ועדה</option>
-                            {% for committee in committees %}
-                                <option value="{{ committee.vaadot_id }}">
-                                    {{ committee.committee_name }} - {{ committee.hativa_name }}
-                                    {% if committee.vaada_date %} ({{ committee.vaada_date }}){% endif %}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
                         <label for="event_maslul_id" class="form-label">מסלול</label>
                         <select class="form-select" name="maslul_id" id="event_maslul_id" required>
                             <option value="">בחר מסלול</option>
@@ -219,6 +207,42 @@
                                 </option>
                             {% endfor %}
                         </select>
+                    </div>
+                    
+                    <!-- Committee Recommendations Section -->
+                    <div id="committeeRecommendations" class="mb-3" style="display: none;">
+                        <div class="card bg-light">
+                            <div class="card-header">
+                                <i class="bi bi-lightbulb text-warning"></i>
+                                <strong>המלצות לועדות מתאימות</strong>
+                            </div>
+                            <div class="card-body">
+                                <div id="recommendationsLoading" class="text-center" style="display: none;">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">טוען...</span>
+                                    </div>
+                                    <span class="ms-2">מחפש ועדות מתאימות...</span>
+                                </div>
+                                <div id="recommendationsList"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="event_vaadot_id" class="form-label">ישיבת ועדה</label>
+                        <select class="form-select" name="vaadot_id" id="event_vaadot_id" required>
+                            <option value="">בחר ישיבת ועדה</option>
+                            {% for committee in committees %}
+                                <option value="{{ committee.vaadot_id }}" data-hativa-id="{{ committee.hativa_id }}">
+                                    {{ committee.committee_name }} - {{ committee.hativa_name }}
+                                    {% if committee.vaada_date %} ({{ committee.vaada_date }}){% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            בחר מסלול תחילה כדי לראות המלצות לועדות מתאימות
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="event_name" class="form-label">שם האירוע</label>
@@ -2361,6 +2385,211 @@ function showAlert(message, type) {
         }
     }, 3000);
 }
+
+// ===== Committee Recommendations for Event Form =====
+let recommendationTimeout = null;
+
+function loadCommitteeRecommendations() {
+    const maslulSelect = document.getElementById('event_maslul_id');
+    const expectedRequestsInput = document.querySelector('#addEventModal input[name="expected_requests"]');
+    const eventNameInput = document.getElementById('event_name');
+    
+    if (!maslulSelect.value) {
+        document.getElementById('committeeRecommendations').style.display = 'none';
+        return;
+    }
+    
+    // Show recommendations section
+    document.getElementById('committeeRecommendations').style.display = 'block';
+    document.getElementById('recommendationsLoading').style.display = 'block';
+    document.getElementById('recommendationsList').innerHTML = '';
+    
+    // Clear any existing timeout
+    if (recommendationTimeout) {
+        clearTimeout(recommendationTimeout);
+    }
+    
+    // Debounce API call
+    recommendationTimeout = setTimeout(() => {
+        const maslulId = maslulSelect.value;
+        const expectedRequests = expectedRequestsInput ? expectedRequestsInput.value || 0 : 0;
+        const eventName = eventNameInput ? eventNameInput.value : '';
+        
+        // Fetch recommendations from API
+        fetch(`/api/recommend_committees?maslul_id=${maslulId}&expected_requests=${expectedRequests}&event_name=${encodeURIComponent(eventName)}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('recommendationsLoading').style.display = 'none';
+                
+                if (data.success && data.recommendations && data.recommendations.length > 0) {
+                    displayRecommendations(data.recommendations);
+                } else {
+                    let message = data.message || 'לא נמצאו ועדות מתאימות';
+                    
+                    document.getElementById('recommendationsList').innerHTML = `
+                        <div class="alert alert-info mb-0">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>${message}</strong>
+                            <hr class="my-2">
+                            <small>
+                                💡 <strong>טיפים:</strong><br>
+                                • וודא שיש ועדות עתידיות באותה חטיבה של המסלול<br>
+                                • בדוק שהועדות לא מלאות או עמוסות מדי<br>
+                                • אפשר להוסיף ועדות חדשות דרך לחצן "הוסף ישיבת ועדה"
+                            </small>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                document.getElementById('recommendationsLoading').style.display = 'none';
+                document.getElementById('recommendationsList').innerHTML = `
+                    <div class="alert alert-danger mb-0">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>שגיאה בטעינת המלצות</strong>
+                    </div>
+                `;
+            });
+    }, 300);
+}
+
+function displayRecommendations(recommendations) {
+    const container = document.getElementById('recommendationsList');
+    container.innerHTML = '';
+    
+    recommendations.forEach((rec, index) => {
+        const card = document.createElement('div');
+        card.className = 'recommendation-item mb-2 p-2 border rounded';
+        card.style.cursor = 'pointer';
+        card.style.transition = 'all 0.2s';
+        
+        // Add color indicators based on availability
+        if (rec.is_available) {
+            card.style.borderColor = '#28a745';
+            card.style.backgroundColor = '#f8fff9';
+        } else {
+            card.style.borderColor = '#ffc107';
+            card.style.backgroundColor = '#fffef8';
+        }
+        
+        // Recommendation badge
+        let badge = '';
+        if (index === 0 && rec.is_available) {
+            badge = '<span class="badge bg-success me-2"><i class="bi bi-star-fill"></i> מומלץ</span>';
+        }
+        
+        // Format date
+        const dateObj = new Date(rec.vaada_date);
+        const formattedDate = dateObj.toLocaleDateString('he-IL', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric',
+            weekday: 'long'
+        });
+        
+        // Build reasons and warnings
+        let reasonsHtml = '';
+        if (rec.reasons && rec.reasons.length > 0) {
+            reasonsHtml = rec.reasons.map(r => 
+                `<small class="text-success d-block"><i class="bi bi-check-circle me-1"></i>${r}</small>`
+            ).join('');
+        }
+        
+        let warningsHtml = '';
+        if (rec.warnings && rec.warnings.length > 0) {
+            warningsHtml = rec.warnings.map(w => 
+                `<small class="text-warning d-block"><i class="bi bi-exclamation-triangle me-1"></i>${w}</small>`
+            ).join('');
+        }
+        
+        card.innerHTML = `
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <div class="fw-bold">
+                        ${badge}
+                        ${rec.committee_name}
+                        <span class="badge bg-primary">${rec.hativa_name}</span>
+                    </div>
+                    <div class="text-muted small mt-1">
+                        <i class="bi bi-calendar me-1"></i>${formattedDate}
+                        <span class="me-2"></span>
+                        <i class="bi bi-clock me-1"></i>בעוד ${rec.days_until_meeting} ימים
+                    </div>
+                    ${reasonsHtml}
+                    ${warningsHtml}
+                </div>
+                <div class="text-end">
+                    <div class="badge bg-secondary">${Math.round(rec.score)} נקודות</div>
+                    <div class="small text-muted mt-1">${rec.num_events} אירועים</div>
+                </div>
+            </div>
+        `;
+        
+        // Add click handler to select this committee
+        card.addEventListener('click', () => {
+            const committeeSelect = document.getElementById('event_vaadot_id');
+            committeeSelect.value = rec.vaadot_id;
+            
+            // Highlight selected card
+            document.querySelectorAll('.recommendation-item').forEach(item => {
+                item.style.boxShadow = 'none';
+            });
+            card.style.boxShadow = '0 0 0 3px rgba(0,123,255,0.3)';
+            
+            // Show success message
+            showAlert('הועדה נבחרה בהצלחה', 'success');
+        });
+        
+        // Hover effect
+        card.addEventListener('mouseenter', () => {
+            if (!card.style.boxShadow || card.style.boxShadow === 'none') {
+                card.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+            }
+        });
+        
+        card.addEventListener('mouseleave', () => {
+            if (card.style.boxShadow !== '0 0 0 3px rgba(0,123,255,0.3)') {
+                card.style.boxShadow = 'none';
+            }
+        });
+        
+        container.appendChild(card);
+    });
+}
+
+// Initialize event listeners when modal opens
+document.getElementById('addEventModal').addEventListener('shown.bs.modal', function() {
+    const maslulSelect = document.getElementById('event_maslul_id');
+    const expectedRequestsInput = document.querySelector('#addEventModal input[name="expected_requests"]');
+    
+    // Load recommendations when maslul changes
+    maslulSelect.addEventListener('change', loadCommitteeRecommendations);
+    
+    // Reload recommendations when expected requests change
+    if (expectedRequestsInput) {
+        expectedRequestsInput.addEventListener('input', loadCommitteeRecommendations);
+    }
+    
+    // If maslul is already selected, load recommendations
+    if (maslulSelect.value) {
+        loadCommitteeRecommendations();
+    }
+});
+
+// Reset recommendations when modal closes
+document.getElementById('addEventModal').addEventListener('hidden.bs.modal', function() {
+    document.getElementById('committeeRecommendations').style.display = 'none';
+    document.getElementById('recommendationsList').innerHTML = '';
+    
+    // Remove event listeners to prevent duplicates
+    const maslulSelect = document.getElementById('event_maslul_id');
+    const expectedRequestsInput = document.querySelector('#addEventModal input[name="expected_requests"]');
+    
+    maslulSelect.removeEventListener('change', loadCommitteeRecommendations);
+    if (expectedRequestsInput) {
+        expectedRequestsInput.removeEventListener('input', loadCommitteeRecommendations);
+    }
+});
 </script>
 
 <style>
@@ -2994,6 +3223,38 @@ function showAlert(message, type) {
 .invalid-drop-zone .drop-zone-hint {
     color: #dc3545;
     font-weight: bold;
+}
+
+/* Committee Recommendations Styles */
+.recommendation-item {
+    transition: all 0.3s ease;
+}
+
+.recommendation-item:hover {
+    transform: translateY(-2px);
+}
+
+#committeeRecommendations .card-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: 600;
+    padding: 12px 15px;
+}
+
+#committeeRecommendations .card-body {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.recommendation-item .badge {
+    font-size: 0.7rem;
+    padding: 0.35em 0.6em;
+}
+
+@media (max-width: 768px) {
+    #committeeRecommendations .card-body {
+        max-height: 300px;
+    }
 }
 </style>
 {% endblock %}

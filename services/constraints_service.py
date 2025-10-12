@@ -90,7 +90,25 @@ class ConstraintsService:
                 'max_third_week_meetings': constraint_settings['max_third_week_meetings'],
                 'max_requests_per_day': max_requests_per_day
             },
-            'sla_days_before': sla_days_before
+            'sla_days_before': sla_days_before,
+            'recommendations': {
+                'base_score': self.db.get_int_setting('rec_base_score', 100),
+                'best_bonus': self.db.get_int_setting('rec_best_bonus', 25),
+                'space_bonus': self.db.get_int_setting('rec_space_bonus', 10),
+                'sla_bonus': self.db.get_int_setting('rec_sla_bonus', 20),
+                'optimal_range_bonus': self.db.get_int_setting('rec_optimal_range_bonus', 15),
+                'no_events_bonus': self.db.get_int_setting('rec_no_events_bonus', 5),
+                'high_load_penalty': self.db.get_int_setting('rec_high_load_penalty', 15),
+                'medium_load_penalty': self.db.get_int_setting('rec_medium_load_penalty', 5),
+                'no_space_penalty': self.db.get_int_setting('rec_no_space_penalty', 50),
+                'no_sla_penalty': self.db.get_int_setting('rec_no_sla_penalty', 30),
+                'tight_sla_penalty': self.db.get_int_setting('rec_tight_sla_penalty', 10),
+                'far_future_penalty': self.db.get_int_setting('rec_far_future_penalty', 10),
+                'week_full_penalty': self.db.get_int_setting('rec_week_full_penalty', 20),
+                'optimal_range_start': self.db.get_int_setting('rec_optimal_range_start', 0),
+                'optimal_range_end': self.db.get_int_setting('rec_optimal_range_end', 30),
+                'far_future_threshold': self.db.get_int_setting('rec_far_future_threshold', 60)
+            }
         }
 
         logger.debug("Constraint overview loaded: %s", overview)
@@ -126,6 +144,26 @@ class ConstraintsService:
             except ValueError:
                 merged['sla_days_before'] = form_values['sla_days_before']
 
+        # Update recommendation settings if present
+        rec_keys = [
+            'rec_base_score', 'rec_best_bonus', 'rec_space_bonus', 'rec_sla_bonus',
+            'rec_optimal_range_bonus', 'rec_no_events_bonus', 'rec_high_load_penalty',
+            'rec_medium_load_penalty', 'rec_no_space_penalty', 'rec_no_sla_penalty',
+            'rec_tight_sla_penalty', 'rec_far_future_penalty', 'rec_week_full_penalty',
+            'rec_optimal_range_start', 'rec_optimal_range_end', 'rec_far_future_threshold'
+        ]
+        
+        recommendations = merged.get('recommendations', {})
+        for key in rec_keys:
+            if form_values.get(key) not in (None, ''):
+                try:
+                    # Remove 'rec_' prefix for the dict key
+                    dict_key = key.replace('rec_', '')
+                    recommendations[dict_key] = int(form_values[key])
+                except ValueError:
+                    dict_key = key.replace('rec_', '')
+                    recommendations[dict_key] = form_values[key]
+
         return merged
 
     def parse_request(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -143,7 +181,24 @@ class ConstraintsService:
             'max_meetings_per_day': data.get('max_meetings_per_day', '').strip(),
             'max_weekly_meetings': data.get('max_weekly_meetings', '').strip(),
             'max_third_week_meetings': data.get('max_third_week_meetings', '').strip(),
-            'max_requests_per_day': data.get('max_requests_per_day', '').strip()
+            'max_requests_per_day': data.get('max_requests_per_day', '').strip(),
+            # Recommendation parameters
+            'rec_base_score': data.get('rec_base_score', '').strip(),
+            'rec_best_bonus': data.get('rec_best_bonus', '').strip(),
+            'rec_space_bonus': data.get('rec_space_bonus', '').strip(),
+            'rec_sla_bonus': data.get('rec_sla_bonus', '').strip(),
+            'rec_optimal_range_bonus': data.get('rec_optimal_range_bonus', '').strip(),
+            'rec_no_events_bonus': data.get('rec_no_events_bonus', '').strip(),
+            'rec_high_load_penalty': data.get('rec_high_load_penalty', '').strip(),
+            'rec_medium_load_penalty': data.get('rec_medium_load_penalty', '').strip(),
+            'rec_no_space_penalty': data.get('rec_no_space_penalty', '').strip(),
+            'rec_no_sla_penalty': data.get('rec_no_sla_penalty', '').strip(),
+            'rec_tight_sla_penalty': data.get('rec_tight_sla_penalty', '').strip(),
+            'rec_far_future_penalty': data.get('rec_far_future_penalty', '').strip(),
+            'rec_week_full_penalty': data.get('rec_week_full_penalty', '').strip(),
+            'rec_optimal_range_start': data.get('rec_optimal_range_start', '').strip(),
+            'rec_optimal_range_end': data.get('rec_optimal_range_end', '').strip(),
+            'rec_far_future_threshold': data.get('rec_far_future_threshold', '').strip()
         }
         logger.debug("Parsed constraint request payload: %s", payload)
         return payload
@@ -191,6 +246,24 @@ class ConstraintsService:
         self._validate_int(payload['max_third_week_meetings'], 'max_third_week_meetings', errors, minimum=1, maximum=30)
         self._validate_int(payload['max_requests_per_day'], 'max_requests_per_day', errors, minimum=1, maximum=1000)
 
+        # Validate recommendation parameters
+        self._validate_int(payload['rec_base_score'], 'rec_base_score', errors, minimum=0, maximum=500)
+        self._validate_int(payload['rec_best_bonus'], 'rec_best_bonus', errors, minimum=0, maximum=100)
+        self._validate_int(payload['rec_space_bonus'], 'rec_space_bonus', errors, minimum=0, maximum=100)
+        self._validate_int(payload['rec_sla_bonus'], 'rec_sla_bonus', errors, minimum=0, maximum=100)
+        self._validate_int(payload['rec_optimal_range_bonus'], 'rec_optimal_range_bonus', errors, minimum=0, maximum=100)
+        self._validate_int(payload['rec_no_events_bonus'], 'rec_no_events_bonus', errors, minimum=0, maximum=100)
+        self._validate_int(payload['rec_high_load_penalty'], 'rec_high_load_penalty', errors, minimum=0, maximum=100)
+        self._validate_int(payload['rec_medium_load_penalty'], 'rec_medium_load_penalty', errors, minimum=0, maximum=100)
+        self._validate_int(payload['rec_no_space_penalty'], 'rec_no_space_penalty', errors, minimum=0, maximum=200)
+        self._validate_int(payload['rec_no_sla_penalty'], 'rec_no_sla_penalty', errors, minimum=0, maximum=200)
+        self._validate_int(payload['rec_tight_sla_penalty'], 'rec_tight_sla_penalty', errors, minimum=0, maximum=100)
+        self._validate_int(payload['rec_far_future_penalty'], 'rec_far_future_penalty', errors, minimum=0, maximum=100)
+        self._validate_int(payload['rec_week_full_penalty'], 'rec_week_full_penalty', errors, minimum=0, maximum=100)
+        self._validate_int(payload['rec_optimal_range_start'], 'rec_optimal_range_start', errors, minimum=0, maximum=365)
+        self._validate_int(payload['rec_optimal_range_end'], 'rec_optimal_range_end', errors, minimum=0, maximum=365)
+        self._validate_int(payload['rec_far_future_threshold'], 'rec_far_future_threshold', errors, minimum=0, maximum=365)
+
         if not errors:
             max_day = int(payload['max_meetings_per_day'])
             max_week = int(payload['max_weekly_meetings'])
@@ -223,7 +296,24 @@ class ConstraintsService:
             'max_meetings_per_day': payload['max_meetings_per_day'],
             'max_weekly_meetings': payload['max_weekly_meetings'],
             'max_third_week_meetings': payload['max_third_week_meetings'],
-            'max_requests_per_day': payload['max_requests_per_day']
+            'max_requests_per_day': payload['max_requests_per_day'],
+            # Recommendation parameters
+            'rec_base_score': payload['rec_base_score'],
+            'rec_best_bonus': payload['rec_best_bonus'],
+            'rec_space_bonus': payload['rec_space_bonus'],
+            'rec_sla_bonus': payload['rec_sla_bonus'],
+            'rec_optimal_range_bonus': payload['rec_optimal_range_bonus'],
+            'rec_no_events_bonus': payload['rec_no_events_bonus'],
+            'rec_high_load_penalty': payload['rec_high_load_penalty'],
+            'rec_medium_load_penalty': payload['rec_medium_load_penalty'],
+            'rec_no_space_penalty': payload['rec_no_space_penalty'],
+            'rec_no_sla_penalty': payload['rec_no_sla_penalty'],
+            'rec_tight_sla_penalty': payload['rec_tight_sla_penalty'],
+            'rec_far_future_penalty': payload['rec_far_future_penalty'],
+            'rec_week_full_penalty': payload['rec_week_full_penalty'],
+            'rec_optimal_range_start': payload['rec_optimal_range_start'],
+            'rec_optimal_range_end': payload['rec_optimal_range_end'],
+            'rec_far_future_threshold': payload['rec_far_future_threshold']
         }
 
         for key, value in updates.items():

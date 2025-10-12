@@ -9,6 +9,7 @@ from auto_scheduler import AutoMeetingScheduler
 from services.auto_schedule_service import AutoScheduleService
 from services.constraints_service import ConstraintsService
 from services.committee_types_service import CommitteeTypesService, CommitteeTypeRequest
+from services.committee_recommendation_service import CommitteeRecommendationService
 from services.audit_logger import AuditLogger
 from auth import AuthManager, login_required, admin_required, editing_permission_required
 
@@ -21,6 +22,7 @@ auto_scheduler = AutoMeetingScheduler(db)
 auto_schedule_service = AutoScheduleService(db)
 constraints_service = ConstraintsService(db)
 committee_types_service = CommitteeTypesService(db)
+committee_recommendation_service = CommitteeRecommendationService(db)
 auth_manager = AuthManager(db)
 audit_logger = AuditLogger(db)
 
@@ -353,6 +355,40 @@ def get_available_dates():
     except Exception as e:
         app.logger.error(f"Error fetching available dates: {str(e)}")
         return jsonify({'success': False, 'message': f'שגיאה בשליפת תאריכים פנויים: {str(e)}'}), 500
+
+
+@app.route('/api/recommend_committees')
+@login_required
+def recommend_committees():
+    """Get committee recommendations for a new event based on route and expected requests"""
+    try:
+        maslul_id = request.args.get('maslul_id', type=int)
+        expected_requests = request.args.get('expected_requests', default=0, type=int)
+        event_name = request.args.get('event_name', default='', type=str)
+        limit = request.args.get('limit', default=5, type=int)
+        
+        if not maslul_id:
+            return jsonify({'success': False, 'message': 'נדרש לבחור מסלול'}), 400
+        
+        # Get recommendations
+        recommendations = committee_recommendation_service.recommend_committees(
+            maslul_id=maslul_id,
+            expected_requests=expected_requests,
+            event_name=event_name,
+            limit=min(limit, 10)  # Max 10 recommendations
+        )
+        
+        return jsonify({
+            'success': True,
+            'recommendations': recommendations,
+            'total': len(recommendations)
+        })
+        
+    except Exception as e:
+        import traceback
+        app.logger.error(f"Error getting committee recommendations: {str(e)}")
+        app.logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'message': f'שגיאה בקבלת המלצות: {str(e)}'}), 500
 
 
 @app.route('/constraints')

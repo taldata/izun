@@ -190,7 +190,23 @@ class DatabaseManager:
                 ('max_weekly_meetings', '3', 'Maximum number of committee meetings per standard week'),
                 ('max_third_week_meetings', '4', 'Maximum number of committee meetings during the third week of a month'),
                 ('max_requests_per_day', '100', 'Maximum total expected requests per day across all events'),
-                ('show_deadline_dates_in_calendar', '1', 'Show derived deadline dates in calendar (1=yes, 0=no)')
+                ('show_deadline_dates_in_calendar', '1', 'Show derived deadline dates in calendar (1=yes, 0=no)'),
+                ('rec_base_score', '100', 'Committee recommendation base score'),
+                ('rec_best_bonus', '25', 'Bonus for best recommendation'),
+                ('rec_space_bonus', '10', 'Bonus for available space'),
+                ('rec_sla_bonus', '20', 'Maximum bonus for SLA buffer'),
+                ('rec_optimal_range_bonus', '15', 'Bonus for optimal time range'),
+                ('rec_no_events_bonus', '5', 'Bonus for committee with no events'),
+                ('rec_high_load_penalty', '15', 'Penalty for high event load (7+ events)'),
+                ('rec_medium_load_penalty', '5', 'Penalty for medium event load (4-6 events)'),
+                ('rec_no_space_penalty', '50', 'Penalty for no available space'),
+                ('rec_no_sla_penalty', '30', 'Penalty for insufficient SLA time'),
+                ('rec_tight_sla_penalty', '10', 'Penalty for tight SLA time'),
+                ('rec_far_future_penalty', '10', 'Penalty for dates too far in future'),
+                ('rec_week_full_penalty', '20', 'Penalty for full week'),
+                ('rec_optimal_range_start', '0', 'Optimal range start (days after SLA)'),
+                ('rec_optimal_range_end', '30', 'Optimal range end (days after SLA)'),
+                ('rec_far_future_threshold', '60', 'Days considered too far in future (after optimal range)')
         ''')
         
         conn.commit()
@@ -356,7 +372,9 @@ class DatabaseManager:
         
         if hativa_id:
             cursor.execute('''
-                SELECT m.*, h.name as hativa_name 
+                SELECT m.maslul_id, m.hativa_id, m.name, m.description, m.is_active, m.created_at,
+                       m.sla_days, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days,
+                       h.name as hativa_name
                 FROM maslulim m 
                 JOIN hativot h ON m.hativa_id = h.hativa_id 
                 WHERE m.hativa_id = ? 
@@ -364,7 +382,9 @@ class DatabaseManager:
             ''', (hativa_id,))
         else:
             cursor.execute('''
-                SELECT m.*, h.name as hativa_name 
+                SELECT m.maslul_id, m.hativa_id, m.name, m.description, m.is_active, m.created_at,
+                       m.sla_days, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days,
+                       h.name as hativa_name
                 FROM maslulim m 
                 JOIN hativot h ON m.hativa_id = h.hativa_id 
                 ORDER BY h.name, m.name
@@ -374,13 +394,13 @@ class DatabaseManager:
         conn.close()
         
         return [{'maslul_id': row[0], 'hativa_id': row[1], 'name': row[2], 
-                'description': row[3], 'created_at': row[4], 'is_active': row[5], 
-                'sla_days': row[6] if len(row) > 6 else 45,
-                'stage_a_days': row[7] if len(row) > 7 else 10,
-                'stage_b_days': row[8] if len(row) > 8 else 15,
-                'stage_c_days': row[9] if len(row) > 9 else 10,
-                'stage_d_days': row[10] if len(row) > 10 else 10,
-                'hativa_name': row[11] if len(row) > 11 else 'לא ידוע'} for row in rows]
+                'description': row[3], 'is_active': row[4], 'created_at': row[5],
+                'sla_days': row[6] if row[6] is not None else 45,
+                'stage_a_days': row[7] if row[7] is not None else 10,
+                'stage_b_days': row[8] if row[8] is not None else 15,
+                'stage_c_days': row[9] if row[9] is not None else 10,
+                'stage_d_days': row[10] if row[10] is not None else 10,
+                'hativa_name': row[11]} for row in rows]
     
     def update_maslul(self, maslul_id: int, name: str, description: str = "", sla_days: int = 45,
                       stage_a_days: int = 10, stage_b_days: int = 15, stage_c_days: int = 10, stage_d_days: int = 10) -> bool:
@@ -1772,7 +1792,9 @@ class DatabaseManager:
             conn = self.get_connection()
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT m.*, h.name as hativa_name
+                SELECT m.maslul_id, m.hativa_id, m.name, m.description, m.created_at, 
+                       m.is_active, m.sla_days, m.stage_a_days, m.stage_b_days, 
+                       m.stage_c_days, m.stage_d_days, h.name as hativa_name
                 FROM maslulim m
                 JOIN hativot h ON m.hativa_id = h.hativa_id
                 WHERE m.maslul_id = ?
@@ -1789,12 +1811,18 @@ class DatabaseManager:
                     'description': row[3],
                     'created_at': row[4],
                     'is_active': row[5],
-                    'sla_days': row[6],
-                    'hativa_name': row[7]
+                    'sla_days': row[6] if row[6] is not None else 45,
+                    'stage_a_days': row[7] if row[7] is not None else 10,
+                    'stage_b_days': row[8] if row[8] is not None else 15,
+                    'stage_c_days': row[9] if row[9] is not None else 10,
+                    'stage_d_days': row[10] if row[10] is not None else 10,
+                    'hativa_name': row[11]
                 }
             return None
         except Exception as e:
             print(f"Error getting maslul by ID: {e}")
+            import traceback
+            traceback.print_exc()
             if 'conn' in locals():
                 conn.close()
             return None
