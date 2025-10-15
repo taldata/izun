@@ -871,18 +871,23 @@ function createMonthCalendar(year, month, isCompact = false) {
                         
                         deadlines.forEach(deadline => {
                             const deadlineDiv = document.createElement('div');
-                            deadlineDiv.className = 'deadline-badge d-flex align-items-center mb-1';
+                            deadlineDiv.className = 'deadline-badge d-flex align-items-start mb-1';
                             deadlineDiv.style.fontSize = isCompact ? '0.5rem' : '0.6rem';
-                            deadlineDiv.style.padding = isCompact ? '2px 4px' : '3px 6px';
+                            deadlineDiv.style.padding = isCompact ? '3px 5px' : '4px 7px';
                             deadlineDiv.style.borderRadius = '4px';
                             deadlineDiv.style.backgroundColor = `${deadline.config.color}20`;
                             deadlineDiv.style.borderRight = `3px solid ${deadline.config.color}`;
                             deadlineDiv.style.color = deadline.config.color;
                             deadlineDiv.style.fontWeight = '500';
+                            deadlineDiv.style.minHeight = isCompact ? '20px' : '24px';
                             
                             deadlineDiv.innerHTML = `
                                 <i class="${deadline.config.icon} me-1" style="font-size: ${isCompact ? '0.4rem' : '0.5rem'};"></i>
-                                <span class="text-truncate">${deadline.config.label}</span>
+                                <div class="d-flex flex-column">
+                                    <span class="text-truncate fw-bold" style="font-size: ${isCompact ? '0.45rem' : '0.55rem'};">${deadline.config.label}</span>
+                                    <span class="text-truncate" style="font-size: ${isCompact ? '0.35rem' : '0.45rem'}; opacity: 0.8;">${deadline.event.name}</span>
+                                    <span class="text-truncate" style="font-size: ${isCompact ? '0.35rem' : '0.45rem'}; opacity: 0.7;">${deadline.event.maslul_name}</span>
+                                </div>
                             `;
                             
                             deadlineDiv.title = `${deadline.config.label} - ${deadline.event.name} (${deadline.event.maslul_name})`;
