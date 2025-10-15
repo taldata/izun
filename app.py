@@ -1764,6 +1764,58 @@ def permissions_matrix():
     current_user = auth_manager.get_current_user()
     return render_template('admin/permissions.html', current_user=current_user)
 
+@app.route('/user-guide')
+def user_guide_index():
+    """User guide index - table of contents"""
+    return render_template('user_guide_index.html')
+
+@app.route('/user-guide/full')
+def user_guide_full():
+    """User guide - Full single page version"""
+    return render_template('user_guide.html')
+
+@app.route('/user-guide/login')
+def user_guide_login():
+    """User guide - Login section"""
+    # For now, redirect to full guide with anchor
+    return redirect(url_for('user_guide_full') + '#login')
+
+@app.route('/user-guide/interface')
+def user_guide_interface():
+    """User guide - Interface section"""
+    # For now, redirect to full guide with anchor
+    return redirect(url_for('user_guide_full') + '#interface')
+
+@app.route('/user-guide/user')
+def user_guide_user():
+    """User guide - User role"""
+    # For now, redirect to full guide with anchor
+    return redirect(url_for('user_guide_full') + '#user-role')
+
+@app.route('/user-guide/manager')
+def user_guide_manager():
+    """User guide - Manager role"""
+    # For now, redirect to full guide with anchor
+    return redirect(url_for('user_guide_full') + '#manager-role')
+
+@app.route('/user-guide/admin')
+def user_guide_admin():
+    """User guide - Admin role"""
+    # For now, redirect to full guide with anchor
+    return redirect(url_for('user_guide_full') + '#admin-role')
+
+@app.route('/user-guide/faq')
+def user_guide_faq():
+    """User guide - FAQ"""
+    # For now, redirect to full guide with anchor
+    return redirect(url_for('user_guide_full') + '#faq')
+
+@app.route('/user-guide/tips')
+def user_guide_tips():
+    """User guide - Tips and tricks"""
+    # For now, redirect to full guide with anchor
+    return redirect(url_for('user_guide_full') + '#tips')
+
 @app.route('/admin/users/add', methods=['POST'])
 @admin_required
 def add_user():
