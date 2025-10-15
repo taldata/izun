@@ -1567,12 +1567,12 @@ def add_committee_type():
     response = committee_types_service.create_committee_type(committee_type_request)
     
     # Log the operation
-    if response.success and response.committee_type:
+    if response.success and response.committee_type_id:
         hativot = db.get_hativot()
         hativa = next((h for h in hativot if h['hativa_id'] == committee_type_request.hativa_id), None)
         hativa_name = hativa['name'] if hativa else 'Unknown'
         audit_logger.log_committee_type_created(
-            response.committee_type['committee_type_id'],
+            response.committee_type_id,
             committee_type_request.name,
             hativa_name
         )
