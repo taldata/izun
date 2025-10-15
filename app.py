@@ -148,7 +148,6 @@ def get_editing_status():
 # Bulk Delete API endpoints
 @app.route('/api/events/bulk_delete', methods=['POST'])
 @login_required
-@editing_permission_required
 def bulk_delete_events():
     """Bulk delete events by IDs"""
     try:
@@ -163,8 +162,33 @@ def bulk_delete_events():
         if len(event_ids) > 1000:
             return jsonify({'success': False, 'message': 'ניתן למחוק עד 1000 אירועים בבת אחת'}), 400
 
+        # Get current user
+        user = auth_manager.get_current_user()
+        if not user:
+            return jsonify({'success': False, 'message': 'נדרשת התחברות'}), 401
+        
+        # Check permissions: Users cannot delete events
+        if user['role'] == 'user':
+            return jsonify({'success': False, 'message': 'משתמשים רגילים לא יכולים למחוק אירועים'}), 403
+        
         # Pre-fetch names for audit per item (best-effort)
         events_map = {e['event_id']: e for e in db.get_events()}
+        
+        # For managers, verify all events are in their division
+        if user['role'] == 'manager':
+            for event_id in event_ids:
+                try:
+                    event_id_int = int(event_id)
+                    if event_id_int in events_map:
+                        event = events_map[event_id_int]
+                        # Check if event belongs to manager's division
+                        if event.get('maslul_hativa_id') != user['hativa_id']:
+                            return jsonify({
+                                'success': False, 
+                                'message': f'מנהל יכול למחוק רק אירועים בחטיבה שלו. אירוע {event.get("name", event_id)} לא בחטיבה שלך'
+                            }), 403
+                except (ValueError, KeyError):
+                    continue
         deleted = db.delete_events_bulk(event_ids)
 
         # Audit: summary
@@ -194,7 +218,6 @@ def bulk_delete_events():
 
 @app.route('/api/committees/bulk_delete', methods=['POST'])
 @login_required
-@editing_permission_required
 def bulk_delete_committees():
     """Bulk delete committees (vaadot) by IDs; related events are removed via cascade."""
     try:
@@ -208,8 +231,33 @@ def bulk_delete_committees():
         if len(vaadot_ids) > 500:
             return jsonify({'success': False, 'message': 'ניתן למחוק עד 500 ועדות בבת אחת'}), 400
 
+        # Get current user
+        user = auth_manager.get_current_user()
+        if not user:
+            return jsonify({'success': False, 'message': 'נדרשת התחברות'}), 401
+        
+        # Check permissions: Users cannot delete committees
+        if user['role'] == 'user':
+            return jsonify({'success': False, 'message': 'משתמשים רגילים לא יכולים למחוק ועדות'}), 403
+        
         # Pre-fetch names for audit per item (best-effort)
         vaadot_map = {v['vaadot_id']: v for v in db.get_vaadot()}
+        
+        # For managers, verify all committees are in their division
+        if user['role'] == 'manager':
+            for vaada_id in vaadot_ids:
+                try:
+                    vaada_id_int = int(vaada_id)
+                    if vaada_id_int in vaadot_map:
+                        vaada = vaadot_map[vaada_id_int]
+                        # Check if committee belongs to manager's division
+                        if vaada.get('hativa_id') != user['hativa_id']:
+                            return jsonify({
+                                'success': False, 
+                                'message': f'מנהל יכול למחוק רק ועדות בחטיבה שלו. ועדה {vaada.get("committee_name", vaada_id)} לא בחטיבה שלך'
+                            }), 403
+                except (ValueError, KeyError):
+                    continue
         deleted_committees, affected_events = db.delete_vaadot_bulk(vaadot_ids)
 
         # Audit: summary
@@ -1117,9 +1165,21 @@ def edit_event(event_id):
     return redirect(url_for('index'))
 
 @app.route('/events/delete/<int:event_id>', methods=['POST'])
+@login_required
 def delete_event_route(event_id):
     """Delete event"""
     try:
+        # Get current user
+        user = auth_manager.get_current_user()
+        if not user:
+            flash('נדרשת התחברות', 'error')
+            return redirect(url_for('login'))
+        
+        # Check permissions: Users cannot delete events
+        if user['role'] == 'user':
+            flash('משתמשים רגילים לא יכולים למחוק אירועים', 'error')
+            return redirect(url_for('index'))
+        
         # Get event name before deletion
         events = db.get_events()
         event = next((e for e in events if e['event_id'] == event_id), None)
@@ -1127,6 +1187,12 @@ def delete_event_route(event_id):
         if not event:
             flash('האירוע לא נמצא במערכת', 'error')
             return redirect(url_for('index'))
+        
+        # For managers, verify event is in their division
+        if user['role'] == 'manager':
+            if event.get('maslul_hativa_id') != user['hativa_id']:
+                flash('מנהל יכול למחוק רק אירועים בחטיבה שלו', 'error')
+                return redirect(url_for('index'))
         
         success = db.delete_event(event_id)
         if success:
