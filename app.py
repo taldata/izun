@@ -11,6 +11,7 @@ from services.constraints_service import ConstraintsService
 from services.committee_types_service import CommitteeTypesService, CommitteeTypeRequest
 from services.committee_recommendation_service import CommitteeRecommendationService
 from services.audit_logger import AuditLogger
+from services.ad_service import ADService
 from auth import AuthManager, login_required, admin_required, editing_permission_required
 
 app = Flask(__name__)
@@ -18,12 +19,13 @@ app.secret_key = 'committee_management_secret_key_2025'
 
 # Initialize system components
 db = DatabaseManager()
+ad_service = ADService(db)
 auto_scheduler = AutoMeetingScheduler(db)
 auto_schedule_service = AutoScheduleService(db)
 constraints_service = ConstraintsService(db)
 committee_types_service = CommitteeTypesService(db)
 committee_recommendation_service = CommitteeRecommendationService(db)
-auth_manager = AuthManager(db)
+auth_manager = AuthManager(db, ad_service)
 audit_logger = AuditLogger(db)
 
 # Mobile device detection middleware
@@ -65,7 +67,11 @@ def login():
         else:
             flash(message, 'error')
     
-    return render_template('login.html')
+    # Check if AD is enabled
+    ad_enabled = ad_service.is_enabled()
+    ad_server = db.get_system_setting('ad_server_url') if ad_enabled else None
+    
+    return render_template('login.html', ad_enabled=ad_enabled, ad_server=ad_server)
 
 @app.route('/logout')
 def logout():
@@ -2024,6 +2030,192 @@ def change_user_password():
         flash(f'שגיאה בשינוי הסיסמה: {str(e)}', 'error')
     
     return redirect(url_for('manage_users'))
+
+# Active Directory Settings Routes
+@app.route('/admin/ad_settings')
+@admin_required
+def ad_settings():
+    """Active Directory settings page"""
+    try:
+        # Get all AD settings
+        ad_config = {
+            'enabled': db.get_system_setting('ad_enabled') == '1',
+            'server_url': db.get_system_setting('ad_server_url') or '',
+            'port': db.get_system_setting('ad_port') or '636',
+            'use_ssl': db.get_system_setting('ad_use_ssl') != '0',
+            'use_tls': db.get_system_setting('ad_use_tls') == '1',
+            'base_dn': db.get_system_setting('ad_base_dn') or '',
+            'bind_dn': db.get_system_setting('ad_bind_dn') or '',
+            'bind_password': db.get_system_setting('ad_bind_password') or '',
+            'user_search_base': db.get_system_setting('ad_user_search_base') or '',
+            'user_search_filter': db.get_system_setting('ad_user_search_filter') or '(sAMAccountName={username})',
+            'group_search_base': db.get_system_setting('ad_group_search_base') or '',
+            'admin_group': db.get_system_setting('ad_admin_group') or '',
+            'manager_group': db.get_system_setting('ad_manager_group') or '',
+            'auto_create_users': db.get_system_setting('ad_auto_create_users') == '1',
+            'default_hativa_id': db.get_system_setting('ad_default_hativa_id') or '',
+            'sync_on_login': db.get_system_setting('ad_sync_on_login') == '1'
+        }
+        
+        # Get hativot for default division selection
+        hativot = db.get_hativot()
+        
+        # Get AD users count
+        ad_users = db.get_ad_users()
+        local_users = db.get_local_users()
+        
+        current_user = auth_manager.get_current_user()
+        
+        return render_template('admin/ad_settings.html',
+                             ad_config=ad_config,
+                             hativot=hativot,
+                             ad_users_count=len(ad_users),
+                             local_users_count=len(local_users),
+                             current_user=current_user)
+    except Exception as e:
+        app.logger.error(f'Error loading AD settings: {str(e)}')
+        flash(f'שגיאה בטעינת הגדרות Active Directory: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
+@app.route('/admin/ad_settings/update', methods=['POST'])
+@admin_required
+def update_ad_settings():
+    """Update Active Directory settings"""
+    try:
+        user_id = session['user_id']
+        
+        # Get form data
+        settings = {
+            'ad_enabled': '1' if request.form.get('enabled') == 'on' else '0',
+            'ad_server_url': request.form.get('server_url', '').strip(),
+            'ad_port': request.form.get('port', '636').strip(),
+            'ad_use_ssl': '1' if request.form.get('use_ssl') == 'on' else '0',
+            'ad_use_tls': '1' if request.form.get('use_tls') == 'on' else '0',
+            'ad_base_dn': request.form.get('base_dn', '').strip(),
+            'ad_bind_dn': request.form.get('bind_dn', '').strip(),
+            'ad_bind_password': request.form.get('bind_password', '').strip(),
+            'ad_user_search_base': request.form.get('user_search_base', '').strip(),
+            'ad_user_search_filter': request.form.get('user_search_filter', '(sAMAccountName={username})').strip(),
+            'ad_group_search_base': request.form.get('group_search_base', '').strip(),
+            'ad_admin_group': request.form.get('admin_group', '').strip(),
+            'ad_manager_group': request.form.get('manager_group', '').strip(),
+            'ad_auto_create_users': '1' if request.form.get('auto_create_users') == 'on' else '0',
+            'ad_default_hativa_id': request.form.get('default_hativa_id', '').strip(),
+            'ad_sync_on_login': '1' if request.form.get('sync_on_login') == 'on' else '0'
+        }
+        
+        # Update all settings
+        for key, value in settings.items():
+            db.update_system_setting(key, value, user_id)
+        
+        # Reload AD service with new settings
+        ad_service.reload_settings()
+        
+        audit_logger.log_success(
+            audit_logger.ACTION_UPDATE,
+            'ad_settings',
+            details='עדכון הגדרות Active Directory'
+        )
+        
+        flash('הגדרות Active Directory עודכנו בהצלחה', 'success')
+        
+    except Exception as e:
+        audit_logger.log_error(
+            audit_logger.ACTION_UPDATE,
+            'ad_settings',
+            str(e),
+            details='עדכון הגדרות Active Directory'
+        )
+        flash(f'שגיאה בעדכון הגדרות AD: {str(e)}', 'error')
+    
+    return redirect(url_for('ad_settings'))
+
+@app.route('/admin/ad_settings/test', methods=['POST'])
+@admin_required
+def test_ad_connection():
+    """Test Active Directory connection"""
+    try:
+        # Reload settings first
+        ad_service.reload_settings()
+        
+        # Test connection
+        success, message = ad_service.test_connection()
+        
+        if success:
+            audit_logger.log_success(
+                audit_logger.ACTION_TEST,
+                'ad_connection',
+                details='בדיקת חיבור AD הצליחה'
+            )
+            return jsonify({'success': True, 'message': message})
+        else:
+            audit_logger.log_error(
+                audit_logger.ACTION_TEST,
+                'ad_connection',
+                message,
+                details='בדיקת חיבור AD נכשלה'
+            )
+            return jsonify({'success': False, 'message': message})
+            
+    except Exception as e:
+        app.logger.error(f'Error testing AD connection: {str(e)}')
+        return jsonify({'success': False, 'message': f'שגיאה: {str(e)}'})
+
+@app.route('/admin/ad_settings/search_users', methods=['POST'])
+@admin_required
+def search_ad_users():
+    """Search for users in Active Directory"""
+    try:
+        search_term = request.form.get('search_term', '').strip()
+        
+        if not search_term:
+            return jsonify({'success': False, 'message': 'נדרש מונח חיפוש'})
+        
+        # Search AD
+        users = ad_service.search_users(search_term, limit=20)
+        
+        return jsonify({'success': True, 'users': users, 'count': len(users)})
+        
+    except Exception as e:
+        app.logger.error(f'Error searching AD users: {str(e)}')
+        return jsonify({'success': False, 'message': f'שגיאה בחיפוש: {str(e)}'})
+
+@app.route('/admin/ad_settings/sync_user', methods=['POST'])
+@admin_required
+def sync_ad_user():
+    """Manually sync a user from AD"""
+    try:
+        username = request.form.get('username', '').strip()
+        role = request.form.get('role', 'user')
+        hativa_id = request.form.get('hativa_id')
+        
+        if not username:
+            return jsonify({'success': False, 'message': 'נדרש שם משתמש'})
+        
+        # Get user from AD
+        _, user_info, _ = ad_service.authenticate(username, '')
+        
+        if not user_info:
+            # Try to search for user
+            users = ad_service.search_users(username, limit=1)
+            if users:
+                user_info = users[0]
+            else:
+                return jsonify({'success': False, 'message': 'משתמש לא נמצא ב-AD'})
+        
+        # Sync to local DB
+        hativa_id_int = int(hativa_id) if hativa_id else None
+        user_id = ad_service.sync_user_to_local(user_info, role, hativa_id_int)
+        
+        if user_id:
+            audit_logger.log_user_created(user_id, username, role)
+            return jsonify({'success': True, 'message': f'משתמש {username} סונכרן בהצלחה'})
+        else:
+            return jsonify({'success': False, 'message': 'שגיאה בסנכרון המשתמש'})
+            
+    except Exception as e:
+        app.logger.error(f'Error syncing AD user: {str(e)}')
+        return jsonify({'success': False, 'message': f'שגיאה: {str(e)}'})
 
 # Drag & Drop API endpoints
 @app.route('/api/move_committee', methods=['POST'])

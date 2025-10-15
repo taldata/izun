@@ -1,0 +1,445 @@
+{% extends "base.html" %}
+
+{% block title %}הגדרות Active Directory{% endblock %}
+
+{% block extra_css %}
+<style>
+    .settings-card {
+        border: none;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        margin-bottom: 1.5rem;
+    }
+    
+    .settings-card .card-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-weight: bold;
+        padding: 1rem 1.5rem;
+    }
+    
+    .status-badge {
+        font-size: 0.9rem;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+    }
+    
+    .status-enabled {
+        background: linear-gradient(45deg, #11998e, #38ef7d);
+        color: white;
+    }
+    
+    .status-disabled {
+        background: linear-gradient(45deg, #ee0979, #ff6a00);
+        color: white;
+    }
+    
+    .info-box {
+        background: #f8f9fa;
+        border-left: 4px solid #667eea;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 0 5px 5px 0;
+    }
+    
+    .btn-test {
+        background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+        border: none;
+        color: white;
+    }
+    
+    .btn-test:hover {
+        background: linear-gradient(45deg, #e082ea 0%, #e4465b 100%);
+        color: white;
+    }
+    
+    .stats-box {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    
+    .stats-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+    }
+    
+    .stats-label {
+        font-size: 1rem;
+        opacity: 0.9;
+    }
+    
+    .form-section {
+        padding: 1.5rem;
+    }
+    
+    .password-field {
+        font-family: 'Courier New', monospace;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="mb-4">
+        <h1 class="display-4">
+            <i class="fas fa-server me-3"></i>
+            הגדרות Active Directory
+        </h1>
+        <p class="lead">ניהול אינטגרציה עם Active Directory לאימות משתמשים</p>
+    </div>
+
+    <!-- Status and Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="stats-box">
+                <div class="stats-label">סטטוס AD</div>
+                <div class="stats-number">
+                    {% if ad_config.enabled %}
+                        <i class="fas fa-check-circle"></i> פעיל
+                    {% else %}
+                        <i class="fas fa-times-circle"></i> כבוי
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stats-box">
+                <div class="stats-number">{{ ad_users_count }}</div>
+                <div class="stats-label">משתמשי AD במערכת</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stats-box">
+                <div class="stats-number">{{ local_users_count }}</div>
+                <div class="stats-label">משתמשים מקומיים</div>
+            </div>
+        </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('update_ad_settings') }}">
+        <!-- Connection Settings -->
+        <div class="card settings-card">
+            <div class="card-header">
+                <i class="fas fa-plug me-2"></i>
+                הגדרות חיבור
+            </div>
+            <div class="card-body form-section">
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="enabled" name="enabled" 
+                                   {% if ad_config.enabled %}checked{% endif %}>
+                            <label class="form-check-label" for="enabled">
+                                <strong>הפעל אימות Active Directory</strong>
+                            </label>
+                        </div>
+                        <small class="text-muted">כאשר מופעל, המערכת תנסה לאמת משתמשים דרך AD תחילה</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        <label for="server_url" class="form-label">כתובת שרת AD *</label>
+                        <input type="text" class="form-control" id="server_url" name="server_url" 
+                               value="{{ ad_config.server_url }}" 
+                               placeholder="ad.domain.com או 192.168.1.10" required>
+                        <small class="text-muted">ללא פרוטוקול (ldap:// או ldaps://)</small>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label for="port" class="form-label">פורט</label>
+                        <input type="number" class="form-control" id="port" name="port" 
+                               value="{{ ad_config.port }}" placeholder="636">
+                        <small class="text-muted">636 לLDAPS, 389 לLDAP</small>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label class="form-label d-block">&nbsp;</label>
+                        <button type="button" class="btn btn-test w-100" onclick="testConnection()">
+                            <i class="fas fa-plug"></i> בדוק חיבור
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="use_ssl" name="use_ssl" 
+                                   {% if ad_config.use_ssl %}checked{% endif %}>
+                            <label class="form-check-label" for="use_ssl">
+                                השתמש ב-SSL/LDAPS (מומלץ)
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="use_tls" name="use_tls" 
+                                   {% if ad_config.use_tls %}checked{% endif %}>
+                            <label class="form-check-label" for="use_tls">
+                                השתמש ב-STARTTLS
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Directory Settings -->
+        <div class="card settings-card">
+            <div class="card-header">
+                <i class="fas fa-folder-tree me-2"></i>
+                הגדרות ספרייה
+            </div>
+            <div class="card-body form-section">
+                <div class="info-box">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>DN (Distinguished Name)</strong> הוא הנתיב המלא לאובייקט ב-Active Directory.
+                    <br>לדוגמה: <code>CN=Users,DC=domain,DC=com</code>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label for="base_dn" class="form-label">Base DN *</label>
+                        <input type="text" class="form-control" id="base_dn" name="base_dn" 
+                               value="{{ ad_config.base_dn }}" 
+                               placeholder="DC=domain,DC=com" required>
+                        <small class="text-muted">נקודת המוצא לכל החיפושים</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="bind_dn" class="form-label">חשבון שירות (Bind DN) *</label>
+                        <input type="text" class="form-control" id="bind_dn" name="bind_dn" 
+                               value="{{ ad_config.bind_dn }}" 
+                               placeholder="CN=ServiceAccount,CN=Users,DC=domain,DC=com" required>
+                        <small class="text-muted">חשבון לביצוע חיפושים ב-AD</small>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="bind_password" class="form-label">סיסמת חשבון שירות *</label>
+                        <input type="password" class="form-control password-field" id="bind_password" 
+                               name="bind_password" value="{{ ad_config.bind_password }}" required>
+                        <small class="text-muted">סיסמת חשבון השירות</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="user_search_base" class="form-label">בסיס חיפוש משתמשים</label>
+                        <input type="text" class="form-control" id="user_search_base" name="user_search_base" 
+                               value="{{ ad_config.user_search_base }}" 
+                               placeholder="CN=Users,DC=domain,DC=com">
+                        <small class="text-muted">אם ריק, ישתמש ב-Base DN</small>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="user_search_filter" class="form-label">פילטר חיפוש משתמשים</label>
+                        <input type="text" class="form-control" id="user_search_filter" name="user_search_filter" 
+                               value="{{ ad_config.user_search_filter }}" 
+                               placeholder="(sAMAccountName={username})">
+                        <small class="text-muted">{username} יוחלף בשם המשתמש</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label for="group_search_base" class="form-label">בסיס חיפוש קבוצות</label>
+                        <input type="text" class="form-control" id="group_search_base" name="group_search_base" 
+                               value="{{ ad_config.group_search_base }}" 
+                               placeholder="CN=Groups,DC=domain,DC=com">
+                        <small class="text-muted">אם ריק, ישתמש ב-Base DN</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Role Mapping -->
+        <div class="card settings-card">
+            <div class="card-header">
+                <i class="fas fa-users-cog me-2"></i>
+                מיפוי תפקידים לפי קבוצות AD
+            </div>
+            <div class="card-body form-section">
+                <div class="info-box">
+                    <i class="fas fa-lightbulb me-2"></i>
+                    ניתן להגדיר קבוצות AD שיקבעו אוטומטית את תפקיד המשתמש במערכת
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="admin_group" class="form-label">קבוצת מנהלי מערכת</label>
+                        <input type="text" class="form-control" id="admin_group" name="admin_group" 
+                               value="{{ ad_config.admin_group }}" 
+                               placeholder="CN=System Admins,CN=Groups,DC=domain,DC=com">
+                        <small class="text-muted">משתמשים בקבוצה זו יקבלו הרשאות admin</small>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="manager_group" class="form-label">קבוצת מנהלי חטיבות</label>
+                        <input type="text" class="form-control" id="manager_group" name="manager_group" 
+                               value="{{ ad_config.manager_group }}" 
+                               placeholder="CN=Division Managers,CN=Groups,DC=domain,DC=com">
+                        <small class="text-muted">משתמשים בקבוצה זו יקבלו הרשאות manager</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Sync Settings -->
+        <div class="card settings-card">
+            <div class="card-header">
+                <i class="fas fa-sync me-2"></i>
+                הגדרות סנכרון משתמשים
+            </div>
+            <div class="card-body form-section">
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="auto_create_users" 
+                                   name="auto_create_users" {% if ad_config.auto_create_users %}checked{% endif %}>
+                            <label class="form-check-label" for="auto_create_users">
+                                <strong>צור משתמשים אוטומטית בהתחברות ראשונה</strong>
+                            </label>
+                        </div>
+                        <small class="text-muted">משתמש AD שמצליח להתחבר ייווצר אוטומטית במערכת</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="sync_on_login" 
+                                   name="sync_on_login" {% if ad_config.sync_on_login %}checked{% endif %}>
+                            <label class="form-check-label" for="sync_on_login">
+                                <strong>סנכרן פרטי משתמש מ-AD בכל התחברות</strong>
+                            </label>
+                        </div>
+                        <small class="text-muted">שם מלא ואימייל יעודכנו מ-AD בכל כניסה</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label for="default_hativa_id" class="form-label">חטיבת ברירת מחדל למשתמשים חדשים</label>
+                        <select class="form-select" id="default_hativa_id" name="default_hativa_id">
+                            <option value="">ללא חטיבה</option>
+                            {% for hativa in hativot %}
+                            <option value="{{ hativa.hativa_id }}" 
+                                    {% if ad_config.default_hativa_id|string == hativa.hativa_id|string %}selected{% endif %}>
+                                {{ hativa.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">חטיבה שתוקצה למשתמשי AD חדשים</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <button type="submit" class="btn btn-primary btn-lg me-2">
+                    <i class="fas fa-save me-2"></i>שמור הגדרות
+                </button>
+                <a href="{{ url_for('manage_users') }}" class="btn btn-secondary btn-lg">
+                    <i class="fas fa-arrow-right me-2"></i>חזור לניהול משתמשים
+                </a>
+            </div>
+        </div>
+    </form>
+
+    <!-- Help Section -->
+    <div class="card settings-card">
+        <div class="card-header">
+            <i class="fas fa-question-circle me-2"></i>
+            עזרה ופתרון בעיות
+        </div>
+        <div class="card-body">
+            <h5>הגדרות נפוצות</h5>
+            <ul>
+                <li><strong>Base DN:</strong> <code>DC=domain,DC=com</code> (החלף עם הדומיין שלך)</li>
+                <li><strong>Bind DN:</strong> <code>CN=ServiceAccount,CN=Users,DC=domain,DC=com</code></li>
+                <li><strong>User Search Base:</strong> <code>CN=Users,DC=domain,DC=com</code></li>
+                <li><strong>User Search Filter:</strong> <code>(sAMAccountName={username})</code></li>
+            </ul>
+
+            <h5 class="mt-4">בדיקת חיבור</h5>
+            <p>לחץ על כפתור "בדוק חיבור" כדי לוודא שהמערכת יכולה להתחבר לשרת AD שלך.</p>
+
+            <h5 class="mt-4">דרישות</h5>
+            <ul>
+                <li>חשבון שירות ב-AD עם הרשאות קריאה</li>
+                <li>גישה לפורט 636 (LDAPS) או 389 (LDAP) מהשרת</li>
+                <li>אישור SSL תקף (לLDAPS)</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function testConnection() {
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>בודק...';
+    
+    fetch('{{ url_for("test_ad_connection") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ ' + data.message);
+        } else {
+            alert('❌ ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('❌ שגיאה בבדיקת החיבור: ' + error);
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    });
+}
+
+// Show/hide optional fields based on checkboxes
+document.getElementById('use_ssl').addEventListener('change', function() {
+    const portField = document.getElementById('port');
+    if (this.checked) {
+        portField.value = '636';
+    } else {
+        portField.value = '389';
+    }
+});
+
+document.getElementById('enabled').addEventListener('change', function() {
+    const formSections = document.querySelectorAll('.form-section input, .form-section select');
+    formSections.forEach(field => {
+        if (field.id !== 'enabled') {
+            field.disabled = !this.checked;
+        }
+    });
+});
+
+// Initialize state on load
+document.addEventListener('DOMContentLoaded', function() {
+    const enabledCheckbox = document.getElementById('enabled');
+    if (!enabledCheckbox.checked) {
+        const formSections = document.querySelectorAll('.form-section input, .form-section select');
+        formSections.forEach(field => {
+            if (field.id !== 'enabled') {
+                field.disabled = true;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
+

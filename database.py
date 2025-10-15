@@ -122,11 +122,13 @@ class DatabaseManager:
                 user_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL UNIQUE,
                 email TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
+                password_hash TEXT,
                 full_name TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'manager', 'user')),
                 hativa_id INTEGER,
                 is_active INTEGER DEFAULT 1,
+                auth_source TEXT DEFAULT 'local' CHECK (auth_source IN ('local', 'ad')),
+                ad_dn TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_login TIMESTAMP,
                 FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id)
@@ -206,7 +208,23 @@ class DatabaseManager:
                 ('rec_week_full_penalty', '20', 'Penalty for full week'),
                 ('rec_optimal_range_start', '0', 'Optimal range start (days after SLA)'),
                 ('rec_optimal_range_end', '30', 'Optimal range end (days after SLA)'),
-                ('rec_far_future_threshold', '60', 'Days considered too far in future (after optimal range)')
+                ('rec_far_future_threshold', '60', 'Days considered too far in future (after optimal range)'),
+                ('ad_enabled', '0', 'Enable Active Directory authentication (1=yes, 0=no)'),
+                ('ad_server_url', '', 'Active Directory server URL (e.g., ad.domain.com)'),
+                ('ad_port', '636', 'AD server port (636 for LDAPS, 389 for LDAP)'),
+                ('ad_use_ssl', '1', 'Use SSL/LDAPS (1=yes, 0=no)'),
+                ('ad_use_tls', '0', 'Use STARTTLS (1=yes, 0=no)'),
+                ('ad_base_dn', '', 'Base DN (e.g., DC=domain,DC=com)'),
+                ('ad_bind_dn', '', 'Service account DN for binding'),
+                ('ad_bind_password', '', 'Service account password'),
+                ('ad_user_search_base', '', 'User search base DN (defaults to base_dn)'),
+                ('ad_user_search_filter', '(sAMAccountName={username})', 'LDAP filter for user search'),
+                ('ad_group_search_base', '', 'Group search base DN (defaults to base_dn)'),
+                ('ad_admin_group', '', 'AD group name/DN for admin role'),
+                ('ad_manager_group', '', 'AD group name/DN for manager role'),
+                ('ad_auto_create_users', '1', 'Automatically create users on first AD login (1=yes, 0=no)'),
+                ('ad_default_hativa_id', '', 'Default division ID for new AD users'),
+                ('ad_sync_on_login', '1', 'Sync user info from AD on each login (1=yes, 0=no)')
         ''')
         
         conn.commit()
@@ -259,6 +277,16 @@ class DatabaseManager:
             
             if 'color' not in hativot_columns:
                 cursor.execute('ALTER TABLE hativot ADD COLUMN color TEXT DEFAULT "#007bff"')
+            
+            # Migrate users table for AD support
+            cursor.execute("PRAGMA table_info(users)")
+            users_columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'auth_source' not in users_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN auth_source TEXT DEFAULT 'local' CHECK (auth_source IN ('local', 'ad'))")
+            
+            if 'ad_dn' not in users_columns:
+                cursor.execute('ALTER TABLE users ADD COLUMN ad_dn TEXT')
             
             tables_columns = {
                 'hativot': [('is_active', 'INTEGER DEFAULT 1')],
@@ -2136,3 +2164,155 @@ class DatabaseManager:
                 conn.close()
             return False
     
+    # Active Directory User Management Methods
+    def create_ad_user(self, username: str, email: str, full_name: str, 
+                      role: str = 'user', hativa_id: Optional[int] = None,
+                      ad_dn: str = '') -> int:
+        """
+        Create a new AD user (no password required)
+        
+        Args:
+            username: AD username (sAMAccountName)
+            email: User email
+            full_name: User's full display name
+            role: User role
+            hativa_id: Division ID
+            ad_dn: Active Directory Distinguished Name
+            
+        Returns:
+            User ID
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO users (username, email, password_hash, full_name, role, hativa_id, auth_source, ad_dn)
+            VALUES (?, ?, NULL, ?, ?, ?, 'ad', ?)
+        ''', (username, email, full_name, role, hativa_id, ad_dn))
+        user_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return user_id
+    
+    def update_ad_user_info(self, user_id: int, email: str, full_name: str) -> bool:
+        """
+        Update AD user information from AD sync
+        
+        Args:
+            user_id: User ID
+            email: Updated email
+            full_name: Updated full name
+            
+        Returns:
+            Success boolean
+        """
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE users 
+                SET email = ?, full_name = ?
+                WHERE user_id = ? AND auth_source = 'ad'
+            ''', (email, full_name, user_id))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error updating AD user info: {e}")
+            return False
+    
+    def get_user_by_username_any_source(self, username: str) -> Optional[Dict]:
+        """
+        Get user by username regardless of auth source
+        
+        Args:
+            username: Username to search for
+            
+        Returns:
+            User dictionary or None
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT u.*, h.name as hativa_name
+            FROM users u
+            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
+            WHERE u.username = ?
+        ''', (username,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return {
+                'user_id': row[0], 'username': row[1], 'email': row[2], 'password_hash': row[3],
+                'full_name': row[4], 'role': row[5], 'hativa_id': row[6], 'is_active': row[7],
+                'auth_source': row[8], 'ad_dn': row[9], 
+                'created_at': row[10], 'last_login': row[11], 'hativa_name': row[12]
+            }
+        return None
+    
+    def get_ad_users(self) -> List[Dict]:
+        """Get all Active Directory users"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
+                   u.hativa_id, h.name as hativa_name, u.is_active, 
+                   u.created_at, u.last_login, u.ad_dn
+            FROM users u
+            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
+            WHERE u.auth_source = 'ad'
+            ORDER BY u.created_at DESC
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+        
+        users = []
+        for row in rows:
+            users.append({
+                'user_id': row[0],
+                'username': row[1],
+                'email': row[2],
+                'full_name': row[3],
+                'role': row[4],
+                'hativa_id': row[5],
+                'hativa_name': row[6],
+                'is_active': row[7],
+                'created_at': row[8],
+                'last_login': row[9],
+                'ad_dn': row[10],
+                'auth_source': 'ad'
+            })
+        return users
+    
+    def get_local_users(self) -> List[Dict]:
+        """Get all local (non-AD) users"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
+                   u.hativa_id, h.name as hativa_name, u.is_active, 
+                   u.created_at, u.last_login
+            FROM users u
+            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
+            WHERE u.auth_source = 'local' OR u.auth_source IS NULL
+            ORDER BY u.created_at DESC
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+        
+        users = []
+        for row in rows:
+            users.append({
+                'user_id': row[0],
+                'username': row[1],
+                'email': row[2],
+                'full_name': row[3],
+                'role': row[4],
+                'hativa_id': row[5],
+                'hativa_name': row[6],
+                'is_active': row[7],
+                'created_at': row[8],
+                'last_login': row[9],
+                'auth_source': 'local'
+            })
+        return users

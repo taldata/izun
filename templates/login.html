@@ -60,6 +60,17 @@
                             התחברות למערכת
                         </h3>
                         <p class="mb-0 opacity-75">איזון עומסים - ניהול ועדות</p>
+                        {% if ad_enabled %}
+                        <div class="mt-3">
+                            <span class="badge bg-light text-dark px-3 py-2">
+                                <i class="bi bi-server me-1"></i>
+                                מחובר ל-Active Directory
+                                {% if ad_server %}
+                                <small class="d-block mt-1 opacity-75">{{ ad_server }}</small>
+                                {% endif %}
+                            </span>
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="card-body p-5">
                         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -74,24 +85,45 @@
                             {% endif %}
                         {% endwith %}
 
+                        {% if ad_enabled %}
+                        <div class="alert alert-info border-0 mb-4">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-info-circle-fill fs-4 me-3"></i>
+                                <div>
+                                    <strong>אימות Active Directory פעיל</strong>
+                                    <p class="mb-0 small">תוכל להתחבר עם פרטי ה-AD שלך או עם משתמש מקומי</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
                         <form method="POST" action="{{ url_for('login') }}">
                             <div class="mb-4">
                                 <label for="username" class="form-label fw-semibold">
                                     <i class="bi bi-person me-1"></i>שם משתמש
+                                    {% if ad_enabled %}
+                                    <span class="badge bg-secondary ms-2">AD או מקומי</span>
+                                    {% endif %}
                                 </label>
-                                <input type="text" class="form-control form-control-lg" id="username" name="username" required>
+                                <input type="text" class="form-control form-control-lg" id="username" name="username" 
+                                       placeholder="{% if ad_enabled %}שם משתמש AD או משתמש מקומי{% else %}שם משתמש{% endif %}" required>
                             </div>
                             
                             <div class="mb-4">
                                 <label for="password" class="form-label fw-semibold">
                                     <i class="bi bi-lock me-1"></i>סיסמה
                                 </label>
-                                <input type="password" class="form-control form-control-lg" id="password" name="password" required>
+                                <input type="password" class="form-control form-control-lg" id="password" name="password" 
+                                       placeholder="סיסמה" required>
                             </div>
                             
                             <div class="d-grid mb-4">
                                 <button type="submit" class="btn btn-primary btn-login text-white">
+                                    {% if ad_enabled %}
+                                    <i class="bi bi-shield-check me-2"></i>התחבר
+                                    {% else %}
                                     <i class="bi bi-box-arrow-in-right me-2"></i>התחבר למערכת
+                                    {% endif %}
                                 </button>
                             </div>
                         </form>
@@ -99,12 +131,21 @@
                         <!-- Demo Users Info -->
                         <div class="demo-users p-3">
                             <h6 class="fw-bold text-muted mb-2">
-                                <i class="bi bi-info-circle me-1"></i>משתמשי דמו
+                                <i class="bi bi-info-circle me-1"></i>משתמשים מקומיים
                             </h6>
                             <small class="text-muted">
                                 <strong>מנהל:</strong> admin / admin123<br>
-                                <strong>משתמש:</strong> user / user123
+                                {% if not ad_enabled %}
+                                <strong>משתמש:</strong> user / user123<br>
+                                {% endif %}
                             </small>
+                            {% if ad_enabled %}
+                            <hr class="my-2">
+                            <small class="text-muted">
+                                <i class="bi bi-server me-1"></i>
+                                <strong>משתמשי AD:</strong> השתמש בפרטי Active Directory שלך
+                            </small>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
