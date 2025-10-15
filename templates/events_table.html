@@ -318,6 +318,10 @@
                                     <i class="bi bi-grid-3x2 me-1"></i>תצוגת ועדות
                                 </label>
                             </div>
+                            <div id="emptyCommitteesToggle" class="form-check form-switch ms-2 d-none">
+                                <input class="form-check-input" type="checkbox" id="includeEmptyCommittees" onchange="onEmptyCommitteesToggle()">
+                                <label class="form-check-label text-white small" for="includeEmptyCommittees">הצג ועדות ללא אירועים</label>
+                            </div>
                             <button class="btn clear-filters-btn btn-sm" onclick="clearAllFilters()">
                                 <i class="bi bi-x-circle me-1"></i>נקה פילטרים
                             </button>
@@ -395,10 +399,29 @@
                 </div>
                 
                 <!-- Table Section -->
+                <!-- Bulk Action Bar -->
+                <div id="bulkActionBar" class="d-none p-2 border-bottom bg-light d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong id="selectedCount">0</strong> נבחרו
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button id="bulkDeleteEventsBtn" class="btn btn-sm btn-danger" onclick="confirmBulkDeleteEvents()">
+                            <i class="bi bi-trash"></i> מחק אירועים נבחרים
+                        </button>
+                        <button id="bulkDeleteCommitteesBtn" class="btn btn-sm btn-danger d-none" onclick="confirmBulkDeleteCommittees()">
+                            <i class="bi bi-trash"></i> מחק ועדות נבחרות (כולל אירועים)
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="clearSelections()">נקה בחירה</button>
+                    </div>
+                </div>
+
                 <div class="table-responsive">
                     <table class="table table-hover events-table mb-0" id="eventsTable">
                         <thead>
                             <tr>
+                                <th style="width:36px;">
+                                    <input type="checkbox" id="selectAllEvents" onchange="toggleSelectAllEvents(this)">
+                                </th>
                                 <th>שם האירוע</th>
                                 <th>סוג</th>
                                 <th>חטיבה</th>
@@ -425,6 +448,9 @@
                                 data-committee-date="{{ event.vaada_date or '' }}"
                                 data-expected-requests="{{ event.expected_requests or 0 }}"
                                 data-event-name="{{ event.name.lower() }}">
+                                <td>
+                                    <input type="checkbox" class="event-select" value="{{ event.event_id }}" onchange="onSelectionChanged()">
+                                </td>
                                 <td>
                                     <strong>{{ event.name }}</strong>
                                 </td>
@@ -551,6 +577,9 @@
                         <table class="table table-hover committee-table" id="committeeTable">
                             <thead>
                                 <tr>
+                                    <th style="width:36px;">
+                                        <input type="checkbox" id="selectAllCommittees" onchange="toggleSelectAllCommittees(this)">
+                                    </th>
                                     <th width="5%"></th>
                                     <th>שם ועדה</th>
                                     <th>חטיבה</th>
@@ -735,6 +764,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize view toggle
     initializeViewToggle();
+
+    // Initialize bulk bar visibility
+    onSelectionChanged();
 });
 
 // View Toggle Functions
@@ -750,6 +782,9 @@ function initializeViewToggle() {
             committeeView.style.display = 'none';
             // Re-apply filters to table
             filterTable();
+            document.getElementById('bulkDeleteEventsBtn').classList.remove('d-none');
+            document.getElementById('bulkDeleteCommitteesBtn').classList.add('d-none');
+            document.getElementById('emptyCommitteesToggle').classList.add('d-none');
         }
     });
 
@@ -759,19 +794,23 @@ function initializeViewToggle() {
             committeeView.style.display = 'block';
             // Load committee view
             loadCommitteeView();
+            document.getElementById('bulkDeleteEventsBtn').classList.add('d-none');
+            document.getElementById('bulkDeleteCommitteesBtn').classList.remove('d-none');
+            document.getElementById('emptyCommitteesToggle').classList.remove('d-none');
         }
     });
 }
 
 async function loadCommitteeView() {
     const container = document.getElementById('committeeTableBody');
+    const includeEmpty = document.getElementById('includeEmptyCommittees').checked;
 
     try {
         // Show loading state
         container.innerHTML = '<tr><td colspan="9" class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">טוען...</span></div></td></tr>';
 
         // Fetch committee data from API
-        const response = await fetch('/api/events_by_committee');
+        const response = await fetch('/api/events_by_committee' + (includeEmpty ? '?include_empty=1' : ''));
         const data = await response.json();
 
         if (data.success) {
@@ -821,6 +860,9 @@ function renderCommitteeTable(committees) {
 
         html += `
             <tr class="committee-row" data-committee-id="${committee.committee_info.vaadot_id}">
+                <td>
+                    <input type="checkbox" class="committee-select" value="${committee.committee_info.vaadot_id}" onchange="onSelectionChanged()">
+                </td>
                 <td>
                     <button class="expand-button" onclick="toggleCommitteeRow('${committee.committee_info.vaadot_id}')" data-expanded="false">
                         <i class="bi bi-chevron-right"></i>
@@ -985,6 +1027,128 @@ function downloadCSV(csvContent, filename) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+}
+
+// Bulk selection / actions
+function onEmptyCommitteesToggle() {
+    const committeesViewRadio = document.getElementById('committeesView');
+    if (committeesViewRadio.checked) {
+        loadCommitteeView();
+    }
+}
+function getSelectedEventIds() {
+    return Array.from(document.querySelectorAll('.event-select:checked'))
+        .map(cb => parseInt(cb.value))
+        .filter(Number.isFinite);
+}
+
+function getSelectedCommitteeIds() {
+    return Array.from(document.querySelectorAll('.committee-select:checked'))
+        .map(cb => parseInt(cb.value))
+        .filter(Number.isFinite);
+}
+
+function onSelectionChanged() {
+    const eventsSelected = getSelectedEventIds().length;
+    const committeesSelected = getSelectedCommitteeIds().length;
+    const total = eventsSelected + committeesSelected;
+    const bar = document.getElementById('bulkActionBar');
+    const selectedCount = document.getElementById('selectedCount');
+    if (total > 0) {
+        bar.classList.remove('d-none');
+        selectedCount.textContent = total;
+    } else {
+        bar.classList.add('d-none');
+        selectedCount.textContent = '0';
+    }
+}
+
+function toggleSelectAllEvents(master) {
+    const visibleRows = Array.from(document.querySelectorAll('#eventsTable tbody tr'))
+        .filter(row => row.style.display !== 'none');
+    visibleRows.forEach(row => {
+        const cb = row.querySelector('.event-select');
+        if (cb) cb.checked = master.checked;
+    });
+    onSelectionChanged();
+}
+
+function toggleSelectAllCommittees(master) {
+    const visibleRows = Array.from(document.querySelectorAll('#committeeTableBody .committee-row'));
+    visibleRows.forEach(row => {
+        const cb = row.querySelector('.committee-select');
+        if (cb) cb.checked = master.checked;
+    });
+    onSelectionChanged();
+}
+
+function clearSelections() {
+    document.querySelectorAll('.event-select, .committee-select').forEach(cb => cb.checked = false);
+    const selectAllEvents = document.getElementById('selectAllEvents');
+    const selectAllCommittees = document.getElementById('selectAllCommittees');
+    if (selectAllEvents) selectAllEvents.checked = false;
+    if (selectAllCommittees) selectAllCommittees.checked = false;
+    onSelectionChanged();
+}
+
+async function confirmBulkDeleteEvents() {
+    const ids = getSelectedEventIds();
+    if (ids.length === 0) return;
+    if (!confirm(`האם למחוק ${ids.length} אירועים שנבחרו?`)) return;
+    await bulkDeleteEvents(ids);
+}
+
+async function confirmBulkDeleteCommittees() {
+    const ids = getSelectedCommitteeIds();
+    if (ids.length === 0) return;
+    if (!confirm(`האם למחוק ${ids.length} ועדות שנבחרו (כולל כל האירועים שלהן)?`)) return;
+    await bulkDeleteCommittees(ids);
+}
+
+async function bulkDeleteEvents(eventIds) {
+    try {
+        const res = await fetch('/api/events/bulk_delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event_ids: eventIds })
+        });
+        const data = await res.json();
+        if (data.success) {
+            // Remove deleted rows from table
+            eventIds.forEach(id => {
+                const row = document.querySelector(`#eventsTable tbody tr[data-event-id="${id}"]`);
+                if (row) row.remove();
+            });
+            clearSelections();
+            filterTable();
+            alert(`נמחקו ${data.deleted_count} אירועים`);
+        } else {
+            alert(data.message || 'שגיאה במחיקה מרובה');
+        }
+    } catch (e) {
+        alert('שגיאה בביצוע הבקשה');
+    }
+}
+
+async function bulkDeleteCommittees(vaadotIds) {
+    try {
+        const res = await fetch('/api/committees/bulk_delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ vaadot_ids: vaadotIds })
+        });
+        const data = await res.json();
+        if (data.success) {
+            // Refresh committee view
+            loadCommitteeView();
+            clearSelections();
+            alert(`נמחקו ${data.deleted_committees} ועדות ו-${data.deleted_events} אירועים`);
+        } else {
+            alert(data.message || 'שגיאה במחיקה מרובה');
+        }
+    } catch (e) {
+        alert('שגיאה בביצוע הבקשה');
+    }
 }
 </script>
 {% endblock %}

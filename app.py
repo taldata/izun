@@ -139,6 +139,98 @@ def get_editing_status():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Bulk Delete API endpoints
+@app.route('/api/events/bulk_delete', methods=['POST'])
+@login_required
+@editing_permission_required
+def bulk_delete_events():
+    """Bulk delete events by IDs"""
+    try:
+        data = request.get_json(silent=True) or {}
+        event_ids = data.get('event_ids') or []
+        if not isinstance(event_ids, list) or not all(isinstance(x, (int, str)) for x in event_ids):
+            return jsonify({'success': False, 'message': 'פורמט בקשה לא תקין'}), 400
+
+        # Optional: limit batch size
+        if len(event_ids) == 0:
+            return jsonify({'success': True, 'deleted_count': 0, 'message': 'לא נבחרו אירועים למחיקה'})
+        if len(event_ids) > 1000:
+            return jsonify({'success': False, 'message': 'ניתן למחוק עד 1000 אירועים בבת אחת'}), 400
+
+        # Pre-fetch names for audit per item (best-effort)
+        events_map = {e['event_id']: e for e in db.get_events()}
+        deleted = db.delete_events_bulk(event_ids)
+
+        # Audit: summary
+        audit_logger.log_success(
+            audit_logger.ACTION_DELETE,
+            audit_logger.ENTITY_EVENT,
+            details=f'מחיקה מרובה: {deleted} אירועים'
+        )
+        # Audit: per-item (only for those that existed)
+        for eid in event_ids:
+            try:
+                eid_int = int(eid)
+                if eid_int in events_map:
+                    audit_logger.log_event_deleted(eid_int, events_map[eid_int].get('name', 'Unknown'))
+            except Exception:
+                continue
+
+        return jsonify({'success': True, 'deleted_count': deleted})
+    except Exception as e:
+        audit_logger.log_error(
+            audit_logger.ACTION_DELETE,
+            audit_logger.ENTITY_EVENT,
+            str(e),
+            details='מחיקה מרובה אירועים'
+        )
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/committees/bulk_delete', methods=['POST'])
+@login_required
+@editing_permission_required
+def bulk_delete_committees():
+    """Bulk delete committees (vaadot) by IDs; related events are removed via cascade."""
+    try:
+        data = request.get_json(silent=True) or {}
+        vaadot_ids = data.get('vaadot_ids') or []
+        if not isinstance(vaadot_ids, list) or not all(isinstance(x, (int, str)) for x in vaadot_ids):
+            return jsonify({'success': False, 'message': 'פורמט בקשה לא תקין'}), 400
+
+        if len(vaadot_ids) == 0:
+            return jsonify({'success': True, 'deleted_committees': 0, 'deleted_events': 0, 'message': 'לא נבחרו ועדות למחיקה'})
+        if len(vaadot_ids) > 500:
+            return jsonify({'success': False, 'message': 'ניתן למחוק עד 500 ועדות בבת אחת'}), 400
+
+        # Pre-fetch names for audit per item (best-effort)
+        vaadot_map = {v['vaadot_id']: v for v in db.get_vaadot()}
+        deleted_committees, affected_events = db.delete_vaadot_bulk(vaadot_ids)
+
+        # Audit: summary
+        audit_logger.log_success(
+            audit_logger.ACTION_DELETE,
+            audit_logger.ENTITY_VAADA,
+            details=f'מחיקה מרובה: {deleted_committees} ועדות ו-{affected_events} אירועים'
+        )
+        # Audit: per-item
+        for vid in vaadot_ids:
+            try:
+                vid_int = int(vid)
+                committee_name = vaadot_map.get(vid_int, {}).get('committee_name', 'Unknown')
+                audit_logger.log_vaada_deleted(vid_int, committee_name)
+            except Exception:
+                continue
+
+        return jsonify({'success': True, 'deleted_committees': deleted_committees, 'deleted_events': affected_events})
+    except Exception as e:
+        audit_logger.log_error(
+            audit_logger.ACTION_DELETE,
+            audit_logger.ENTITY_VAADA,
+            str(e),
+            details='מחיקה מרובה ועדות'
+        )
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 # Soft Delete API endpoints
 @app.route('/api/toggle_committee_type/<int:committee_type_id>', methods=['POST'])
 @editing_permission_required
@@ -2097,6 +2189,7 @@ def get_events_by_committee():
     try:
         # Get all events
         events = db.get_events()
+        include_empty = request.args.get('include_empty') in ('1', 'true', 'True')
 
         # Group events by committee meeting (vaadot_id)
         events_by_committee = {}
@@ -2129,6 +2222,29 @@ def get_events_by_committee():
                 summary['total_actual_submissions'] += event.get('actual_submissions', 0) or 0
                 if event.get('event_type'):
                     summary['event_types'].add(event.get('event_type'))
+
+        # Optionally include committees without events
+        if include_empty:
+            committees = db.get_vaadot()
+            for c in committees:
+                vid = c.get('vaadot_id')
+                if vid not in events_by_committee:
+                    events_by_committee[vid] = {
+                        'committee_info': {
+                            'vaadot_id': vid,
+                            'committee_name': c.get('committee_name', ''),
+                            'hativa_name': c.get('hativa_name', ''),
+                            'vaada_date': c.get('vaada_date', ''),
+                            'committee_type': ''
+                        },
+                        'events': [],
+                        'summary': {
+                            'total_events': 0,
+                            'total_expected_requests': 0,
+                            'total_actual_submissions': 0,
+                            'event_types': set()
+                        }
+                    }
 
         # Convert to list and format for JSON response
         result = []

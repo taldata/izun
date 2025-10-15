@@ -775,6 +775,34 @@ class DatabaseManager:
             if 'conn' in locals():
                 conn.close()
             return False
+
+    def delete_vaadot_bulk(self, vaadot_ids: List[int]) -> Tuple[int, int]:
+        """
+        Bulk delete committee meetings (vaadot) by IDs.
+        Returns (deleted_committees_count, affected_events_count).
+        Events are removed via FK ON DELETE CASCADE; we compute count beforehand.
+        """
+        if not vaadot_ids:
+            return 0, 0
+        ids = [int(vid) for vid in vaadot_ids]
+        placeholders = ','.join(['?'] * len(ids))
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            # Count related events before deletion
+            cursor.execute(f'SELECT COUNT(*) FROM events WHERE vaadot_id IN ({placeholders})', ids)
+            events_count = cursor.fetchone()[0] or 0
+            # Delete committees
+            cursor.execute(f'DELETE FROM vaadot WHERE vaadot_id IN ({placeholders})', ids)
+            deleted_committees = cursor.rowcount or 0
+            conn.commit()
+            return deleted_committees, events_count
+        except Exception as e:
+            conn.rollback()
+            print(f"Error bulk deleting vaadot: {e}")
+            raise
+        finally:
+            conn.close()
     
     def _get_week_bounds(self, check_date: date) -> Tuple[date, date]:
         """Return start (Sunday) and end (Saturday) dates for the week of the given date."""
@@ -1083,6 +1111,26 @@ class DatabaseManager:
         conn.commit()
         conn.close()
         return success
+
+    def delete_events_bulk(self, event_ids: List[int]) -> int:
+        """Bulk delete events by IDs in a single transaction. Returns number of deleted rows."""
+        if not event_ids:
+            return 0
+        ids = [int(eid) for eid in event_ids]
+        placeholders = ','.join(['?'] * len(ids))
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(f'DELETE FROM events WHERE event_id IN ({placeholders})', ids)
+            deleted = cursor.rowcount or 0
+            conn.commit()
+            return deleted
+        except Exception as e:
+            conn.rollback()
+            print(f"Error bulk deleting events: {e}")
+            raise
+        finally:
+            conn.close()
     
     # User Management and Permissions
     def create_user(self, username: str, email: str, password_hash: str, full_name: str, 
