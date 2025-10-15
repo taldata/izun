@@ -1,0 +1,758 @@
+{% extends "base.html" %}
+
+{% block title %}ניהול הרשאות{% endblock %}
+
+{% block extra_head %}
+<style>
+    .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 10px;
+    }
+    
+    .permission-card {
+        border: none;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        margin-bottom: 1.5rem;
+        border-radius: 15px;
+        overflow: hidden;
+    }
+    
+    .permission-card:hover {
+        box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        transform: translateY(-2px);
+    }
+    
+    .role-header {
+        padding: 1.5rem;
+        color: white;
+        font-weight: bold;
+        font-size: 1.2rem;
+    }
+    
+    .role-admin {
+        background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+    }
+    
+    .role-manager {
+        background: linear-gradient(45deg, #4834d4, #686de0);
+    }
+    
+    .role-user {
+        background: linear-gradient(45deg, #00d2d3, #54a0ff);
+    }
+    
+    .permission-item {
+        padding: 0.75rem 1.5rem;
+        border-bottom: 1px solid #f0f0f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: background-color 0.2s;
+    }
+    
+    .permission-item:last-child {
+        border-bottom: none;
+    }
+    
+    .permission-item:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .permission-icon {
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        min-width: 30px;
+        text-align: center;
+    }
+    
+    .permission-allowed {
+        color: #28a745;
+    }
+    
+    .permission-denied {
+        color: #dc3545;
+    }
+    
+    .permission-partial {
+        color: #ffc107;
+    }
+    
+    .stats-card {
+        background: white;
+        border-radius: 15px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        margin-bottom: 2rem;
+        border-left: 4px solid;
+    }
+    
+    .stats-card.admin-stat {
+        border-left-color: #ff6b6b;
+    }
+    
+    .stats-card.manager-stat {
+        border-left-color: #4834d4;
+    }
+    
+    .stats-card.user-stat {
+        border-left-color: #00d2d3;
+    }
+    
+    .permission-note {
+        font-size: 0.85rem;
+        color: #6c757d;
+        font-style: italic;
+        margin-top: 0.25rem;
+    }
+    
+    .legend-item {
+        display: inline-flex;
+        align-items: center;
+        margin-right: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .legend-icon {
+        font-size: 1.2rem;
+        margin-right: 0.5rem;
+    }
+    
+    .comparison-table {
+        background: white;
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .comparison-table th {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem;
+        font-weight: 600;
+    }
+    
+    .comparison-table td {
+        padding: 0.75rem;
+        vertical-align: middle;
+    }
+    
+    .comparison-table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="page-header text-center">
+        <h1 class="mb-0">
+            <i class="bi bi-shield-lock me-3"></i>
+            ניהול הרשאות
+        </h1>
+        <p class="mb-0 mt-2">מטריקס הרשאות מלא - תפקידים ופעולות</p>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="stats-card admin-stat">
+                <div class="d-flex align-items-center">
+                    <div class="permission-icon" style="color: #ff6b6b; font-size: 2.5rem;">👑</div>
+                    <div class="flex-grow-1">
+                        <h5 class="mb-0">Admin - מנהל מערכת</h5>
+                        <p class="mb-0 text-muted">שליטה מלאה על כל המערכת</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stats-card manager-stat">
+                <div class="d-flex align-items-center">
+                    <div class="permission-icon" style="color: #4834d4; font-size: 2.5rem;">👨‍💼</div>
+                    <div class="flex-grow-1">
+                        <h5 class="mb-0">Manager - מנהל חטיבה</h5>
+                        <p class="mb-0 text-muted">ניהול מלא של החטיבה</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stats-card user-stat">
+                <div class="d-flex align-items-center">
+                    <div class="permission-icon" style="color: #00d2d3; font-size: 2.5rem;">👤</div>
+                    <div class="flex-grow-1">
+                        <h5 class="mb-0">User - משתמש רגיל</h5>
+                        <p class="mb-0 text-muted">עריכה בחטיבה בתקופת עריכה</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="card mb-4" style="border-radius: 15px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        <div class="card-body">
+            <h6 class="mb-3"><i class="bi bi-info-circle me-2"></i>מקרא סימנים:</h6>
+            <div class="d-flex flex-wrap">
+                <div class="legend-item">
+                    <span class="legend-icon permission-allowed">✅</span>
+                    <span>מותר מלא</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-icon permission-partial">⚠️</span>
+                    <span>מותר חלקי / בתנאים</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-icon permission-denied">❌</span>
+                    <span>אסור</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-icon" style="color: #6c757d;">🔒</span>
+                    <span>תלוי בתקופת עריכה</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comparison Table -->
+    <div class="card mb-4" style="border-radius: 15px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 comparison-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40%;">פעולה</th>
+                            <th style="width: 20%; text-align: center;">👤 User</th>
+                            <th style="width: 20%; text-align: center;">👨‍💼 Manager</th>
+                            <th style="width: 20%; text-align: center;">👑 Admin</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Viewing Permissions -->
+                        <tr style="background-color: #f0f4ff;">
+                            <td colspan="4" class="fw-bold"><i class="bi bi-eye me-2"></i>הרשאות צפייה</td>
+                        </tr>
+                        <tr>
+                            <td>צפייה בלוח שנה</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל המערכת</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל המערכת</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל המערכת</td>
+                        </tr>
+                        <tr>
+                            <td>צפייה באירועים</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל המערכת</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל המערכת</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל המערכת</td>
+                        </tr>
+                        <tr>
+                            <td>צפייה בועדות</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל המערכת</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל המערכת</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל המערכת</td>
+                        </tr>
+                        
+                        <!-- Event Permissions -->
+                        <tr style="background-color: #fff4e6;">
+                            <td colspan="4" class="fw-bold"><i class="bi bi-calendar-event me-2"></i>הרשאות אירועים</td>
+                        </tr>
+                        <tr>
+                            <td>יצירת אירוע</td>
+                            <td class="text-center"><span class="permission-partial">⚠️</span> בחטיבה שלו 🔒</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בכל מקום</td>
+                        </tr>
+                        <tr>
+                            <td>עריכת אירוע</td>
+                            <td class="text-center"><span class="permission-partial">⚠️</span> שלו בלבד 🔒</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל אירוע</td>
+                        </tr>
+                        <tr>
+                            <td>מחיקת אירוע</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל אירוע</td>
+                        </tr>
+                        <tr>
+                            <td>הזזת אירוע (Drag & Drop)</td>
+                            <td class="text-center"><span class="permission-partial">⚠️</span> שלו בלבד 🔒</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל אירוע</td>
+                        </tr>
+                        
+                        <!-- Committee Permissions -->
+                        <tr style="background-color: #f0fff4;">
+                            <td colspan="4" class="fw-bold"><i class="bi bi-people me-2"></i>הרשאות ועדות</td>
+                        </tr>
+                        <tr>
+                            <td>יצירת ועדה</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בכל מקום</td>
+                        </tr>
+                        <tr>
+                            <td>עריכת ועדה</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל ועדה</td>
+                        </tr>
+                        <tr>
+                            <td>מחיקת ועדה</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל ועדה</td>
+                        </tr>
+                        <tr>
+                            <td>הזזת ועדה (Drag & Drop)</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל ועדה</td>
+                        </tr>
+                        
+                        <!-- Route/Maslul Permissions -->
+                        <tr style="background-color: #fff0f6;">
+                            <td colspan="4" class="fw-bold"><i class="bi bi-signpost-2 me-2"></i>הרשאות מסלולים</td>
+                        </tr>
+                        <tr>
+                            <td>יצירת מסלול</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בכל חטיבה</td>
+                        </tr>
+                        <tr>
+                            <td>עריכת מסלול</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל מסלול</td>
+                        </tr>
+                        <tr>
+                            <td>מחיקת/השבתת מסלול</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל מסלול</td>
+                        </tr>
+                        
+                        <!-- Division Permissions -->
+                        <tr style="background-color: #f0f9ff;">
+                            <td colspan="4" class="fw-bold"><i class="bi bi-building me-2"></i>הרשאות חטיבות</td>
+                        </tr>
+                        <tr>
+                            <td>יצירת חטיבה</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        <tr>
+                            <td>עריכת חטיבה</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        <tr>
+                            <td>מחיקת/השבתת חטיבה</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        
+                        <!-- Committee Types Permissions -->
+                        <tr style="background-color: #fef9e7;">
+                            <td colspan="4" class="fw-bold"><i class="bi bi-tags me-2"></i>הרשאות סוגי ועדות</td>
+                        </tr>
+                        <tr>
+                            <td>יצירת סוג ועדה</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-partial">⚠️</span> לחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        <tr>
+                            <td>עריכת סוג ועדה</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-partial">⚠️</span> לחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        <tr>
+                            <td>השבתת סוג ועדה</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-partial">⚠️</span> לחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        
+                        <!-- Auto Schedule Permissions -->
+                        <tr style="background-color: #f0f4ff;">
+                            <td colspan="4" class="fw-bold"><i class="bi bi-calendar-check me-2"></i>תזמון אוטומטי</td>
+                        </tr>
+                        <tr>
+                            <td>יצירת תזמון אוטומטי</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> לחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> לכל חטיבה</td>
+                        </tr>
+                        <tr>
+                            <td>אישור הצעות תזמון</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> לחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> לכל חטיבה</td>
+                        </tr>
+                        
+                        <!-- User Management Permissions -->
+                        <tr style="background-color: #fff0f6;">
+                            <td colspan="4" class="fw-bold"><i class="bi bi-person-gear me-2"></i>ניהול משתמשים</td>
+                        </tr>
+                        <tr>
+                            <td>צפייה ברשימת משתמשים</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        <tr>
+                            <td>יצירת משתמש</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        <tr>
+                            <td>עריכת משתמש</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        <tr>
+                            <td>מחיקת משתמש</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        <tr>
+                            <td>שינוי סיסמה למשתמשים</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        
+                        <!-- System Settings Permissions -->
+                        <tr style="background-color: #f0fff4;">
+                            <td colspan="4" class="fw-bold"><i class="bi bi-gear me-2"></i>הגדרות מערכת</td>
+                        </tr>
+                        <tr>
+                            <td>הגדרות Active Directory</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        <tr>
+                            <td>ניהול תקופת עריכה</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        <tr>
+                            <td>הגדרות אילוצים וחוקים</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        <tr>
+                            <td>צפייה ביומן ביקורת</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                        <tr>
+                            <td>ניהול תאריכי חריג</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-partial">⚠️</span> הצעות בלבד</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Role Cards -->
+    <div class="row">
+        <!-- User Role Card -->
+        <div class="col-lg-4">
+            <div class="permission-card">
+                <div class="role-header role-user">
+                    <i class="bi bi-person-circle me-2"></i>
+                    משתמש רגיל (User)
+                </div>
+                <div class="card-body p-0">
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
+                                <strong>צפייה מלאה</strong>
+                                <div class="permission-note">כל הלוח שנה, ועדות ואירועים</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-partial">⚠️</span>
+                            <div>
+                                <strong>יצירת אירועים</strong>
+                                <div class="permission-note">בחטיבה שלו, בתקופת עריכה בלבד</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-partial">⚠️</span>
+                            <div>
+                                <strong>עריכת אירועים</strong>
+                                <div class="permission-note">רק אירועים שהוא יצר, בתקופת עריכה</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-denied">❌</span>
+                            <div>
+                                <strong>יצירת ועדות</strong>
+                                <div class="permission-note">רק מנהלים יכולים ליצור ועדות</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-denied">❌</span>
+                            <div>
+                                <strong>הזזת ועדות</strong>
+                                <div class="permission-note">רק מנהלים יכולים להזיז ועדות</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-denied">❌</span>
+                            <div>
+                                <strong>מחיקה</strong>
+                                <div class="permission-note">אין הרשאות מחיקה</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-denied">❌</span>
+                            <div>
+                                <strong>הגדרות מערכת</strong>
+                                <div class="permission-note">אין גישה להגדרות</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manager Role Card -->
+        <div class="col-lg-4">
+            <div class="permission-card">
+                <div class="role-header role-manager">
+                    <i class="bi bi-person-badge me-2"></i>
+                    מנהל חטיבה (Manager)
+                </div>
+                <div class="card-body p-0">
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
+                                <strong>צפייה מלאה</strong>
+                                <div class="permission-note">כל הלוח שנה, ועדות ואירועים</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
+                                <strong>ניהול מלא של החטיבה</strong>
+                                <div class="permission-note">ועדות, אירועים ומסלולים בחטיבה שלו</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
+                                <strong>יצירת ועדות</strong>
+                                <div class="permission-note">בחטיבה שלו בלבד</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
+                                <strong>הזזת ועדות</strong>
+                                <div class="permission-note">בחטיבה שלו בלבד</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
+                                <strong>תזמון אוטומטי</strong>
+                                <div class="permission-note">יצירה ואישור לחטיבה שלו</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
+                                <strong>עריכה ללא הגבלה</strong>
+                                <div class="permission-note">גם מחוץ לתקופת עריכה</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-denied">❌</span>
+                            <div>
+                                <strong>הגדרות מערכת</strong>
+                                <div class="permission-note">רק אדמין יכול לשנות הגדרות</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Role Card -->
+        <div class="col-lg-4">
+            <div class="permission-card">
+                <div class="role-header role-admin">
+                    <i class="bi bi-shield-check me-2"></i>
+                    מנהל מערכת (Admin)
+                </div>
+                <div class="card-body p-0">
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
+                                <strong>שליטה מלאה</strong>
+                                <div class="permission-note">כל הפעולות בכל המערכת</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
+                                <strong>ניהול משתמשים</strong>
+                                <div class="permission-note">יצירה, עריכה, מחיקה והרשאות</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
+                                <strong>ניהול חטיבות</strong>
+                                <div class="permission-note">כל החטיבות במערכת</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
+                                <strong>הגדרות Active Directory</strong>
+                                <div class="permission-note">חיבור וסנכרון עם AD</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
+                                <strong>תקופת עריכה</strong>
+                                <div class="permission-note">פתיחה וסגירה של תקופת עריכה</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
+                                <strong>אילוצים וחוקים</strong>
+                                <div class="permission-note">הגדרת מגבלות ותצורת מערכת</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
+                                <strong>יומן ביקורת</strong>
+                                <div class="permission-note">צפייה בכל פעולות המשתמשים</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notes Section -->
+    <div class="card mt-4" style="border-radius: 15px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.1); border-left: 4px solid #ffc107;">
+        <div class="card-body">
+            <h5><i class="bi bi-lightbulb me-2 text-warning"></i>הערות חשובות</h5>
+            <ul class="mb-0">
+                <li><strong>תקופת עריכה (🔒):</strong> משתמשים רגילים יכולים לערוך רק כאשר תקופת העריכה פתוחה. מנהלים ואדמינים יכולים לערוך תמיד.</li>
+                <li><strong>הגבלת חטיבה:</strong> משתמשים ומנהלים מוגבלים לחטיבה שהם משויכים אליה. רק אדמין יכול לעבוד על כל החטיבות.</li>
+                <li><strong>הרשאות Active Directory:</strong> משתמשים שמתחברים דרך AD יכולים לקבל הרשאות אוטומטית לפי קבוצות AD.</li>
+                <li><strong>Drag & Drop:</strong> רק מנהלים ואדמינים יכולים להזיז ועדות. כל המשתמשים יכולים להזיז אירועים (בהתאם להרשאותיהם).</li>
+                <li><strong>יומן ביקורת:</strong> כל פעולה נרשמת ביומן הביקורת ונגישה למנהל המערכת בלבד.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add smooth scrolling
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+    });
+    
+    // Highlight current user role
+    const currentUserRole = '{{ current_user.role if current_user else "" }}';
+    if (currentUserRole) {
+        const roleCards = document.querySelectorAll('.permission-card');
+        roleCards.forEach(card => {
+            const header = card.querySelector('.role-header');
+            if (header && header.classList.contains(`role-${currentUserRole}`)) {
+                card.style.border = '3px solid #667eea';
+                card.style.boxShadow = '0 5px 25px rgba(102, 126, 234, 0.3)';
+                
+                // Add badge
+                const badge = document.createElement('div');
+                badge.className = 'position-absolute top-0 end-0 badge bg-primary m-3';
+                badge.innerHTML = '<i class="bi bi-person-check me-1"></i>התפקיד שלך';
+                card.style.position = 'relative';
+                card.appendChild(badge);
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
+

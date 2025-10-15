@@ -721,8 +721,16 @@ function createMonthCalendar(year, month, isCompact = false) {
                     committeeDiv.style.borderRadius = '6px';
                     committeeDiv.style.fontWeight = 'bold';
                     
-                    // Add drag & drop attributes
-                    committeeDiv.draggable = true;
+                    // Add drag & drop attributes (only for managers and admins)
+                    const userRole = '{{ current_user.role }}';
+                    if (userRole === 'manager' || userRole === 'admin') {
+                        committeeDiv.draggable = true;
+                        committeeDiv.style.cursor = 'grab';
+                    } else {
+                        committeeDiv.draggable = false;
+                        committeeDiv.style.cursor = 'default';
+                        committeeDiv.title = 'רק מנהלים יכולים להזיז ועדות';
+                    }
                     committeeDiv.setAttribute('data-vaada-id', committee.vaadot_id);
                     committeeDiv.setAttribute('data-date', currentDateStr);
                     committeeDiv.setAttribute('data-type', 'committee');
@@ -1377,24 +1385,36 @@ function initializeDragAndDrop() {
 }
 
 function initializeDraggableItems() {
-    // Make committee badges draggable
+    // Get user role - users cannot drag committees, only managers and admins can
+    const userRole = '{{ current_user.role }}';
+    console.log('User role:', userRole); // Debug
+    
+    // Make committee badges draggable (only for managers and admins)
     const committeeBadges = document.querySelectorAll('.committee-badge');
     console.log('Found committee badges:', committeeBadges.length); // Debug
     
     committeeBadges.forEach((badge, index) => {
-        badge.draggable = true;
-        badge.addEventListener('dragstart', handleCommitteeDragStart);
-        badge.addEventListener('dragend', handleDragEnd);
-        badge.style.cursor = 'grab';
-        console.log(`Committee badge ${index + 1} initialized:`, {
-            vaadaId: badge.getAttribute('data-vaada-id'),
-            date: badge.getAttribute('data-date'),
-            draggable: badge.draggable,
-            element: badge
-        }); // Debug
+        // Only managers and admins can drag committees
+        if (userRole === 'manager' || userRole === 'admin') {
+            badge.draggable = true;
+            badge.addEventListener('dragstart', handleCommitteeDragStart);
+            badge.addEventListener('dragend', handleDragEnd);
+            badge.style.cursor = 'grab';
+            console.log(`Committee badge ${index + 1} initialized as draggable:`, {
+                vaadaId: badge.getAttribute('data-vaada-id'),
+                date: badge.getAttribute('data-date'),
+                draggable: badge.draggable,
+                element: badge
+            }); // Debug
+        } else {
+            badge.draggable = false;
+            badge.style.cursor = 'default';
+            badge.title = 'רק מנהלים יכולים להזיז ועדות';
+            console.log(`Committee badge ${index + 1} NOT draggable (user role: ${userRole})`); // Debug
+        }
     });
     
-    // Make event badges draggable
+    // Make event badges draggable (all authenticated users)
     const eventBadges = document.querySelectorAll('.event-badge');
     console.log('Found event badges:', eventBadges.length); // Debug
     

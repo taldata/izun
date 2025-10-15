@@ -1691,6 +1691,13 @@ def manage_users():
                          stats=stats,
                          current_user=current_user)
 
+@app.route('/admin/permissions')
+@login_required
+def permissions_matrix():
+    """Permissions management and matrix view"""
+    current_user = auth_manager.get_current_user()
+    return render_template('admin/permissions.html', current_user=current_user)
+
 @app.route('/admin/users/add', methods=['POST'])
 @admin_required
 def add_user():
@@ -2220,7 +2227,6 @@ def sync_ad_user():
 # Drag & Drop API endpoints
 @app.route('/api/move_committee', methods=['POST'])
 @login_required
-@editing_permission_required
 def move_committee():
     """Move committee meeting to a different date"""
     try:
@@ -2230,6 +2236,27 @@ def move_committee():
         
         if not vaada_id or not new_date:
             return jsonify({'success': False, 'message': 'נתונים חסרים'}), 400
+        
+        # Get current user
+        user = auth_manager.get_current_user()
+        if not user:
+            return jsonify({'success': False, 'message': 'נדרשת התחברות'}), 401
+        
+        # Get committee details to check permissions
+        vaada = db.get_vaada_by_id(vaada_id)
+        if not vaada:
+            return jsonify({'success': False, 'message': 'ועדה לא נמצאה'}), 404
+        
+        # Check permissions: Only managers and admins can move committees
+        if user['role'] == 'user':
+            return jsonify({'success': False, 'message': 'רק מנהלים ומנהלי מערכת יכולים להזיז ועדות'}), 403
+        
+        # Manager can only move committees in their division
+        if user['role'] == 'manager':
+            if vaada['hativa_id'] != user['hativa_id']:
+                return jsonify({'success': False, 'message': 'מנהל יכול להזיז רק ועדות בחטיבה שלו'}), 403
+        
+        # Admin can move any committee (no additional checks needed)
         
         # Validate date format and convert to date object
         try:
@@ -2247,8 +2274,7 @@ def move_committee():
         if existing_meetings and any(meeting['vaadot_id'] != vaada_id for meeting in existing_meetings):
             return jsonify({'success': False, 'message': 'התאריך תפוס - יש כבר ועדה ביום זה'}), 400
         
-        # Get committee details before moving for logging
-        vaada = db.get_vaada_by_id(vaada_id)
+        # Store old date and committee name for logging
         old_date = vaada['vaada_date'] if vaada else 'Unknown'
         committee_name = vaada['committee_name'] if vaada else 'Unknown'
         
