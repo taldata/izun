@@ -85,17 +85,19 @@
                             <td>{{ vaada.deleted_at }}</td>
                             <td>
                                 {% if current_user.role != 'user' %}
-                                <button class="btn btn-sm btn-success me-2" 
+                                <button class="btn btn-sm btn-success me-2"
                                         onclick="restoreVaada({{ vaada.vaadot_id }})"
-                                        title="שחזר">
-                                    <i class="fas fa-undo"></i>
+                                        title="שחזר ועדה">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>
+                                    שחזר
                                 </button>
                                 {% endif %}
                                 {% if current_user.role == 'admin' %}
-                                <button class="btn btn-sm btn-danger" 
+                                <button class="btn btn-sm btn-danger"
                                         onclick="permanentDeleteVaada({{ vaada.vaadot_id }})"
                                         title="מחק לצמיתות">
-                                    <i class="fas fa-trash"></i>
+                                    <i class="bi bi-trash3 me-1"></i>
+                                    מחק
                                 </button>
                                 {% endif %}
                             </td>
@@ -153,17 +155,19 @@
                             <td>{{ event.deleted_at }}</td>
                             <td>
                                 {% if current_user.role != 'user' %}
-                                <button class="btn btn-sm btn-success me-2" 
+                                <button class="btn btn-sm btn-success me-2"
                                         onclick="restoreEvent({{ event.event_id }})"
-                                        title="שחזר">
-                                    <i class="fas fa-undo"></i>
+                                        title="שחזר אירוע">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>
+                                    שחזר
                                 </button>
                                 {% endif %}
                                 {% if current_user.role == 'admin' %}
-                                <button class="btn btn-sm btn-danger" 
+                                <button class="btn btn-sm btn-danger"
                                         onclick="permanentDeleteEvent({{ event.event_id }})"
                                         title="מחק לצמיתות">
-                                    <i class="fas fa-trash"></i>
+                                    <i class="bi bi-trash3 me-1"></i>
+                                    מחק
                                 </button>
                                 {% endif %}
                             </td>
