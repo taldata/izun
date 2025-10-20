@@ -2002,33 +2002,13 @@ function showCommitteeMenu(dateStr, event, existingCommittee) {
     `;
     menu.insertBefore(dateHeader, menu.firstChild);
     
-    // Now position the menu properly with bounds checking
-    const rect = event.target.getBoundingClientRect();
+    // Position menu in center of viewport for best accessibility
     const menuRect = menu.getBoundingClientRect();
-    
-    let left = rect.left + window.scrollX;
-    let top = rect.bottom + window.scrollY + 5;
-    
-    // Check if menu would go off the right edge of screen
-    if (left + menuRect.width > window.innerWidth) {
-        left = rect.right + window.scrollX - menuRect.width;
-    }
-    
-    // Check if menu would go off the bottom edge of screen
-    if (top + menuRect.height > window.innerHeight + window.scrollY) {
-        top = rect.top + window.scrollY - menuRect.height - 5;
-    }
-    
-    // Ensure menu doesn't go off the left edge
-    if (left < 10) {
-        left = 10;
-    }
-    
-    // Ensure menu doesn't go off the top edge
-    if (top < 10) {
-        top = 10;
-    }
-    
+
+    // Center horizontally and vertically in viewport
+    let left = (window.innerWidth - menuRect.width) / 2;
+    let top = (window.innerHeight - menuRect.height) / 2 + window.scrollY;
+
     // Apply final position and make visible with animation
     menu.style.left = left + 'px';
     menu.style.top = top + 'px';
