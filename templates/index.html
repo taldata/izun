@@ -1847,15 +1847,18 @@ function showDateMenu(dateStr, event, existingCommittee) {
         box-shadow: 0 10px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
         z-index: 1000;
         min-width: 320px;
+        max-width: 90vw;
+        max-height: 80vh;
         padding: 0;
-        overflow: hidden;
+        overflow-y: auto;
         opacity: 0;
         transform: translateY(-10px) scale(0.95);
         transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%) translateY(-10px) scale(0.95);
     `;
     
-    // First add menu to DOM temporarily to get accurate dimensions
-    menu.style.visibility = 'hidden';
     document.body.appendChild(menu);
     
     // Create menu items based on whether committee exists
@@ -2009,22 +2012,10 @@ function showDateMenu(dateStr, event, existingCommittee) {
     `;
     menu.insertBefore(dateHeader, menu.firstChild);
     
-    // Position menu in center of viewport for best accessibility
-    const menuRect = menu.getBoundingClientRect();
-
-    // Center horizontally and vertically in viewport
-    let left = (window.innerWidth - menuRect.width) / 2;
-    let top = (window.innerHeight - menuRect.height) / 2 + window.scrollY;
-
-    // Apply final position and make visible with animation
-    menu.style.left = left + 'px';
-    menu.style.top = top + 'px';
-    menu.style.visibility = 'visible';
-
-    // Trigger animation
+    // Trigger animation - menu is already centered with CSS transform
     requestAnimationFrame(() => {
         menu.style.opacity = '1';
-        menu.style.transform = 'translateY(0) scale(1)';
+        menu.style.transform = 'translate(-50%, -50%) scale(1)';
     });
     
     // Close menu when clicking outside
@@ -2058,14 +2049,18 @@ function showEventMenu(event, clickEvent, committee) {
         box-shadow: 0 10px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
         z-index: 1000;
         min-width: 320px;
+        max-width: 90vw;
+        max-height: 80vh;
         padding: 0;
-        overflow: hidden;
+        overflow-y: auto;
         opacity: 0;
         transform: translateY(-10px) scale(0.95);
         transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%) translateY(-10px) scale(0.95);
     `;
 
-    menu.style.visibility = 'hidden';
     document.body.appendChild(menu);
 
     // Create menu items for event - only edit and delete
@@ -2185,19 +2180,10 @@ function showEventMenu(event, clickEvent, committee) {
     `;
     menu.insertBefore(eventHeader, menu.firstChild);
 
-    // Position menu in center of viewport
-    const menuRect = menu.getBoundingClientRect();
-    let left = (window.innerWidth - menuRect.width) / 2;
-    let top = (window.innerHeight - menuRect.height) / 2 + window.scrollY;
-
-    menu.style.left = left + 'px';
-    menu.style.top = top + 'px';
-    menu.style.visibility = 'visible';
-
-    // Trigger animation
+    // Trigger animation - menu is already centered with CSS transform
     requestAnimationFrame(() => {
         menu.style.opacity = '1';
-        menu.style.transform = 'translateY(0) scale(1)';
+        menu.style.transform = 'translate(-50%, -50%) scale(1)';
     });
 
     // Close menu when clicking outside
