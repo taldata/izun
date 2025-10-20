@@ -903,42 +903,42 @@ def delete_maslul(maslul_id):
     
     return redirect(url_for('maslulim'))
 
-@app.route('/exception_dates')
+@app.route('/exception_dates', methods=['GET', 'POST'])
 def exception_dates():
     """Manage exception dates"""
-    include_past = request.args.get('include_past', 'false') == 'true'
+    if request.method == 'POST':
+        # Handle POST - add new exception date
+        date_str = request.form.get('date', '').strip()
+        description = request.form.get('description', '').strip()
+        date_type = request.form.get('type', 'holiday').strip()
+        
+        if not date_str:
+            flash('תאריך הוא שדה חובה', 'error')
+            return redirect(url_for('exception_dates'))
+        
+        try:
+            exception_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            db.add_exception_date(exception_date, description, date_type)
+            
+            # Get the date_id for logging (query just added record)
+            exception_dates_list = db.get_exception_dates(include_past=True)
+            added_date = next((ed for ed in exception_dates_list if ed['exception_date'] == date_str), None)
+            date_id = added_date['date_id'] if added_date else None
+            
+            audit_logger.log_exception_date_added(date_id, date_str, description)
+            flash(f'תאריך חריג {date_str} נוסף בהצלחה', 'success')
+        except ValueError:
+            flash('פורמט תאריך לא תקין', 'error')
+        except Exception as e:
+            flash(f'שגיאה בהוספת תאריך: {str(e)}', 'error')
+        
+        return redirect(url_for('exception_dates'))
+    
+    # Handle GET - display exception dates
+    include_past = request.args.get('include_past', 'true') == 'true'
     dates_list = db.get_exception_dates(include_past=include_past)
     current_user = auth_manager.get_current_user()
     return render_template('exception_dates.html', dates=dates_list, current_user=current_user, include_past=include_past)
-
-@app.route('/exception_dates/add', methods=['POST'])
-def add_exception_date():
-    """Add exception date"""
-    date_str = request.form.get('date', '').strip()
-    description = request.form.get('description', '').strip()
-    date_type = request.form.get('type', 'holiday').strip()
-    
-    if not date_str:
-        flash('תאריך הוא שדה חובה', 'error')
-        return redirect(url_for('exception_dates'))
-    
-    try:
-        exception_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-        db.add_exception_date(exception_date, description, date_type)
-        
-        # Get the date_id for logging (query just added record)
-        exception_dates_list = db.get_exception_dates(include_past=True)
-        added_date = next((ed for ed in exception_dates_list if ed['exception_date'] == date_str), None)
-        date_id = added_date['date_id'] if added_date else None
-        
-        audit_logger.log_exception_date_added(date_id, date_str, description)
-        flash(f'תאריך חריג {date_str} נוסף בהצלחה', 'success')
-    except ValueError:
-        flash('פורמט תאריך לא תקין', 'error')
-    except Exception as e:
-        flash(f'שגיאה בהוספת תאריך: {str(e)}', 'error')
-    
-    return redirect(url_for('exception_dates'))
 
 @app.route('/exception_dates/edit/<int:date_id>', methods=['POST'])
 @login_required
