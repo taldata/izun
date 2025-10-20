@@ -1850,13 +1850,17 @@ function showCommitteeMenu(dateStr, event, existingCommittee) {
     menu.className = 'day-menu';
     menu.style.cssText = `
         position: fixed;
-        background: white;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        border: none;
+        border-radius: 16px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
         z-index: 1000;
-        min-width: 250px;
-        padding: 8px 0;
+        min-width: 320px;
+        padding: 0;
+        overflow: hidden;
+        opacity: 0;
+        transform: translateY(-10px) scale(0.95);
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     `;
     
     // First add menu to DOM temporarily to get accurate dimensions
@@ -1866,9 +1870,11 @@ function showCommitteeMenu(dateStr, event, existingCommittee) {
     // Create menu items for existing committee
     const menuItems = [
         {
-            text: `📅 הוסף אירוע לועדה`,
+            text: `הוסף אירוע לועדה`,
             subtitle: `${existingCommittee.committee_name} - ${existingCommittee.hativa_name}`,
             icon: 'bi-calendar-plus',
+            color: '#4F46E5',
+            bgColor: '#EEF2FF',
             action: () => {
                 // Pre-select the existing committee in the event modal
                 document.getElementById('event_vaadot_id').value = existingCommittee.vaadot_id;
@@ -1883,18 +1889,22 @@ function showCommitteeMenu(dateStr, event, existingCommittee) {
             }
         },
         {
-            text: '✏️ ערוך ועדה',
+            text: 'ערוך ועדה',
             subtitle: 'עריכת פרטי הועדה הקיימת',
             icon: 'bi-pencil',
+            color: '#0891B2',
+            bgColor: '#ECFEFF',
             action: () => {
                 editCommittee(existingCommittee);
                 menu.remove();
             }
         },
         {
-            text: '🗑️ מחק ועדה',
+            text: 'מחק ועדה',
             subtitle: 'מחיקת הועדה וכל האירועים שלה',
             icon: 'bi-trash',
+            color: '#DC2626',
+            bgColor: '#FEF2F2',
             action: () => {
                 if (confirm(`האם אתה בטוח שברצונך למחוק את ישיבת הועדה "${existingCommittee.committee_name}"? פעולה זו תמחק גם את כל האירועים הקשורים אליה.`)) {
                     const form = document.createElement('form');
@@ -1908,47 +1918,88 @@ function showCommitteeMenu(dateStr, event, existingCommittee) {
         }
     ];
     
-    menuItems.forEach(item => {
+    menuItems.forEach((item, index) => {
         const menuItem = document.createElement('div');
         menuItem.className = 'day-menu-item';
         menuItem.style.cssText = `
-            padding: 12px 16px;
+            padding: 16px 20px;
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 8px;
-            transition: background-color 0.2s;
+            gap: 14px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            border-bottom: ${index < menuItems.length - 1 ? '1px solid #f0f0f0' : 'none'};
+            position: relative;
         `;
-        
-        // Create content with subtitle support
-        const content = `
-            <i class="bi ${item.icon}"></i>
-            <div style="flex: 1;">
-                <div style="font-weight: 500;">${item.text}</div>
-                ${item.subtitle ? `<div style="font-size: 0.8rem; color: #6c757d; margin-top: 2px;">${item.subtitle}</div>` : ''}
+
+        // Create icon container with modern styling
+        const iconContainer = `
+            <div style="
+                width: 44px;
+                height: 44px;
+                background: ${item.bgColor};
+                border-radius: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            " class="menu-icon-container">
+                <i class="bi ${item.icon}" style="font-size: 20px; color: ${item.color};"></i>
             </div>
         `;
-        
+
+        // Create content with subtitle support
+        const content = `
+            ${iconContainer}
+            <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 600; font-size: 15px; color: #1f2937; margin-bottom: 2px;">${item.text}</div>
+                ${item.subtitle ? `<div style="font-size: 13px; color: #6b7280; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.subtitle}</div>` : ''}
+            </div>
+        `;
+
         menuItem.innerHTML = content;
-        
-        menuItem.onmouseover = () => menuItem.style.backgroundColor = '#f8f9fa';
-        menuItem.onmouseout = () => menuItem.style.backgroundColor = 'transparent';
+
+        menuItem.onmouseover = () => {
+            menuItem.style.backgroundColor = '#fafafa';
+            menuItem.style.transform = 'translateX(-3px)';
+            const iconCont = menuItem.querySelector('.menu-icon-container');
+            if (iconCont) {
+                iconCont.style.transform = 'scale(1.08)';
+                iconCont.style.boxShadow = `0 4px 12px ${item.color}30`;
+            }
+        };
+        menuItem.onmouseout = () => {
+            menuItem.style.backgroundColor = 'transparent';
+            menuItem.style.transform = 'translateX(0)';
+            const iconCont = menuItem.querySelector('.menu-icon-container');
+            if (iconCont) {
+                iconCont.style.transform = 'scale(1)';
+                iconCont.style.boxShadow = 'none';
+            }
+        };
         menuItem.onclick = item.action;
-        
+
         menu.appendChild(menuItem);
     });
     
-    // Add date header
+    // Add date header with modern styling
     const dateHeader = document.createElement('div');
     dateHeader.style.cssText = `
-        padding: 8px 16px;
-        font-weight: bold;
-        color: #6c757d;
-        border-bottom: 1px solid #eee;
-        margin-bottom: 4px;
-        font-size: 0.9rem;
+        padding: 20px 20px 16px 20px;
+        font-weight: 700;
+        font-size: 17px;
+        color: #111827;
+        background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+        border-bottom: 2px solid #e5e7eb;
+        letter-spacing: -0.02em;
     `;
-    dateHeader.textContent = formatDateHebrew(dateStr);
+    dateHeader.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="bi bi-calendar-event" style="color: #6366F1; font-size: 20px;"></i>
+            <span>${formatDateHebrew(dateStr)}</span>
+        </div>
+    `;
     menu.insertBefore(dateHeader, menu.firstChild);
     
     // Now position the menu properly with bounds checking
@@ -1978,10 +2029,16 @@ function showCommitteeMenu(dateStr, event, existingCommittee) {
         top = 10;
     }
     
-    // Apply final position and make visible
+    // Apply final position and make visible with animation
     menu.style.left = left + 'px';
     menu.style.top = top + 'px';
     menu.style.visibility = 'visible';
+
+    // Trigger animation
+    requestAnimationFrame(() => {
+        menu.style.opacity = '1';
+        menu.style.transform = 'translateY(0) scale(1)';
+    });
     
     // Close menu when clicking outside
     setTimeout(() => {
@@ -2638,16 +2695,34 @@ document.getElementById('addEventModal').addEventListener('hidden.bs.modal', fun
 }
 
 .day-menu {
-    font-family: inherit;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
     direction: rtl;
 }
 
-.day-menu-item:hover {
-    background-color: #e3f2fd !important;
+.day-menu-item {
+    user-select: none;
 }
 
 .day-menu-item:active {
-    background-color: #bbdefb !important;
+    transform: translateX(-5px) scale(0.98) !important;
+}
+
+/* Smooth scrollbar for menu if needed */
+.day-menu::-webkit-scrollbar {
+    width: 6px;
+}
+
+.day-menu::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.day-menu::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+}
+
+.day-menu::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
 }
 
 /* Multi-month view styles */
