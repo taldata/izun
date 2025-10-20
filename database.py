@@ -647,7 +647,9 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         query = '''
-            SELECT v.*, ct.name as committee_name, h.name as hativa_name,
+            SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date, 
+                   v.status, v.exception_date_id, v.notes, v.created_at,
+                   ct.name as committee_name, h.name as hativa_name,
                    ed.exception_date, ed.description as exception_description, ed.type as exception_type
             FROM vaadot v
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
