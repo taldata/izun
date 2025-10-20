@@ -920,13 +920,16 @@ def exception_dates():
             exception_date = datetime.strptime(date_str, '%Y-%m-%d').date()
             db.add_exception_date(exception_date, description, date_type)
             
+            # Recalculate all event deadlines to account for the new exception date
+            updated_count = db.recalculate_all_event_deadlines()
+            
             # Get the date_id for logging (query just added record)
             exception_dates_list = db.get_exception_dates(include_past=True)
             added_date = next((ed for ed in exception_dates_list if ed['exception_date'] == date_str), None)
             date_id = added_date['date_id'] if added_date else None
             
             audit_logger.log_exception_date_added(date_id, date_str, description)
-            flash(f'תאריך חריג {date_str} נוסף בהצלחה', 'success')
+            flash(f'תאריך חריג {date_str} נוסף בהצלחה. עודכנו {updated_count} אירועים.', 'success')
         except ValueError:
             flash('פורמט תאריך לא תקין', 'error')
         except Exception as e:
@@ -968,12 +971,15 @@ def edit_exception_date(date_id):
         success = db.update_exception_date(date_id, exception_date, description, date_type)
         
         if success:
+            # Recalculate all event deadlines to account for the updated exception date
+            updated_count = db.recalculate_all_event_deadlines()
+            
             audit_logger.log_success(
                 audit_logger.ACTION_UPDATE,
                 'exception_date',
                 details=f'עדכון תאריך חריג: {date_str} - {description}'
             )
-            flash(f'תאריך חריג {date_str} עודכן בהצלחה', 'success')
+            flash(f'תאריך חריג {date_str} עודכן בהצלחה. עודכנו {updated_count} אירועים.', 'success')
         else:
             flash('שגיאה בעדכון תאריך חריג', 'error')
     except ValueError:
@@ -1009,12 +1015,15 @@ def delete_exception_date(date_id):
         success = db.delete_exception_date(date_id)
         
         if success:
+            # Recalculate all event deadlines to account for the deleted exception date
+            updated_count = db.recalculate_all_event_deadlines()
+            
             audit_logger.log_success(
                 audit_logger.ACTION_DELETE,
                 'exception_date',
                 details=f'מחיקת תאריך חריג: {exception_date_obj["exception_date"]} - {exception_date_obj.get("description", "")}'
             )
-            flash(f'תאריך חריג {exception_date_obj["exception_date"]} נמחק בהצלחה', 'success')
+            flash(f'תאריך חריג {exception_date_obj["exception_date"]} נמחק בהצלחה. עודכנו {updated_count} אירועים.', 'success')
         else:
             flash('לא ניתן למחוק תאריך חריג שמשויכות אליו ועדות', 'error')
     except Exception as e:

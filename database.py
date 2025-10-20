@@ -557,6 +557,57 @@ class DatabaseManager:
         conn.close()
         return count > 0
     
+    def recalculate_all_event_deadlines(self) -> int:
+        """Recalculate deadline dates for all existing events based on current exception dates"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Get all events with their committee dates and maslul stage information
+        cursor.execute('''
+            SELECT e.event_id, v.vaada_date, 
+                   m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days
+            FROM events e
+            JOIN vaadot v ON e.vaadot_id = v.vaadot_id
+            JOIN maslulim m ON e.maslul_id = m.maslul_id
+            WHERE (e.is_deleted = 0 OR e.is_deleted IS NULL)
+              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
+        ''')
+        
+        events = cursor.fetchall()
+        updated_count = 0
+        
+        for event in events:
+            event_id, vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days = event
+            
+            # Convert vaada_date to date object if it's a string
+            if isinstance(vaada_date, str):
+                from datetime import datetime
+                vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+            
+            # Recalculate stage dates
+            stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
+            
+            # Update the event with new deadline dates
+            cursor.execute('''
+                UPDATE events 
+                SET call_deadline_date = ?,
+                    intake_deadline_date = ?,
+                    review_deadline_date = ?,
+                    response_deadline_date = ?
+                WHERE event_id = ?
+            ''', (
+                stage_dates['call_deadline_date'],
+                stage_dates['intake_deadline_date'],
+                stage_dates['review_deadline_date'],
+                stage_dates['response_deadline_date'],
+                event_id
+            ))
+            updated_count += 1
+        
+        conn.commit()
+        conn.close()
+        return updated_count
+    
     # Committee Types operations
     def add_committee_type(self, hativa_id: int, name: str, scheduled_day: int, frequency: str = 'weekly', 
                           week_of_month: Optional[int] = None, description: str = "") -> int:
