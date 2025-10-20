@@ -172,7 +172,7 @@ def bulk_delete_events():
             return jsonify({'success': False, 'message': 'משתמשים רגילים לא יכולים למחוק אירועים'}), 403
         
         # Pre-fetch names for audit per item (best-effort)
-        events_map = {e['event_id']: e for e in db.get_events()}
+        events_map = {e['event_id']: e for e in db.get_all_events()}
         
         # For managers, verify all events are in their division
         if user['role'] == 'manager':
@@ -189,7 +189,7 @@ def bulk_delete_events():
                             }), 403
                 except (ValueError, KeyError):
                     continue
-        deleted = db.delete_events_bulk(event_ids)
+        deleted = db.delete_events_bulk(event_ids, user['user_id'])
 
         # Audit: summary
         audit_logger.log_success(
@@ -258,7 +258,7 @@ def bulk_delete_committees():
                             }), 403
                 except (ValueError, KeyError):
                     continue
-        deleted_committees, affected_events = db.delete_vaadot_bulk(vaadot_ids)
+        deleted_committees, affected_events = db.delete_vaadot_bulk(vaadot_ids, user['user_id'])
 
         # Audit: summary
         audit_logger.log_success(
@@ -579,7 +579,7 @@ def index():
     maslulim = db.get_maslulim()
     committee_types = db.get_committee_types()
     committees = db.get_vaadot()  # This now returns meeting instances
-    events = db.get_events()
+    events = db.get_all_events()
     exception_dates = db.get_exception_dates()
     
     # Debug logging
@@ -876,7 +876,7 @@ def delete_maslul(maslul_id):
     """Delete route with safety checks"""
     try:
         # Check if maslul is used in any events
-        events = db.get_events()
+        events = db.get_all_events()
         maslul_events = [e for e in events if e['maslul_id'] == maslul_id]
         
         if maslul_events:
@@ -1025,19 +1025,23 @@ def delete_committee_meeting(vaadot_id):
         vaada = db.get_vaada_by_id(vaadot_id)
         committee_name = vaada['committee_name'] if vaada else 'Unknown'
         
+        # Get current user
+        user = auth_manager.get_current_user()
+        user_id = user['user_id'] if user else None
+        
         # First delete all related events
-        events = db.get_events()
+        events = db.get_all_events()
         related_events = [e for e in events if e['vaadot_id'] == vaadot_id]
         
         for event in related_events:
-            db.delete_event(event['event_id'])
+            db.delete_event(event['event_id'], user_id)
             audit_logger.log_event_deleted(event['event_id'], event['name'])
         
         # Then delete the committee meeting
-        success = db.delete_vaada(vaadot_id)
+        success = db.delete_vaada(vaadot_id, user_id)
         if success:
             audit_logger.log_vaada_deleted(vaadot_id, committee_name)
-            flash(f'ישיבת הועדה ו-{len(related_events)} אירועים נמחקו בהצלחה', 'success')
+            flash(f'ישיבת הועדה ו-{len(related_events)} אירועים הועברו לסל המחזור בהצלחה', 'success')
         else:
             flash('שגיאה במחיקת הישיבה', 'error')
     except Exception as e:
@@ -1181,7 +1185,7 @@ def delete_event_route(event_id):
             return redirect(url_for('index'))
         
         # Get event name before deletion
-        events = db.get_events()
+        events = db.get_all_events()
         event = next((e for e in events if e['event_id'] == event_id), None)
         
         if not event:
@@ -1194,10 +1198,10 @@ def delete_event_route(event_id):
                 flash('מנהל יכול למחוק רק אירועים בחטיבה שלו', 'error')
                 return redirect(url_for('index'))
         
-        success = db.delete_event(event_id)
+        success = db.delete_event(event_id, user['user_id'])
         if success:
             audit_logger.log_event_deleted(event_id, event['name'])
-            flash(f'אירוע "{event["name"]}" נמחק בהצלחה', 'success')
+            flash(f'אירוע "{event["name"]}" הועבר לסל המחזור בהצלחה', 'success')
         else:
             flash('שגיאה במחיקת האירוע', 'error')
     except Exception as e:
@@ -1286,7 +1290,7 @@ def api_vaadot_hativa(vaadot_id):
 def api_event_details(event_id):
     """API endpoint to get event details"""
     try:
-        events = db.get_events()
+        events = db.get_all_events()
         event = next((e for e in events if e['event_id'] == event_id), None)
         
         if event:
@@ -1319,7 +1323,7 @@ def api_maslul_details(maslul_id):
             }), 404
             
         # Get related events count
-        events = db.get_events()
+        events = db.get_all_events()
         events_count = len([e for e in events if e['maslul_id'] == maslul_id])
         
         return jsonify({
@@ -2524,7 +2528,7 @@ def get_events_by_committee():
     """API endpoint to get events grouped by committee meetings"""
     try:
         # Get all events
-        events = db.get_events()
+        events = db.get_all_events()
         include_empty = request.args.get('include_empty') in ('1', 'true', 'True')
 
         # Group events by committee meeting (vaadot_id)
@@ -2604,13 +2608,207 @@ def get_events_by_committee():
             'error': str(e)
         }), 500
 
+# Recycle Bin Routes
+@app.route('/recycle_bin')
+@login_required
+def recycle_bin():
+    """Recycle bin view for deleted items"""
+    try:
+        current_user = auth_manager.get_current_user()
+        
+        # Managers can only see their division's deleted items
+        hativa_id = None
+        if current_user['role'] == 'manager':
+            hativa_id = current_user['hativa_id']
+        
+        deleted_vaadot = db.get_deleted_vaadot(hativa_id)
+        deleted_events = db.get_deleted_events(hativa_id)
+        
+        return render_template('recycle_bin.html',
+                             deleted_vaadot=deleted_vaadot,
+                             deleted_events=deleted_events,
+                             current_user=current_user)
+    except Exception as e:
+        flash(f'שגיאה בטעינת סל המחזור: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
+@app.route('/api/recycle_bin/restore_vaada/<int:vaadot_id>', methods=['POST'])
+@login_required
+def restore_vaada_route(vaadot_id):
+    """Restore a deleted committee meeting"""
+    try:
+        user = auth_manager.get_current_user()
+        if not user:
+            return jsonify({'success': False, 'message': 'נדרשת התחברות'}), 401
+        
+        # Users cannot restore
+        if user['role'] == 'user':
+            return jsonify({'success': False, 'message': 'משתמשים רגילים לא יכולים לשחזר פריטים'}), 403
+        
+        # Get the vaada to check permissions for managers
+        deleted_vaadot = db.get_deleted_vaadot()
+        vaada = next((v for v in deleted_vaadot if v['vaadot_id'] == vaadot_id), None)
+        
+        if not vaada:
+            return jsonify({'success': False, 'message': 'ועדה לא נמצאה בסל המחזור'}), 404
+        
+        # Check manager permissions
+        if user['role'] == 'manager' and vaada['hativa_id'] != user['hativa_id']:
+            return jsonify({'success': False, 'message': 'מנהל יכול לשחזר רק ועדות מהחטיבה שלו'}), 403
+        
+        success = db.restore_vaada(vaadot_id)
+        if success:
+            audit_logger.log_success(
+                audit_logger.ACTION_CREATE,
+                audit_logger.ENTITY_VAADA,
+                details=f'שחזור ועדה מסל המחזור: {vaada["committee_name"]}'
+            )
+            return jsonify({'success': True, 'message': 'הועדה שוחזרה בהצלחה'})
+        else:
+            return jsonify({'success': False, 'message': 'שגיאה בשחזור הועדה'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/recycle_bin/restore_event/<int:event_id>', methods=['POST'])
+@login_required
+def restore_event_route(event_id):
+    """Restore a deleted event"""
+    try:
+        user = auth_manager.get_current_user()
+        if not user:
+            return jsonify({'success': False, 'message': 'נדרשת התחברות'}), 401
+        
+        # Users cannot restore
+        if user['role'] == 'user':
+            return jsonify({'success': False, 'message': 'משתמשים רגילים לא יכולים לשחזר פריטים'}), 403
+        
+        # Get the event to check permissions for managers
+        deleted_events = db.get_deleted_events()
+        event = next((e for e in deleted_events if e['event_id'] == event_id), None)
+        
+        if not event:
+            return jsonify({'success': False, 'message': 'אירוע לא נמצא בסל המחזור'}), 404
+        
+        # Check manager permissions
+        if user['role'] == 'manager' and event['maslul_hativa_id'] != user['hativa_id']:
+            return jsonify({'success': False, 'message': 'מנהל יכול לשחזר רק אירועים מהחטיבה שלו'}), 403
+        
+        success = db.restore_event(event_id)
+        if success:
+            audit_logger.log_success(
+                audit_logger.ACTION_CREATE,
+                audit_logger.ENTITY_EVENT,
+                details=f'שחזור אירוע מסל המחזור: {event["name"]}'
+            )
+            return jsonify({'success': True, 'message': 'האירוע שוחזר בהצלחה'})
+        else:
+            return jsonify({'success': False, 'message': 'שגיאה בשחזור האירוע'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/recycle_bin/permanent_delete_vaada/<int:vaadot_id>', methods=['POST'])
+@login_required
+def permanent_delete_vaada_route(vaadot_id):
+    """Permanently delete a committee meeting"""
+    try:
+        user = auth_manager.get_current_user()
+        if not user:
+            return jsonify({'success': False, 'message': 'נדרשת התחברות'}), 401
+        
+        # Only admins can permanently delete
+        if user['role'] != 'admin':
+            return jsonify({'success': False, 'message': 'רק מנהלי מערכת יכולים למחוק לצמיתות'}), 403
+        
+        # Get the vaada info for logging
+        deleted_vaadot = db.get_deleted_vaadot()
+        vaada = next((v for v in deleted_vaadot if v['vaadot_id'] == vaadot_id), None)
+        
+        if not vaada:
+            return jsonify({'success': False, 'message': 'ועדה לא נמצאה בסל המחזור'}), 404
+        
+        success = db.permanently_delete_vaada(vaadot_id)
+        if success:
+            audit_logger.log_success(
+                audit_logger.ACTION_DELETE,
+                audit_logger.ENTITY_VAADA,
+                details=f'מחיקה לצמיתות: {vaada["committee_name"]}'
+            )
+            return jsonify({'success': True, 'message': 'הועדה נמחקה לצמיתות'})
+        else:
+            return jsonify({'success': False, 'message': 'שגיאה במחיקה לצמיתות'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/recycle_bin/permanent_delete_event/<int:event_id>', methods=['POST'])
+@login_required
+def permanent_delete_event_route(event_id):
+    """Permanently delete an event"""
+    try:
+        user = auth_manager.get_current_user()
+        if not user:
+            return jsonify({'success': False, 'message': 'נדרשת התחברות'}), 401
+        
+        # Only admins can permanently delete
+        if user['role'] != 'admin':
+            return jsonify({'success': False, 'message': 'רק מנהלי מערכת יכולים למחוק לצמיתות'}), 403
+        
+        # Get the event info for logging
+        deleted_events = db.get_deleted_events()
+        event = next((e for e in deleted_events if e['event_id'] == event_id), None)
+        
+        if not event:
+            return jsonify({'success': False, 'message': 'אירוע לא נמצא בסל המחזור'}), 404
+        
+        success = db.permanently_delete_event(event_id)
+        if success:
+            audit_logger.log_success(
+                audit_logger.ACTION_DELETE,
+                audit_logger.ENTITY_EVENT,
+                details=f'מחיקה לצמיתות: {event["name"]}'
+            )
+            return jsonify({'success': True, 'message': 'האירוע נמחק לצמיתות'})
+        else:
+            return jsonify({'success': False, 'message': 'שגיאה במחיקה לצמיתות'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/recycle_bin/empty', methods=['POST'])
+@login_required
+def empty_recycle_bin_route():
+    """Empty the recycle bin (permanently delete all items)"""
+    try:
+        user = auth_manager.get_current_user()
+        if not user:
+            return jsonify({'success': False, 'message': 'נדרשת התחברות'}), 401
+        
+        # Only admins can empty recycle bin
+        if user['role'] != 'admin':
+            return jsonify({'success': False, 'message': 'רק מנהלי מערכת יכולים לרוקן את סל המחזור'}), 403
+        
+        vaadot_deleted, events_deleted = db.empty_recycle_bin()
+        
+        audit_logger.log_success(
+            audit_logger.ACTION_DELETE,
+            'recycle_bin',
+            details=f'ריקון סל מחזור: {vaadot_deleted} ועדות, {events_deleted} אירועים'
+        )
+        
+        return jsonify({
+            'success': True, 
+            'message': f'סל המחזור רוקן בהצלחה',
+            'vaadot_deleted': vaadot_deleted,
+            'events_deleted': events_deleted
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @app.route('/events_table')
 @login_required
 def events_table():
     """Events table view with advanced filtering"""
     try:
         # Get all events with extended information
-        events = db.get_events()
+        events = db.get_all_events()
 
         # Normalize date fields for consistent formatting in the template
         from datetime import datetime

@@ -311,6 +311,11 @@ class DatabaseManager:
                     ('is_active', 'INTEGER DEFAULT 1'),
                     ('description', 'TEXT')
                 ],
+                'vaadot': [
+                    ('is_deleted', 'INTEGER DEFAULT 0'),
+                    ('deleted_at', 'TIMESTAMP'),
+                    ('deleted_by', 'INTEGER')
+                ],
                 'events': [
                     ('call_publication_date', 'DATE'),
                     ('call_deadline_date', 'DATE'),
@@ -319,7 +324,10 @@ class DatabaseManager:
                     ('response_deadline_date', 'DATE'),
                     ('actual_submissions', 'INTEGER DEFAULT 0'),
                     ('scheduled_date', 'DATE'),
-                    ('status', 'TEXT DEFAULT "planned"')
+                    ('status', 'TEXT DEFAULT "planned"'),
+                    ('is_deleted', 'INTEGER DEFAULT 0'),
+                    ('deleted_at', 'TIMESTAMP'),
+                    ('deleted_by', 'INTEGER')
                 ]
             }
             
@@ -633,7 +641,7 @@ class DatabaseManager:
         return count < max_per_day
     
     def get_vaadot(self, hativa_id: Optional[int] = None, start_date: Optional[date] = None, 
-                   end_date: Optional[date] = None) -> List[Dict]:
+                   end_date: Optional[date] = None, include_deleted: bool = False) -> List[Dict]:
         """Get committee meetings with optional filters"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -648,6 +656,9 @@ class DatabaseManager:
             WHERE 1=1
         '''
         params = []
+        
+        if not include_deleted:
+            query += ' AND (v.is_deleted = 0 OR v.is_deleted IS NULL)'
         
         if hativa_id:
             query += ' AND v.hativa_id = ?'
@@ -785,15 +796,27 @@ class DatabaseManager:
             if conn:
                 conn.close()
 
-    def delete_vaada(self, vaadot_id: int) -> bool:
-        """Delete a committee meeting"""
+    def delete_vaada(self, vaadot_id: int, user_id: Optional[int] = None) -> bool:
+        """Soft delete a committee meeting"""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            # Delete the vaada (events will be cascade deleted due to foreign key)
-            cursor.execute('DELETE FROM vaadot WHERE vaadot_id = ?', (vaadot_id,))
+            # Soft delete the vaada
+            cursor.execute('''
+                UPDATE vaadot 
+                SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
+                WHERE vaadot_id = ?
+            ''', (datetime.now(ISRAEL_TZ), user_id, vaadot_id))
             success = cursor.rowcount > 0
+            
+            # Also soft delete related events
+            if success:
+                cursor.execute('''
+                    UPDATE events 
+                    SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
+                    WHERE vaadot_id = ? AND is_deleted = 0
+                ''', (datetime.now(ISRAEL_TZ), user_id, vaadot_id))
             
             conn.commit()
             conn.close()
@@ -804,11 +827,11 @@ class DatabaseManager:
                 conn.close()
             return False
 
-    def delete_vaadot_bulk(self, vaadot_ids: List[int]) -> Tuple[int, int]:
+    def delete_vaadot_bulk(self, vaadot_ids: List[int], user_id: Optional[int] = None) -> Tuple[int, int]:
         """
-        Bulk delete committee meetings (vaadot) by IDs.
+        Bulk soft delete committee meetings (vaadot) by IDs.
         Returns (deleted_committees_count, affected_events_count).
-        Events are removed via FK ON DELETE CASCADE; we compute count beforehand.
+        Events are also soft deleted.
         """
         if not vaadot_ids:
             return 0, 0
@@ -818,11 +841,24 @@ class DatabaseManager:
         try:
             cursor = conn.cursor()
             # Count related events before deletion
-            cursor.execute(f'SELECT COUNT(*) FROM events WHERE vaadot_id IN ({placeholders})', ids)
+            cursor.execute(f'SELECT COUNT(*) FROM events WHERE vaadot_id IN ({placeholders}) AND is_deleted = 0', ids)
             events_count = cursor.fetchone()[0] or 0
-            # Delete committees
-            cursor.execute(f'DELETE FROM vaadot WHERE vaadot_id IN ({placeholders})', ids)
+            
+            # Soft delete related events first
+            cursor.execute(f'''
+                UPDATE events 
+                SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
+                WHERE vaadot_id IN ({placeholders}) AND is_deleted = 0
+            ''', [datetime.now(ISRAEL_TZ), user_id] + ids)
+            
+            # Soft delete committees
+            cursor.execute(f'''
+                UPDATE vaadot 
+                SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
+                WHERE vaadot_id IN ({placeholders}) AND is_deleted = 0
+            ''', [datetime.now(ISRAEL_TZ), user_id] + ids)
             deleted_committees = cursor.rowcount or 0
+            
             conn.commit()
             return deleted_committees, events_count
         except Exception as e:
@@ -1011,7 +1047,7 @@ class DatabaseManager:
         conn.close()
         return event_id
     
-    def get_events(self, vaadot_id: Optional[int] = None) -> List[Dict]:
+    def get_events(self, vaadot_id: Optional[int] = None, include_deleted: bool = False) -> List[Dict]:
         """Get events, optionally filtered by committee"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -1046,10 +1082,17 @@ class DatabaseManager:
             JOIN hativot vh ON v.hativa_id = vh.hativa_id
             JOIN maslulim m ON e.maslul_id = m.maslul_id
             JOIN hativot h ON m.hativa_id = h.hativa_id
+            WHERE (e.is_deleted = 0 OR e.is_deleted IS NULL)
         '''
+        
+        if not include_deleted:
+            pass  # Already filtered in base query
+        else:
+            # If we want to include deleted, remove the WHERE clause
+            base_query = base_query.replace('WHERE (e.is_deleted = 0 OR e.is_deleted IS NULL)', 'WHERE 1=1')
 
         if vaadot_id:
-            cursor.execute(base_query + ' WHERE e.vaadot_id = ? ORDER BY e.created_at DESC', (vaadot_id,))
+            cursor.execute(base_query + ' AND e.vaadot_id = ? ORDER BY e.created_at DESC', (vaadot_id,))
         else:
             cursor.execute(base_query + ' ORDER BY e.created_at DESC')
         
@@ -1130,18 +1173,22 @@ class DatabaseManager:
         conn.close()
         return success
     
-    def delete_event(self, event_id: int) -> bool:
-        """Delete an event"""
+    def delete_event(self, event_id: int, user_id: Optional[int] = None) -> bool:
+        """Soft delete an event"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM events WHERE event_id = ?', (event_id,))
+        cursor.execute('''
+            UPDATE events 
+            SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
+            WHERE event_id = ? AND is_deleted = 0
+        ''', (datetime.now(ISRAEL_TZ), user_id, event_id))
         success = cursor.rowcount > 0
         conn.commit()
         conn.close()
         return success
 
-    def delete_events_bulk(self, event_ids: List[int]) -> int:
-        """Bulk delete events by IDs in a single transaction. Returns number of deleted rows."""
+    def delete_events_bulk(self, event_ids: List[int], user_id: Optional[int] = None) -> int:
+        """Bulk soft delete events by IDs in a single transaction. Returns number of deleted rows."""
         if not event_ids:
             return 0
         ids = [int(eid) for eid in event_ids]
@@ -1149,7 +1196,11 @@ class DatabaseManager:
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute(f'DELETE FROM events WHERE event_id IN ({placeholders})', ids)
+            cursor.execute(f'''
+                UPDATE events 
+                SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
+                WHERE event_id IN ({placeholders}) AND is_deleted = 0
+            ''', [datetime.now(ISRAEL_TZ), user_id] + ids)
             deleted = cursor.rowcount or 0
             conn.commit()
             return deleted
@@ -1731,12 +1782,14 @@ class DatabaseManager:
         
         return sla_dates
     
-    def get_events(self) -> List[Dict]:
+    def get_all_events(self, include_deleted: bool = False) -> List[Dict]:
         """Get all events with extended information including committee types and divisions"""
         conn = self.get_connection()
         cursor = conn.cursor()
+        
+        where_clause = '' if include_deleted else 'WHERE (e.is_deleted = 0 OR e.is_deleted IS NULL) AND (v.is_deleted = 0 OR v.is_deleted IS NULL)'
 
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT e.event_id, e.vaadot_id, e.maslul_id, e.name, e.event_type,
                    e.expected_requests, e.actual_submissions, e.call_publication_date,
                    e.call_deadline_date, e.intake_deadline_date, e.review_deadline_date,
@@ -1752,6 +1805,7 @@ class DatabaseManager:
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
             JOIN hativot h ON m.hativa_id = h.hativa_id
             JOIN hativot ht ON ct.hativa_id = ht.hativa_id
+            {where_clause}
             ORDER BY v.vaada_date DESC, e.created_at DESC
         ''')
 
@@ -2316,3 +2370,205 @@ class DatabaseManager:
                 'auth_source': 'local'
             })
         return users
+    
+    # Recycle Bin Functions
+    def get_deleted_vaadot(self, hativa_id: Optional[int] = None) -> List[Dict]:
+        """Get all deleted committee meetings"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        query = '''
+            SELECT v.*, ct.name as committee_name, h.name as hativa_name,
+                   u.full_name as deleted_by_name, u.username as deleted_by_username
+            FROM vaadot v
+            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+            JOIN hativot h ON v.hativa_id = h.hativa_id
+            LEFT JOIN users u ON v.deleted_by = u.user_id
+            WHERE v.is_deleted = 1
+        '''
+        params = []
+        
+        if hativa_id:
+            query += ' AND v.hativa_id = ?'
+            params.append(hativa_id)
+        
+        query += ' ORDER BY v.deleted_at DESC'
+        
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2],
+                'vaada_date': row[3], 'status': row[4], 'exception_date_id': row[5],
+                'notes': row[6], 'created_at': row[7], 'is_deleted': row[8],
+                'deleted_at': row[9], 'deleted_by': row[10],
+                'committee_name': row[11], 'hativa_name': row[12],
+                'deleted_by_name': row[13] if len(row) > 13 else None,
+                'deleted_by_username': row[14] if len(row) > 14 else None} for row in rows]
+    
+    def get_deleted_events(self, hativa_id: Optional[int] = None) -> List[Dict]:
+        """Get all deleted events"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        query = '''
+            SELECT e.*, m.name as maslul_name, m.hativa_id as maslul_hativa_id,
+                   v.vaada_date, ct.name as committee_name, h.name as hativa_name,
+                   u.full_name as deleted_by_name, u.username as deleted_by_username
+            FROM events e
+            JOIN maslulim m ON e.maslul_id = m.maslul_id
+            JOIN vaadot v ON e.vaadot_id = v.vaadot_id
+            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+            JOIN hativot h ON m.hativa_id = h.hativa_id
+            LEFT JOIN users u ON e.deleted_by = u.user_id
+            WHERE e.is_deleted = 1
+        '''
+        params = []
+        
+        if hativa_id:
+            query += ' AND m.hativa_id = ?'
+            params.append(hativa_id)
+        
+        query += ' ORDER BY e.deleted_at DESC'
+        
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [{'event_id': row[0], 'vaadot_id': row[1], 'maslul_id': row[2],
+                'name': row[3], 'event_type': row[4], 'expected_requests': row[5],
+                'call_publication_date': row[6], 'created_at': row[7],
+                'call_deadline_date': row[8], 'intake_deadline_date': row[9],
+                'review_deadline_date': row[10], 'response_deadline_date': row[11],
+                'actual_submissions': row[12], 'scheduled_date': row[13],
+                'status': row[14], 'is_deleted': row[15], 'deleted_at': row[16],
+                'deleted_by': row[17], 'maslul_name': row[18], 'maslul_hativa_id': row[19],
+                'vaada_date': row[20], 'committee_name': row[21], 'hativa_name': row[22],
+                'deleted_by_name': row[23] if len(row) > 23 else None,
+                'deleted_by_username': row[24] if len(row) > 24 else None} for row in rows]
+    
+    def restore_vaada(self, vaadot_id: int) -> bool:
+        """Restore a deleted committee meeting"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # Restore the vaada
+            cursor.execute('''
+                UPDATE vaadot 
+                SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL 
+                WHERE vaadot_id = ? AND is_deleted = 1
+            ''', (vaadot_id,))
+            success = cursor.rowcount > 0
+            
+            # Also restore related events
+            if success:
+                cursor.execute('''
+                    UPDATE events 
+                    SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL 
+                    WHERE vaadot_id = ? AND is_deleted = 1
+                ''', (vaadot_id,))
+            
+            conn.commit()
+            conn.close()
+            return success
+        except Exception as e:
+            print(f"Error restoring vaada: {e}")
+            if 'conn' in locals():
+                conn.close()
+            return False
+    
+    def restore_event(self, event_id: int) -> bool:
+        """Restore a deleted event"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                UPDATE events 
+                SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL 
+                WHERE event_id = ? AND is_deleted = 1
+            ''', (event_id,))
+            success = cursor.rowcount > 0
+            
+            conn.commit()
+            conn.close()
+            return success
+        except Exception as e:
+            print(f"Error restoring event: {e}")
+            if 'conn' in locals():
+                conn.close()
+            return False
+    
+    def permanently_delete_vaada(self, vaadot_id: int) -> bool:
+        """Permanently delete a committee meeting (hard delete)"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # Delete the vaada (events will be cascade deleted due to foreign key)
+            cursor.execute('DELETE FROM vaadot WHERE vaadot_id = ? AND is_deleted = 1', (vaadot_id,))
+            success = cursor.rowcount > 0
+            
+            conn.commit()
+            conn.close()
+            return success
+        except Exception as e:
+            print(f"Error permanently deleting vaada: {e}")
+            if 'conn' in locals():
+                conn.close()
+            return False
+    
+    def permanently_delete_event(self, event_id: int) -> bool:
+        """Permanently delete an event (hard delete)"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('DELETE FROM events WHERE event_id = ? AND is_deleted = 1', (event_id,))
+            success = cursor.rowcount > 0
+            
+            conn.commit()
+            conn.close()
+            return success
+        except Exception as e:
+            print(f"Error permanently deleting event: {e}")
+            if 'conn' in locals():
+                conn.close()
+            return False
+    
+    def empty_recycle_bin(self, hativa_id: Optional[int] = None) -> Tuple[int, int]:
+        """Permanently delete all items in recycle bin"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # Delete events
+            if hativa_id:
+                cursor.execute('''
+                    DELETE FROM events 
+                    WHERE is_deleted = 1 
+                    AND maslul_id IN (SELECT maslul_id FROM maslulim WHERE hativa_id = ?)
+                ''', (hativa_id,))
+            else:
+                cursor.execute('DELETE FROM events WHERE is_deleted = 1')
+            events_deleted = cursor.rowcount or 0
+            
+            # Delete vaadot
+            if hativa_id:
+                cursor.execute('''
+                    DELETE FROM vaadot 
+                    WHERE is_deleted = 1 AND hativa_id = ?
+                ''', (hativa_id,))
+            else:
+                cursor.execute('DELETE FROM vaadot WHERE is_deleted = 1')
+            vaadot_deleted = cursor.rowcount or 0
+            
+            conn.commit()
+            conn.close()
+            return vaadot_deleted, events_deleted
+        except Exception as e:
+            print(f"Error emptying recycle bin: {e}")
+            if 'conn' in locals():
+                conn.close()
+            return 0, 0

@@ -102,6 +102,13 @@
                             <i class="bi bi-table me-1"></i>טבלת אירועים
                         </a>
                     </li>
+                    {% if current_user.role in ['admin', 'manager'] %}
+                    <li class="nav-item">
+                        <a class="nav-link rounded-pill px-3 mx-1" href="{{ url_for('recycle_bin') }}">
+                            <i class="bi bi-trash me-1"></i>סל מחזור
+                        </a>
+                    </li>
+                    {% endif %}
                     <li class="nav-item">
                         <a class="nav-link rounded-pill px-3 mx-1" href="{{ url_for('user_guide_index') }}" style="background: linear-gradient(135deg, #667eea20, #764ba220);">
                             <i class="bi bi-book me-1"></i>מדריך למשתמש

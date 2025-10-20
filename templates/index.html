@@ -2704,8 +2704,14 @@ document.getElementById('addEventModal').addEventListener('hidden.bs.modal', fun
 }
 
 .table th {
-    background-color: #f8f9fa;
-    font-weight: 600;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    font-weight: 700;
+    color: #334155;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    padding: 14px 12px;
+    border-bottom: 2px solid #e2e8f0;
 }
 
 .day-menu {
@@ -3494,6 +3500,44 @@ document.getElementById('addEventModal').addEventListener('hidden.bs.modal', fun
 .btn-secondary:hover {
     background: linear-gradient(135deg, #475569 0%, #334155 100%);
     box-shadow: 0 4px 12px rgba(100, 116, 139, 0.4);
+}
+
+/* ========== CUSTOM SCROLLBAR ========== */
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+    border-radius: 10px;
+    border: 2px solid #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+}
+
+/* ========== TEXT SELECTION ========== */
+::selection {
+    background: rgba(99, 102, 241, 0.3);
+    color: inherit;
+}
+
+::-moz-selection {
+    background: rgba(99, 102, 241, 0.3);
+    color: inherit;
+}
+
+/* ========== SMOOTH FONT RENDERING ========== */
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 </style>
 {% endblock %}

@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+
+{% block title %}סל מחזור - מערכת תזמון ועדות{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="mb-3">
+                <i class="fas fa-trash-restore me-2"></i>
+                סל מחזור
+            </h2>
+            <p class="text-muted">פריטים שנמחקו יוצגו כאן וניתן יהיה לשחזר אותם</p>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-primary">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-users text-primary"></i>
+                        ועדות שנמחקו
+                    </h5>
+                    <h2 class="mb-0">{{ deleted_vaadot|length }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-info">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-calendar-alt text-info"></i>
+                        אירועים שנמחקו
+                    </h5>
+                    <h2 class="mb-0">{{ deleted_events|length }}</h2>
+                </div>
+            </div>
+        </div>
+        {% if current_user.role == 'admin' %}
+        <div class="col-md-4">
+            <div class="card border-danger">
+                <div class="card-body">
+                    <button class="btn btn-danger w-100" onclick="emptyRecycleBin()">
+                        <i class="fas fa-trash-alt me-2"></i>
+                        רוקן סל מחזור
+                    </button>
+                    <small class="text-muted d-block mt-2">מחיקה לצמיתות של כל הפריטים</small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Deleted Committees -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">
+                <i class="fas fa-users me-2"></i>
+                ועדות שנמחקו ({{ deleted_vaadot|length }})
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if deleted_vaadot %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>תאריך ועדה</th>
+                            <th>שם ועדה</th>
+                            <th>חטיבה</th>
+                            <th>נמחק על ידי</th>
+                            <th>תאריך מחיקה</th>
+                            <th>פעולות</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for vaada in deleted_vaadot %}
+                        <tr id="vaada-{{ vaada.vaadot_id }}">
+                            <td>{{ vaada.vaada_date }}</td>
+                            <td>{{ vaada.committee_name }}</td>
+                            <td>{{ vaada.hativa_name }}</td>
+                            <td>{{ vaada.deleted_by_name or 'לא ידוע' }}</td>
+                            <td>{{ vaada.deleted_at }}</td>
+                            <td>
+                                {% if current_user.role != 'user' %}
+                                <button class="btn btn-sm btn-success me-2" 
+                                        onclick="restoreVaada({{ vaada.vaadot_id }})"
+                                        title="שחזר">
+                                    <i class="fas fa-undo"></i>
+                                </button>
+                                {% endif %}
+                                {% if current_user.role == 'admin' %}
+                                <button class="btn btn-sm btn-danger" 
+                                        onclick="permanentDeleteVaada({{ vaada.vaadot_id }})"
+                                        title="מחק לצמיתות">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                אין ועדות שנמחקו בסל המחזור
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Deleted Events -->
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">
+                <i class="fas fa-calendar-alt me-2"></i>
+                אירועים שנמחקו ({{ deleted_events|length }})
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if deleted_events %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>שם אירוע</th>
+                            <th>סוג</th>
+                            <th>מסלול</th>
+                            <th>תאריך ועדה</th>
+                            <th>ועדה</th>
+                            <th>נמחק על ידי</th>
+                            <th>תאריך מחיקה</th>
+                            <th>פעולות</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in deleted_events %}
+                        <tr id="event-{{ event.event_id }}">
+                            <td>{{ event.name }}</td>
+                            <td>
+                                <span class="badge bg-{{ 'primary' if event.event_type == 'kokok' else 'secondary' }}">
+                                    {{ 'קו קו' if event.event_type == 'kokok' else 'שותף' }}
+                                </span>
+                            </td>
+                            <td>{{ event.maslul_name }}</td>
+                            <td>{{ event.vaada_date }}</td>
+                            <td>{{ event.committee_name }}</td>
+                            <td>{{ event.deleted_by_name or 'לא ידוע' }}</td>
+                            <td>{{ event.deleted_at }}</td>
+                            <td>
+                                {% if current_user.role != 'user' %}
+                                <button class="btn btn-sm btn-success me-2" 
+                                        onclick="restoreEvent({{ event.event_id }})"
+                                        title="שחזר">
+                                    <i class="fas fa-undo"></i>
+                                </button>
+                                {% endif %}
+                                {% if current_user.role == 'admin' %}
+                                <button class="btn btn-sm btn-danger" 
+                                        onclick="permanentDeleteEvent({{ event.event_id }})"
+                                        title="מחק לצמיתות">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                אין אירועים שנמחקו בסל המחזור
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function restoreVaada(vaadotId) {
+    if (!confirm('האם אתה בטוח שברצונך לשחזר ועדה זו?')) {
+        return;
+    }
+    
+    fetch(`/api/recycle_bin/restore_vaada/${vaadotId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            // Remove row from table
+            document.getElementById(`vaada-${vaadotId}`).remove();
+            location.reload();
+        } else {
+            alert('שגיאה: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('שגיאה בשחזור הועדה');
+        console.error('Error:', error);
+    });
+}
+
+function restoreEvent(eventId) {
+    if (!confirm('האם אתה בטוח שברצונך לשחזר אירוע זה?')) {
+        return;
+    }
+    
+    fetch(`/api/recycle_bin/restore_event/${eventId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            // Remove row from table
+            document.getElementById(`event-${eventId}`).remove();
+            location.reload();
+        } else {
+            alert('שגיאה: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('שגיאה בשחזור האירוע');
+        console.error('Error:', error);
+    });
+}
+
+function permanentDeleteVaada(vaadotId) {
+    if (!confirm('האם אתה בטוח? פעולה זו תמחק את הועדה לצמיתות ולא ניתן יהיה לשחזר אותה!')) {
+        return;
+    }
+    
+    fetch(`/api/recycle_bin/permanent_delete_vaada/${vaadotId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            // Remove row from table
+            document.getElementById(`vaada-${vaadotId}`).remove();
+            location.reload();
+        } else {
+            alert('שגיאה: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('שגיאה במחיקה לצמיתות');
+        console.error('Error:', error);
+    });
+}
+
+function permanentDeleteEvent(eventId) {
+    if (!confirm('האם אתה בטוח? פעולה זו תמחק את האירוע לצמיתות ולא ניתן יהיה לשחזר אותו!')) {
+        return;
+    }
+    
+    fetch(`/api/recycle_bin/permanent_delete_event/${eventId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            // Remove row from table
+            document.getElementById(`event-${eventId}`).remove();
+            location.reload();
+        } else {
+            alert('שגיאה: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('שגיאה במחיקה לצמיתות');
+        console.error('Error:', error);
+    });
+}
+
+function emptyRecycleBin() {
+    if (!confirm('האם אתה בטוח? פעולה זו תמחק לצמיתות את כל הפריטים בסל המחזור ולא ניתן יהיה לשחזר אותם!')) {
+        return;
+    }
+    
+    fetch('/api/recycle_bin/empty', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`סל המחזור רוקן בהצלחה.\nנמחקו ${data.vaadot_deleted} ועדות ו-${data.events_deleted} אירועים.`);
+            location.reload();
+        } else {
+            alert('שגיאה: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('שגיאה בריקון סל המחזור');
+        console.error('Error:', error);
+    });
+}
+</script>
+{% endblock %}
+
