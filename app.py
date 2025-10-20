@@ -779,8 +779,8 @@ def add_maslul():
             # Validate stage days
             for stage_name, days in [('שלב א', stage_a_days), ('שלב ב', stage_b_days), 
                                    ('שלב ג', stage_c_days), ('שלב ד', stage_d_days)]:
-                if days < 1 or days > 365:
-                    flash(f'{stage_name} חייב להיות בין 1 ל-365 ימים', 'error')
+                if days < 0 or days > 365:
+                    flash(f'{stage_name} חייב להיות בין 0 ל-365 ימים', 'error')
                     return redirect(url_for('maslulim'))
             
             # Check if sum of stages equals SLA
@@ -844,8 +844,8 @@ def edit_maslul(maslul_id):
             # Validate stage days
             for stage_name, days in [('שלב א', stage_a_days), ('שלב ב', stage_b_days), 
                                    ('שלב ג', stage_c_days), ('שלב ד', stage_d_days)]:
-                if days < 1 or days > 365:
-                    flash(f'{stage_name} חייב להיות בין 1 ל-365 ימים', 'error')
+                if days < 0 or days > 365:
+                    flash(f'{stage_name} חייב להיות בין 0 ל-365 ימים', 'error')
                     return redirect(url_for('maslulim'))
             
             # Check if sum of stages equals SLA
