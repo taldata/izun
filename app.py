@@ -820,6 +820,7 @@ def edit_maslul(maslul_id):
         stage_b_days = request.form.get('stage_b_days', 15)
         stage_c_days = request.form.get('stage_c_days', 10)
         stage_d_days = request.form.get('stage_d_days', 10)
+        is_active = request.form.get('is_active') == 'on'
         
         if not name:
             flash('שם המסלול הוא שדה חובה', 'error')
@@ -860,9 +861,10 @@ def edit_maslul(maslul_id):
         
         # Update the maslul
         success = db.update_maslul(maslul_id, name, description, sla_days, 
-                                 stage_a_days, stage_b_days, stage_c_days, stage_d_days)
+                                 stage_a_days, stage_b_days, stage_c_days, stage_d_days, is_active)
         if success:
-            flash(f'מסלול "{name}" עודכן בהצלחה', 'success')
+            status_text = 'פעיל' if is_active else 'לא פעיל'
+            flash(f'מסלול "{name}" עודכן בהצלחה (סטטוס: {status_text})', 'success')
         else:
             flash('המסלול לא נמצא במערכת', 'error')
             
@@ -1175,6 +1177,11 @@ def add_event():
         
         if vaada['hativa_id'] != maslul['hativa_id']:
             flash(f'שגיאה: המסלול "{maslul["name"]}" מחטיבת "{maslul["hativa_name"]}" אינו יכול להיות משויך לועדה מחטיבת "{vaada["hativa_name"]}"', 'error')
+            return redirect(url_for('index'))
+        
+        # Check if maslul is active
+        if not maslul.get('is_active', True):
+            flash(f'שגיאה: המסלול "{maslul["name"]}" אינו פעיל. לא ניתן ליצור אירועים חדשים למסלול זה.', 'error')
             return redirect(url_for('index'))
         
         # Validate event data

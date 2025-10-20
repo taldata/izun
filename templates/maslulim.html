@@ -130,10 +130,15 @@
         <div class="row">
             {% for maslul in hativa.maslulim %}
             <div class="col-md-6 col-lg-4 mb-3">
-                <div class="card maslul-card h-100">
+                <div class="card maslul-card h-100 {% if not maslul.is_active %}border-warning{% endif %}">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-start mb-2">
-                            <h5 class="card-title mb-0">{{ maslul.name }}</h5>
+                            <h5 class="card-title mb-0">
+                                {{ maslul.name }}
+                                {% if not maslul.is_active %}
+                                <i class="bi bi-pause-circle text-warning" title="מסלול לא פעיל"></i>
+                                {% endif %}
+                            </h5>
                             <span class="badge bg-secondary">#{{ maslul.maslul_id }}</span>
                         </div>
                         
@@ -180,7 +185,8 @@
                                         data-stage-a-days="{{ maslul.stage_a_days or 10 }}"
                                         data-stage-b-days="{{ maslul.stage_b_days or 15 }}"
                                         data-stage-c-days="{{ maslul.stage_c_days or 10 }}"
-                                        data-stage-d-days="{{ maslul.stage_d_days or 10 }}">
+                                        data-stage-d-days="{{ maslul.stage_d_days or 10 }}"
+                                        data-is-active="{{ maslul.is_active }}">
                                     <i class="bi bi-pencil"></i>
                                 </button>
                                 <button class="btn btn-outline-danger btn-sm delete-btn" 
@@ -345,6 +351,16 @@
                             <input type="number" class="form-control stage-input-edit" id="edit_stage_d_days" name="stage_d_days" min="0" max="365" required>
                         </div>
                     </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="edit_is_active" name="is_active" checked>
+                            <label class="form-check-label" for="edit_is_active">
+                                <i class="bi bi-check-circle me-1"></i>מסלול פעיל
+                            </label>
+                            <div class="form-text">כאשר מסלול לא פעיל, לא ניתן ליצור עבורו אירועים חדשים</div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
@@ -481,6 +497,10 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_stage_b_days').value = this.dataset.stageBDays || 15;
             document.getElementById('edit_stage_c_days').value = this.dataset.stageCDays || 10;
             document.getElementById('edit_stage_d_days').value = this.dataset.stageDDays || 10;
+            
+            // Set active status
+            const isActive = this.dataset.isActive === '1' || this.dataset.isActive === 'true';
+            document.getElementById('edit_is_active').checked = isActive;
             
             document.getElementById('editMaslulForm').action = `/maslulim/edit/${maslulId}`;
             new bootstrap.Modal(document.getElementById('editMaslulModal')).show();

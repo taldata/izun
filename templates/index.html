@@ -202,9 +202,11 @@
                         <select class="form-select" name="maslul_id" id="event_maslul_id" required>
                             <option value="">בחר מסלול</option>
                             {% for maslul in maslulim %}
+                                {% if maslul.is_active %}
                                 <option value="{{ maslul.maslul_id }}" data-hativa-id="{{ maslul.hativa_id }}">
                                     {{ maslul.name }} ({{ maslul.hativa_name }}) - SLA: {{ maslul.sla_days or 45 }} ימים
                                 </option>
+                                {% endif %}
                             {% endfor %}
                         </select>
                     </div>
@@ -372,8 +374,8 @@
                         <select class="form-select" name="maslul_id" id="edit_event_maslul_id" required>
                             <option value="">בחר מסלול</option>
                             {% for maslul in maslulim %}
-                                <option value="{{ maslul.maslul_id }}" data-hativa-id="{{ maslul.hativa_id }}">
-                                    {{ maslul.name }} ({{ maslul.hativa_name }}) - SLA: {{ maslul.sla_days or 45 }} ימים
+                                <option value="{{ maslul.maslul_id }}" data-hativa-id="{{ maslul.hativa_id }}" data-is-active="{{ maslul.is_active }}">
+                                    {{ maslul.name }} ({{ maslul.hativa_name }}) - SLA: {{ maslul.sla_days or 45 }} ימים{% if not maslul.is_active %} [לא פעיל]{% endif %}
                                 </option>
                             {% endfor %}
                         </select>

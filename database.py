@@ -438,17 +438,17 @@ class DatabaseManager:
                 'stage_d_days': row[10] if row[10] is not None else 10,
                 'hativa_name': row[11]} for row in rows]
     
-    def update_maslul(self, maslul_id: int, name: str, description: str = "", sla_days: int = 45,
-                      stage_a_days: int = 10, stage_b_days: int = 15, stage_c_days: int = 10, stage_d_days: int = 10) -> bool:
+    def update_maslul(self, maslul_id: int, name: str, description: str, sla_days: int, 
+                     stage_a_days: int, stage_b_days: int, stage_c_days: int, stage_d_days: int, is_active: bool = True) -> bool:
         """Update an existing route"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
             UPDATE maslulim 
-            SET name = ?, description = ?, sla_days = ?, stage_a_days = ?, stage_b_days = ?, stage_c_days = ?, stage_d_days = ?
+            SET name = ?, description = ?, sla_days = ?, stage_a_days = ?, stage_b_days = ?, stage_c_days = ?, stage_d_days = ?, is_active = ?
             WHERE maslul_id = ?
-        ''', (name, description, sla_days, stage_a_days, stage_b_days, stage_c_days, stage_d_days, maslul_id))
+        ''', (name, description, sla_days, stage_a_days, stage_b_days, stage_c_days, stage_d_days, 1 if is_active else 0, maslul_id))
         
         success = cursor.rowcount > 0
         conn.commit()
