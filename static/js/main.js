@@ -81,24 +81,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Date validation for exception dates
-    var dateInput = document.getElementById('date');
-    if (dateInput) {
-        // Set minimum date to today
-        var today = new Date().toISOString().split('T')[0];
-        dateInput.setAttribute('min', today);
-        
-        dateInput.addEventListener('change', function() {
-            var selectedDate = new Date(this.value);
-            var today = new Date();
-            
-            if (selectedDate < today) {
-                this.setCustomValidity('לא ניתן לבחור תאריך בעבר');
-            } else {
-                this.setCustomValidity('');
-            }
-        });
-    }
+    // Date validation for exception dates - REMOVED
+    // Allowing both past and future dates for exception dates
+    // Users can now add historical dates (holidays, etc.)
 
     // Committee date suggestions with AJAX
     function loadCommitteeSuggestions(committeeId) {
