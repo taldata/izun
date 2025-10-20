@@ -477,15 +477,76 @@ class DatabaseManager:
         conn.commit()
         conn.close()
     
-    def get_exception_dates(self) -> List[Dict]:
-        """Get all exception dates"""
+    def get_exception_dates(self, include_past: bool = False) -> List[Dict]:
+        """Get exception dates, optionally including past dates"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM exception_dates ORDER BY exception_date')
+        
+        if include_past:
+            cursor.execute('SELECT * FROM exception_dates ORDER BY exception_date DESC')
+        else:
+            today = date.today()
+            cursor.execute('SELECT * FROM exception_dates WHERE exception_date >= ? ORDER BY exception_date', (today,))
+        
         rows = cursor.fetchall()
         conn.close()
         
-        return [{'date_id': row[0], 'exception_date': row[1], 'description': row[2], 'type': row[3]} for row in rows]
+        return [{'date_id': row[0], 'exception_date': row[1], 'description': row[2], 
+                'type': row[3], 'created_at': row[4] if len(row) > 4 else None} for row in rows]
+    
+    def get_exception_date_by_id(self, date_id: int) -> Optional[Dict]:
+        """Get a specific exception date by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM exception_dates WHERE date_id = ?', (date_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return {'date_id': row[0], 'exception_date': row[1], 'description': row[2], 
+                   'type': row[3], 'created_at': row[4] if len(row) > 4 else None}
+        return None
+    
+    def update_exception_date(self, date_id: int, exception_date: date, description: str = "", date_type: str = "holiday") -> bool:
+        """Update an exception date"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE exception_dates 
+                SET exception_date = ?, description = ?, type = ?
+                WHERE date_id = ?
+            ''', (exception_date, description, date_type, date_id))
+            success = cursor.rowcount > 0
+            conn.commit()
+            conn.close()
+            return success
+        except Exception as e:
+            print(f"Error updating exception date: {e}")
+            return False
+    
+    def delete_exception_date(self, date_id: int) -> bool:
+        """Delete an exception date"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if any committees are linked to this exception date
+            cursor.execute('SELECT COUNT(*) FROM vaadot WHERE exception_date_id = ?', (date_id,))
+            linked_count = cursor.fetchone()[0]
+            
+            if linked_count > 0:
+                conn.close()
+                return False  # Cannot delete if committees are linked
+            
+            cursor.execute('DELETE FROM exception_dates WHERE date_id = ?', (date_id,))
+            success = cursor.rowcount > 0
+            conn.commit()
+            conn.close()
+            return success
+        except Exception as e:
+            print(f"Error deleting exception date: {e}")
+            return False
     
     def is_exception_date(self, check_date: date) -> bool:
         """Check if a date is an exception date"""

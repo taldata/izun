@@ -906,9 +906,10 @@ def delete_maslul(maslul_id):
 @app.route('/exception_dates')
 def exception_dates():
     """Manage exception dates"""
-    dates_list = db.get_exception_dates()
+    include_past = request.args.get('include_past', 'false') == 'true'
+    dates_list = db.get_exception_dates(include_past=include_past)
     current_user = auth_manager.get_current_user()
-    return render_template('exception_dates.html', dates=dates_list, current_user=current_user)
+    return render_template('exception_dates.html', dates=dates_list, current_user=current_user, include_past=include_past)
 
 @app.route('/exception_dates/add', methods=['POST'])
 def add_exception_date():
@@ -926,8 +927,8 @@ def add_exception_date():
         db.add_exception_date(exception_date, description, date_type)
         
         # Get the date_id for logging (query just added record)
-        exception_dates = db.get_exception_dates()
-        added_date = next((ed for ed in exception_dates if ed['exception_date'] == date_str), None)
+        exception_dates_list = db.get_exception_dates(include_past=True)
+        added_date = next((ed for ed in exception_dates_list if ed['exception_date'] == date_str), None)
         date_id = added_date['date_id'] if added_date else None
         
         audit_logger.log_exception_date_added(date_id, date_str, description)
@@ -935,13 +936,89 @@ def add_exception_date():
     except ValueError:
         flash('פורמט תאריך לא תקין', 'error')
     except Exception as e:
-        audit_logger.log_error(
-            audit_logger.ACTION_CREATE,
-            audit_logger.ENTITY_EXCEPTION_DATE,
-            str(e),
-            entity_name=date_str
-        )
-        flash(f'שגיאה בהוספת התאריך: {str(e)}', 'error')
+        flash(f'שגיאה בהוספת תאריך: {str(e)}', 'error')
+    
+    return redirect(url_for('exception_dates'))
+
+@app.route('/exception_dates/edit/<int:date_id>', methods=['POST'])
+@login_required
+def edit_exception_date(date_id):
+    """Edit exception date"""
+    try:
+        # Get current user
+        user = auth_manager.get_current_user()
+        if not user:
+            flash('נדרשת התחברות', 'error')
+            return redirect(url_for('login'))
+        
+        # Check permissions: Only admins can edit
+        if user['role'] != 'admin':
+            flash('רק מנהלי מערכת יכולים לערוך תאריכי חריגים', 'error')
+            return redirect(url_for('exception_dates'))
+        
+        date_str = request.form.get('date', '').strip()
+        description = request.form.get('description', '').strip()
+        date_type = request.form.get('type', 'holiday').strip()
+        
+        if not date_str:
+            flash('תאריך הוא שדה חובה', 'error')
+            return redirect(url_for('exception_dates'))
+        
+        exception_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        success = db.update_exception_date(date_id, exception_date, description, date_type)
+        
+        if success:
+            audit_logger.log_success(
+                audit_logger.ACTION_UPDATE,
+                'exception_date',
+                details=f'עדכון תאריך חריג: {date_str} - {description}'
+            )
+            flash(f'תאריך חריג {date_str} עודכן בהצלחה', 'success')
+        else:
+            flash('שגיאה בעדכון תאריך חריג', 'error')
+    except ValueError:
+        flash('פורמט תאריך לא תקין', 'error')
+    except Exception as e:
+        flash(f'שגיאה בעדכון תאריך: {str(e)}', 'error')
+    
+    return redirect(url_for('exception_dates'))
+
+@app.route('/exception_dates/delete/<int:date_id>', methods=['POST'])
+@login_required
+def delete_exception_date(date_id):
+    """Delete exception date"""
+    try:
+        # Get current user
+        user = auth_manager.get_current_user()
+        if not user:
+            flash('נדרשת התחברות', 'error')
+            return redirect(url_for('login'))
+        
+        # Check permissions: Only admins can delete
+        if user['role'] != 'admin':
+            flash('רק מנהלי מערכת יכולים למחוק תאריכי חריגים', 'error')
+            return redirect(url_for('exception_dates'))
+        
+        # Get date info before deletion for logging
+        exception_date_obj = db.get_exception_date_by_id(date_id)
+        
+        if not exception_date_obj:
+            flash('תאריך חריג לא נמצא במערכת', 'error')
+            return redirect(url_for('exception_dates'))
+        
+        success = db.delete_exception_date(date_id)
+        
+        if success:
+            audit_logger.log_success(
+                audit_logger.ACTION_DELETE,
+                'exception_date',
+                details=f'מחיקת תאריך חריג: {exception_date_obj["exception_date"]} - {exception_date_obj.get("description", "")}'
+            )
+            flash(f'תאריך חריג {exception_date_obj["exception_date"]} נמחק בהצלחה', 'success')
+        else:
+            flash('לא ניתן למחוק תאריך חריג שמשויכות אליו ועדות', 'error')
+    except Exception as e:
+        flash(f'שגיאה במחיקת תאריך: {str(e)}', 'error')
     
     return redirect(url_for('exception_dates'))
 

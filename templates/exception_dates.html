@@ -7,9 +7,19 @@
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2><i class="bi bi-calendar-x me-2"></i>ניהול תאריכי חריגים</h2>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addDateModal">
-                <i class="bi bi-plus me-1"></i>הוסף תאריך חריג
-            </button>
+            <div class="d-flex gap-2 align-items-center">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="includePastDates" 
+                           {% if include_past %}checked{% endif %}
+                           onchange="togglePastDates(this.checked)">
+                    <label class="form-check-label" for="includePastDates">
+                        <i class="bi bi-calendar-range me-1"></i>הצג תאריכים עברו
+                    </label>
+                </div>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addDateModal">
+                    <i class="bi bi-plus me-1"></i>הוסף תאריך חריג
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -27,6 +37,9 @@
                                     <th>תאריך</th>
                                     <th>תיאור</th>
                                     <th>סוג</th>
+                                    {% if current_user.role == 'admin' %}
+                                    <th style="width: 150px;">פעולות</th>
+                                    {% endif %}
                                 </tr>
                             </thead>
                             <tbody>
@@ -41,6 +54,20 @@
                                             {% else %}מיוחד{% endif %}
                                         </span>
                                     </td>
+                                    {% if current_user.role == 'admin' %}
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary" 
+                                                onclick="editDate({{ date.date_id }}, '{{ date.exception_date }}', '{{ date.description or '' }}', '{{ date.type }}')"
+                                                title="ערוך">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" 
+                                                onclick="deleteDate({{ date.date_id }}, '{{ date.exception_date }}')"
+                                                title="מחק">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                    {% endif %}
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -102,4 +129,73 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Exception Date Modal -->
+<div class="modal fade" id="editDateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-pencil-square me-2"></i>עריכת תאריך חריג
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="editDateForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_date" class="form-label">תאריך <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="edit_date" name="date" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_description" class="form-label">תיאור התאריך</label>
+                        <input type="text" class="form-control" id="edit_description" name="description" placeholder="למשל: יום עצמאות, יום זיכרון">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_type" class="form-label">סוג התאריך</label>
+                        <select class="form-select" id="edit_type" name="type">
+                            <option value="holiday">חג</option>
+                            <option value="sabbath">שבתון</option>
+                            <option value="special">מיוחד</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>עדכן
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function togglePastDates(includePast) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('include_past', includePast ? 'true' : 'false');
+    window.location.href = url.toString();
+}
+
+function editDate(dateId, dateStr, description, type) {
+    document.getElementById('edit_date').value = dateStr;
+    document.getElementById('edit_description').value = description;
+    document.getElementById('edit_type').value = type;
+    document.getElementById('editDateForm').action = `/exception_dates/edit/${dateId}`;
+    
+    const modal = new bootstrap.Modal(document.getElementById('editDateModal'));
+    modal.show();
+}
+
+function deleteDate(dateId, dateStr) {
+    if (confirm(`האם אתה בטוח שברצונך למחוק את התאריך ${dateStr}?\n\nשים לב: לא ניתן למחוק תאריך חריג שמשויכות אליו ועדות.`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/exception_dates/delete/${dateId}`;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+
 {% endblock %}
