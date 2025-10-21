@@ -640,16 +640,36 @@ function createMonthCalendar(year, month, isCompact = false) {
     thead.className = 'table-light';
     const headerRow = document.createElement('tr');
     const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
-    dayNames.forEach(dayName => {
+    dayNames.forEach((dayName, index) => {
         const th = document.createElement('th');
         th.className = 'text-center';
+        
+        // Add special class for Friday and Saturday (indices 5 and 6)
+        if (index === 5 || index === 6) {
+            th.className += ' weekend-column';
+            // Add visual indicator for weekend
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-moon-stars-fill';
+            icon.style.fontSize = '0.5rem';
+            icon.style.marginLeft = '2px';
+            icon.style.opacity = '0.6';
+            th.appendChild(icon);
+        }
+        
         if (isCompact) {
             th.style.fontSize = '0.7rem';
             th.style.padding = '0.2rem';
         } else {
             th.style.padding = '0.4rem';
         }
-        th.textContent = dayName;
+        
+        const textNode = document.createTextNode(dayName);
+        if (index === 5 || index === 6) {
+            th.insertBefore(textNode, th.firstChild);
+        } else {
+            th.textContent = dayName;
+        }
+        
         headerRow.appendChild(th);
     });
     thead.appendChild(headerRow);
@@ -673,6 +693,14 @@ function createMonthCalendar(year, month, isCompact = false) {
         for (let day = 0; day < 7; day++) {
             const cell = document.createElement('td');
             cell.className = 'calendar-cell position-relative';
+            
+            // Add special class for Friday and Saturday (indices 5 and 6)
+            if (day === 5 || day === 6) {
+                cell.className += ' weekend-column';
+                cell.setAttribute('title', 'לא מתקיימות ועדות בסוף שבוע');
+                cell.style.cursor = 'not-allowed';
+            }
+            
             cell.style.height = isCompact ? '55px' : '70px';
             cell.style.verticalAlign = 'top';
             
@@ -918,20 +946,22 @@ function createMonthCalendar(year, month, isCompact = false) {
                 // Add data attribute for drag & drop
                 cell.setAttribute('data-date', currentDateStr);
                 
-                // Make cell clickable for adding items
-                cell.style.cursor = 'pointer';
-                cell.onclick = function(e) {
-                    // Don't handle click if we just finished dragging
-                    if (isDragging) {
-                        console.log('Click cancelled - was dragging'); // Debug
-                        return;
-                    }
-                    
-                    // Only trigger if clicking on empty space (not on existing items)
-                    if (e.target === cell || e.target === dayDiv) {
-                        handleDayClick(currentDateStr, e);
-                    }
-                };
+                // Make cell clickable for adding items (but not on weekends)
+                if (day !== 5 && day !== 6) {
+                    cell.style.cursor = 'pointer';
+                    cell.onclick = function(e) {
+                        // Don't handle click if we just finished dragging
+                        if (isDragging) {
+                            console.log('Click cancelled - was dragging'); // Debug
+                            return;
+                        }
+                        
+                        // Only trigger if clicking on empty space (not on existing items)
+                        if (e.target === cell || e.target === dayDiv) {
+                            handleDayClick(currentDateStr, e);
+                        }
+                    };
+                }
                 
                 date++;
             }
@@ -1627,6 +1657,12 @@ function handleContainerDrop(e) {
 function isValidDropZone(cell) {
     if (!draggedData) return false;
     
+    // Don't allow dropping on weekend columns
+    if (cell.classList.contains('weekend-column')) {
+        console.log('Drop zone invalid - weekend column'); // Debug
+        return false;
+    }
+    
     const targetDate = cell.getAttribute('data-date');
     if (!targetDate) return false;
     
@@ -1668,7 +1704,14 @@ function highlightValidDropZones(type) {
             // Add hint for invalid drop zones
             const hint = document.createElement('div');
             hint.className = 'drop-zone-hint';
-            hint.textContent = type === 'committee' ? 'תאריך תפוס' : 'אין ועדה';
+            
+            // Special message for weekend columns
+            if (cell.classList.contains('weekend-column')) {
+                hint.textContent = 'סוף שבוע';
+                hint.style.fontSize = '0.6rem';
+            } else {
+                hint.textContent = type === 'committee' ? 'תאריך תפוס' : 'אין ועדה';
+            }
             cell.appendChild(hint);
         }
     });
@@ -2967,6 +3010,127 @@ document.getElementById('addEventModal').addEventListener('hidden.bs.modal', fun
     padding: 6px 4px;
     border-bottom: 2px solid #e2e8f0;
     line-height: 1.2;
+}
+
+/* Weekend columns styling - narrower for Friday and Saturday */
+.weekend-column {
+    width: 8% !important;
+    max-width: 60px !important;
+    background-color: #f8f9fa !important;
+    border-right: 2px solid #dee2e6 !important;
+    position: relative;
+}
+
+/* Visual separator before weekend */
+.calendar-cell:nth-child(6)::before {
+    content: '';
+    position: absolute;
+    right: -2px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, #dee2e6, #adb5bd);
+    z-index: 1;
+}
+
+.table th.weekend-column {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%) !important;
+    color: #6c757d !important;
+    font-size: 0.6rem !important;
+    font-weight: 600 !important;
+}
+
+.table th.weekend-column i {
+    color: #495057;
+}
+
+.calendar-cell.weekend-column {
+    background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f5 100%) !important;
+    opacity: 0.9;
+    padding: 0.2rem !important;
+    position: relative;
+}
+
+.calendar-cell.weekend-column::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 10px,
+        rgba(0,0,0,0.02) 10px,
+        rgba(0,0,0,0.02) 20px
+    );
+    pointer-events: none;
+}
+
+.calendar-cell.weekend-column:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%) !important;
+    opacity: 1;
+    transform: none !important;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.05) !important;
+    border-left-color: #adb5bd !important;
+}
+
+/* Weekend columns are always invalid drop zones */
+.calendar-cell.weekend-column.invalid-drop-zone {
+    background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f5 100%) !important;
+    opacity: 0.7;
+}
+
+.calendar-cell.weekend-column .drop-zone-hint {
+    color: #6c757d;
+    font-weight: 600;
+}
+
+.weekend-column .fw-bold {
+    font-size: 0.75rem !important;
+    color: #6c757d !important;
+}
+
+.weekend-column .badge {
+    font-size: 0.5rem !important;
+    padding: 0px 2px !important;
+    opacity: 0.8;
+}
+
+/* Weekday columns get more space */
+.table th:not(.weekend-column),
+.table td:not(.weekend-column) {
+    width: 16.8% !important;
+}
+
+/* Responsive adjustments for weekend columns */
+@media (max-width: 768px) {
+    .weekend-column {
+        width: 10% !important;
+        max-width: 50px !important;
+    }
+    
+    .table th:not(.weekend-column),
+    .table td:not(.weekend-column) {
+        width: 18% !important;
+    }
+    
+    .weekend-column .fw-bold {
+        font-size: 0.65rem !important;
+    }
+}
+
+@media (max-width: 420px) {
+    .weekend-column {
+        width: 12% !important;
+        max-width: 45px !important;
+    }
+    
+    .table th:not(.weekend-column),
+    .table td:not(.weekend-column) {
+        width: 17.6% !important;
+    }
 }
 
 .day-menu {
