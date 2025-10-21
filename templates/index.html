@@ -138,7 +138,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('add_committee_meeting') }}">
+            <form method="POST" action="{{ url_for('add_committee_meeting') }}" id="addCommitteeForm">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="committee_type_id" class="form-label">סוג ועדה</label>
@@ -160,7 +160,8 @@
                     </div>
                     <div class="mb-3">
                         <label for="vaada_date" class="form-label">תאריך הישיבה</label>
-                        <input type="date" class="form-control" name="vaada_date" id="modalDate" required>
+                        <input type="date" class="form-control" name="vaada_date" id="modalDate" required pattern="\d{4}-\d{2}-\d{2}">
+                        <div class="form-text">בחר תאריך לישיבת הועדה</div>
                     </div>
                     <div class="d-flex align-items-center gap-2 mb-2">
                         <button type="button" class="btn btn-outline-primary btn-sm" id="findAvailableDatesBtn">
@@ -2452,6 +2453,39 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentRouteHativaId = routeSelect.selectedOptions[0]?.getAttribute('data-hativa-id');
             if (currentRouteHativaId && currentRouteHativaId != selectedCommittee.hativa_id) {
                 routeSelect.value = '';
+            }
+        });
+    }
+    
+    // Add form validation for committee date format
+    const addCommitteeForm = document.getElementById('addCommitteeForm');
+    if (addCommitteeForm) {
+        addCommitteeForm.addEventListener('submit', function(e) {
+            const dateInput = document.getElementById('modalDate');
+            if (dateInput && dateInput.value) {
+                // Ensure date is in YYYY-MM-DD format
+                const dateValue = dateInput.value;
+                console.log('Date value before submission:', dateValue);
+                
+                const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+                
+                if (!dateRegex.test(dateValue)) {
+                    e.preventDefault();
+                    alert('שגיאה: פורמט התאריך אינו תקין. נא לבחור תאריך מהלוח.\nפורמט נדרש: YYYY-MM-DD');
+                    console.error('Invalid date format:', dateValue);
+                    return false;
+                }
+                
+                // Validate it's a valid date
+                const dateObj = new Date(dateValue);
+                if (isNaN(dateObj.getTime())) {
+                    e.preventDefault();
+                    alert('שגיאה: התאריך שנבחר אינו תקין');
+                    console.error('Invalid date:', dateValue);
+                    return false;
+                }
+                
+                console.log('Date validation passed:', dateValue);
             }
         });
     }

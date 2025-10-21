@@ -1047,8 +1047,24 @@ def add_committee_meeting():
         flash('סוג ועדה, חטיבה ותאריך הם שדות חובה', 'error')
         return redirect(url_for('index'))
     
+    # Debug logging
+    print(f"DEBUG: Received date value: '{vaada_date}' (type: {type(vaada_date).__name__})")
+    
     try:
-        meeting_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+        # Try multiple date formats to handle different browser formats
+        meeting_date = None
+        date_formats = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%Y/%m/%d']
+        
+        for fmt in date_formats:
+            try:
+                meeting_date = datetime.strptime(vaada_date, fmt).date()
+                break
+            except ValueError:
+                continue
+        
+        if meeting_date is None:
+            raise ValueError(f'פורמט תאריך לא תקין: {vaada_date}. נא להזין תאריך בפורמט YYYY-MM-DD')
+        
         vaadot_id = db.add_vaada(int(committee_type_id), int(hativa_id), meeting_date, status, notes=notes)
         
         # Get committee name for logging
@@ -1056,7 +1072,7 @@ def add_committee_meeting():
         committee_type = next((ct for ct in committee_types if ct['committee_type_id'] == int(committee_type_id)), None)
         committee_name = committee_type['name'] if committee_type else 'Unknown'
         
-        audit_logger.log_vaada_created(vaadot_id, committee_name, vaada_date)
+        audit_logger.log_vaada_created(vaadot_id, committee_name, meeting_date.strftime('%Y-%m-%d'))
         flash('ישיבת ועדה נוספה בהצלחה', 'success')
     except ValueError as e:
         # Check if it's a date format error or our constraint error
@@ -1064,7 +1080,8 @@ def add_committee_meeting():
             audit_logger.log_error(audit_logger.ACTION_CREATE, audit_logger.ENTITY_VAADA, str(e), details=f'תאריך: {vaada_date}')
             flash(str(e), 'error')
         else:
-            flash('פורמט תאריך לא תקין', 'error')
+            audit_logger.log_error(audit_logger.ACTION_CREATE, audit_logger.ENTITY_VAADA, str(e), details=f'תאריך: {vaada_date}')
+            flash(str(e), 'error')
     except Exception as e:
         audit_logger.log_error(audit_logger.ACTION_CREATE, audit_logger.ENTITY_VAADA, str(e), details=f'תאריך: {vaada_date}')
         flash(f'שגיאה בהוספת הישיבה: {str(e)}', 'error')
@@ -1084,7 +1101,20 @@ def edit_committee_meeting(vaadot_id):
         return redirect(url_for('index'))
     
     try:
-        meeting_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+        # Try multiple date formats to handle different browser formats
+        meeting_date = None
+        date_formats = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%Y/%m/%d']
+        
+        for fmt in date_formats:
+            try:
+                meeting_date = datetime.strptime(vaada_date, fmt).date()
+                break
+            except ValueError:
+                continue
+        
+        if meeting_date is None:
+            raise ValueError(f'פורמט תאריך לא תקין: {vaada_date}. נא להזין תאריך בפורמט YYYY-MM-DD')
+        
         success = db.update_vaada(vaadot_id, int(committee_type_id), int(hativa_id), meeting_date, notes=notes)
         if success:
             # Get committee name for logging
@@ -1092,13 +1122,13 @@ def edit_committee_meeting(vaadot_id):
             committee_type = next((ct for ct in committee_types if ct['committee_type_id'] == int(committee_type_id)), None)
             committee_name = committee_type['name'] if committee_type else 'Unknown'
             
-            audit_logger.log_vaada_updated(vaadot_id, committee_name, vaada_date)
+            audit_logger.log_vaada_updated(vaadot_id, committee_name, meeting_date.strftime('%Y-%m-%d'))
             flash('ישיבת הועדה עודכנה בהצלחה', 'success')
         else:
             flash('שגיאה בעדכון הישיבה', 'error')
-    except ValueError:
-        audit_logger.log_error(audit_logger.ACTION_UPDATE, audit_logger.ENTITY_VAADA, 'פורמט תאריך לא תקין', vaadot_id)
-        flash('פורמט תאריך לא תקין', 'error')
+    except ValueError as e:
+        audit_logger.log_error(audit_logger.ACTION_UPDATE, audit_logger.ENTITY_VAADA, str(e), vaadot_id)
+        flash(str(e), 'error')
     except Exception as e:
         audit_logger.log_error(audit_logger.ACTION_UPDATE, audit_logger.ENTITY_VAADA, str(e), vaadot_id)
         flash(f'שגיאה בעדכון הישיבה: {str(e)}', 'error')
