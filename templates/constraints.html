@@ -9,7 +9,7 @@
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
                         <h5 class="mb-0 fw-bold">ניהול אילוצים</h5>
-                        <small class="text-dark">עדכון ימי עבודה, שעות פעילות ומגבלות לוח זמנים</small>
+                        <small class="text-dark">הגדרת מגבלות תזמון ועומסים במערכת</small>
                     </div>
                     <div class="badge bg-dark-subtle text-dark">
                         <i class="bi bi-shield-lock me-1"></i>למנהלי מערכת בלבד
@@ -18,50 +18,12 @@
             </div>
             <div class="card-body p-4">
                 <form action="{{ url_for('update_constraints') }}" method="post" class="needs-validation" novalidate>
-                    <div class="mb-4">
-                        <h6 class="text-primary fw-bold mb-3">
-                            <i class="bi bi-calendar2-week me-2"></i>ימי עבודה
-                        </h6>
-                        <div class="row g-2">
-                            {% for day in settings.work_days.options %}
-                            <div class="col-6 col-md-4 col-lg-3">
-                                <div class="form-check form-switch card border {% if day.selected %}border-primary{% else %}border-light-subtle{% endif %} h-100">
-                                    <div class="card-body py-2">
-                                        <input class="form-check-input float-end" type="checkbox" role="switch" id="day-{{ day.value }}" name="work_days" value="{{ day.value }}" {% if day.selected %}checked{% endif %}>
-                                        <label class="form-check-label pe-4" for="day-{{ day.value }}">{{ day.label }}</label>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% if errors and errors.get('work_days') %}
-                        <div class="text-danger small mt-2">
-                            <i class="bi bi-exclamation-triangle me-1"></i>{{ errors.get('work_days') }}
-                        </div>
-                        {% endif %}
-                    </div>
-
-                    <div class="mb-4">
-                        <h6 class="text-primary fw-bold mb-3">
-                            <i class="bi bi-clock-history me-2"></i>שעות פעילות
-                        </h6>
-                        <div class="row g-3">
-                            <div class="col-12 col-md-6">
-                                <label class="form-label">שעת התחלה</label>
-                                <input type="time" class="form-control {% if errors and errors.get('work_start_time') %}is-invalid{% endif %}" name="work_start_time" value="{{ settings.business_hours.start }}">
-                                {% if errors and errors.get('work_start_time') %}
-                                <div class="invalid-feedback d-block">{{ errors.get('work_start_time') }}</div>
-                                {% endif %}
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <label class="form-label">שעת סיום</label>
-                                <input type="time" class="form-control {% if errors and errors.get('work_end_time') %}is-invalid{% endif %}" name="work_end_time" value="{{ settings.business_hours.end }}">
-                                {% if errors and errors.get('work_end_time') %}
-                                <div class="invalid-feedback d-block">{{ errors.get('work_end_time') }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
+                    <!-- Hidden fields to preserve work days and hours settings -->
+                    {% for day in settings.work_days.selected_values %}
+                    <input type="hidden" name="work_days" value="{{ day }}">
+                    {% endfor %}
+                    <input type="hidden" name="work_start_time" value="{{ settings.business_hours.start }}">
+                    <input type="hidden" name="work_end_time" value="{{ settings.business_hours.end }}">
 
                     <div class="mb-4">
                         <h6 class="text-primary fw-bold mb-3">
@@ -351,14 +313,6 @@
             <div class="card-body">
                 <ul class="list-unstyled mb-0">
                     <li class="mb-2">
-                        <span class="text-muted">ימי עבודה:</span>
-                        <span class="fw-semibold">{{ settings.work_days.summary }}</span>
-                    </li>
-                    <li class="mb-2">
-                        <span class="text-muted">שעות פעילות:</span>
-                        <span class="fw-semibold">{{ settings.business_hours.range }}</span>
-                    </li>
-                    <li class="mb-2">
                         <span class="text-muted">מקסימום ועדות ביום:</span>
                         <span class="fw-semibold">{{ settings.limits.max_meetings_per_day }}</span>
                     </li>
@@ -424,7 +378,7 @@
             </div>
             <div class="card-body small text-muted">
                 <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>הקפידו על התאמה בין מכסות יומיות ושבועיות כדי למנוע חסימות מיותרות.</p>
-                <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>ימי העבודה משפיעים על חישובי SLA, אירועים ותזמון אוטומטי.</p>
+                <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>אילוצי הבקשות הספציפיים לכל תאריך מאפשרים שליטה מדויקת על עומס המערכת.</p>
                 <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>לאחר שינוי ההגדרות, הריצו מחדש את התזמון האוטומטי לבדיקת התוצאות.</p>
                 <p class="mb-0"><i class="bi bi-star text-warning me-1"></i>הגדרות ההמלצות משפיעות על הציון שכל ועדה מקבלת במערכת ההמלצות.</p>
             </div>
