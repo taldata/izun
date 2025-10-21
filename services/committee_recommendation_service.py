@@ -122,7 +122,7 @@ class CommitteeRecommendationService:
         is_available = True
         
         # 1. בדיקת זמינות מקום
-        max_requests = int(self.db.get_system_setting('max_requests_per_day') or '100')
+        max_requests = int(self.db.get_system_setting('max_requests_committee_date') or '100')
         current_requests = self.db.get_total_requests_on_date(vaada_date)
         available_space = max_requests - current_requests
         

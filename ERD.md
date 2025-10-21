@@ -277,12 +277,25 @@ The system includes configurable settings stored in `system_settings`:
 - **max_meetings_per_day**: Maximum number of committee meetings per calendar day (default: 1)
 - **max_weekly_meetings**: Maximum number of committee meetings per standard week (default: 3)
 - **max_third_week_meetings**: Maximum number of committee meetings during the third week of a month (default: 4)
-- **max_requests_per_day**: Maximum total expected requests per day across all events (default: 100)
+
+#### Request Load Constraints (Per Date Type)
+Each type of date has its own configurable constraint for maximum expected requests:
+- **max_requests_committee_date**: Maximum requests on committee meeting dates (default: 100)
+- **max_requests_call_deadline**: Maximum requests on call deadline dates (default: 100)
+- **max_requests_intake_deadline**: Maximum requests on intake deadline dates (default: 100)
+- **max_requests_review_deadline**: Maximum requests on review deadline dates (default: 100)
+- **max_requests_response_deadline**: Maximum requests on response deadline dates (default: 100)
 
 These constraints ensure:
 - Only one committee meeting per day (configurable)
 - Maximum 3 meetings per week (standard weeks)
 - Maximum 4 meetings during the third week of each month (allows for increased capacity)
-- Total daily request load doesn't exceed system capacity
+- Request load doesn't exceed system capacity at each stage:
+  * Committee meeting dates
+  * Call publication deadline dates
+  * Intake deadline dates
+  * Review deadline dates
+  * Response deadline dates
+- Each stage can have different capacity limits based on processing capabilities
 
 This ERD represents a comprehensive committee management system designed for organizational scheduling and event tracking with proper data integrity, business rule enforcement, and modern features like automatic scheduling and role-based access control.

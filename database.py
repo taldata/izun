@@ -191,7 +191,11 @@ class DatabaseManager:
                 ('max_meetings_per_day', '1', 'Maximum number of committee meetings per calendar day'),
                 ('max_weekly_meetings', '3', 'Maximum number of committee meetings per standard week'),
                 ('max_third_week_meetings', '4', 'Maximum number of committee meetings during the third week of a month'),
-                ('max_requests_per_day', '100', 'Maximum total expected requests per day across all events'),
+                ('max_requests_committee_date', '100', 'Maximum total expected requests on committee meeting date'),
+                ('max_requests_call_deadline', '100', 'Maximum total expected requests on call deadline date'),
+                ('max_requests_intake_deadline', '100', 'Maximum total expected requests on intake deadline date'),
+                ('max_requests_review_deadline', '100', 'Maximum total expected requests on review deadline date'),
+                ('max_requests_response_deadline', '100', 'Maximum total expected requests on response deadline date'),
                 ('show_deadline_dates_in_calendar', '1', 'Show derived deadline dates in calendar (1=yes, 0=no)'),
                 ('rec_base_score', '100', 'Committee recommendation base score'),
                 ('rec_best_bonus', '25', 'Bonus for best recommendation'),
@@ -888,6 +892,35 @@ class DatabaseManager:
             if weekly_count >= weekly_limit:
                 raise ValueError(f"השבוע של {vaada_date} כבר מכיל {weekly_count} ועדות (המגבלה היא {weekly_limit})")
 
+            # Check constraints on derived dates for all events in this committee
+            cursor.execute('''
+                SELECT e.event_id, e.expected_requests, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days
+                FROM events e
+                JOIN maslulim m ON e.maslul_id = m.maslul_id
+                WHERE e.vaadot_id = ? AND e.is_deleted = 0
+            ''', (vaadot_id,))
+            events = cursor.fetchall()
+            
+            # Close connection before calling constraint check functions
+            conn.close()
+            conn = None
+            
+            # Check derived date constraints for each event
+            for event in events:
+                event_id, expected_requests, stage_a_days, stage_b_days, stage_c_days, stage_d_days = event
+                
+                # Calculate new derived dates with the new committee date
+                stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
+                
+                # Check constraints (excluding the current event)
+                derived_constraint_error = self.check_derived_dates_constraints(stage_dates, expected_requests, exclude_event_id=event_id)
+                if derived_constraint_error:
+                    raise ValueError(f"העברת הועדה תגרום לחריגה באירוע {event_id}: {derived_constraint_error}")
+            
+            # Reopen connection for the update
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
             cursor.execute('''
                 UPDATE vaadot 
                 SET vaada_date = ?, exception_date_id = ?
@@ -1137,17 +1170,23 @@ class DatabaseManager:
             conn.close()
             raise ValueError(f'המסלול "{maslul_name}" מחטיבת "{maslul_hativa_name}" אינו יכול להיות משויך לועדה "{committee_name}" מחטיבת "{vaada_hativa_name}"')
         
-        # Check max requests per day constraint
-        max_requests_per_day = int(self.get_system_setting('max_requests_per_day') or '100')
+        # Check max requests per day constraint on committee date
+        max_requests_committee = int(self.get_system_setting('max_requests_committee_date') or '100')
         current_total_requests = self.get_total_requests_on_date(vaada_date, exclude_event_id=None)
         new_total_requests = current_total_requests + expected_requests
         
-        if new_total_requests > max_requests_per_day:
+        if new_total_requests > max_requests_committee:
             conn.close()
-            raise ValueError(f'חריגה מאילוץ מקסימום בקשות ביום: התאריך {vaada_date} כבר מכיל {current_total_requests} בקשות צפויות. הוספת {expected_requests} בקשות תגרום לסך של {new_total_requests} (המגבלה היא {max_requests_per_day})')
+            raise ValueError(f'חריגה מאילוץ מקסימום בקשות ביום ועדה: התאריך {vaada_date} כבר מכיל {current_total_requests} בקשות צפויות. הוספת {expected_requests} בקשות תגרום לסך של {new_total_requests} (המגבלה היא {max_requests_committee})')
         
         # Calculate derived dates based on stage durations
         stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
+        
+        # Check max requests per day constraint on derived dates
+        derived_constraint_error = self.check_derived_dates_constraints(stage_dates, expected_requests, exclude_event_id=None)
+        if derived_constraint_error:
+            conn.close()
+            raise ValueError(derived_constraint_error)
         
         cursor.execute('''
             INSERT INTO events (vaadot_id, maslul_id, name, event_type, expected_requests, actual_submissions,
@@ -1260,17 +1299,23 @@ class DatabaseManager:
             conn.close()
             raise ValueError(f'המסלול "{maslul_name}" מחטיבת "{maslul_hativa_name}" אינו יכול להיות משויך לועדה "{committee_name}" מחטיבת "{vaada_hativa_name}"')
         
-        # Check max requests per day constraint (excluding current event)
-        max_requests_per_day = int(self.get_system_setting('max_requests_per_day') or '100')
+        # Check max requests per day constraint on committee date (excluding current event)
+        max_requests_committee = int(self.get_system_setting('max_requests_committee_date') or '100')
         current_total_requests = self.get_total_requests_on_date(vaada_date, exclude_event_id=event_id)
         new_total_requests = current_total_requests + expected_requests
         
-        if new_total_requests > max_requests_per_day:
+        if new_total_requests > max_requests_committee:
             conn.close()
-            raise ValueError(f'חריגה מאילוץ מקסימום בקשות ביום: התאריך {vaada_date} כבר מכיל {current_total_requests} בקשות צפויות (ללא האירוע הנוכחי). עדכון ל-{expected_requests} בקשות יגרום לסך של {new_total_requests} (המגבלה היא {max_requests_per_day})')
+            raise ValueError(f'חריגה מאילוץ מקסימום בקשות ביום ועדה: התאריך {vaada_date} כבר מכיל {current_total_requests} בקשות צפויות (ללא האירוע הנוכחי). עדכון ל-{expected_requests} בקשות יגרום לסך של {new_total_requests} (המגבלה היא {max_requests_committee})')
         
         # Calculate derived dates based on stage durations
         stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
+        
+        # Check max requests per day constraint on derived dates (excluding current event)
+        derived_constraint_error = self.check_derived_dates_constraints(stage_dates, expected_requests, exclude_event_id=event_id)
+        if derived_constraint_error:
+            conn.close()
+            raise ValueError(derived_constraint_error)
         
         cursor.execute('''
             UPDATE events 
@@ -1819,7 +1864,7 @@ class DatabaseManager:
         return current_date
     
     def get_total_requests_on_date(self, check_date, exclude_event_id: Optional[int] = None) -> int:
-        """Get total expected requests across all events on a specific date"""
+        """Get total expected requests across all events on a specific date (committee date)"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
@@ -1844,6 +1889,108 @@ class DatabaseManager:
         conn.close()
         
         return total if total else 0
+    
+    def get_total_requests_on_derived_date(self, check_date, date_type: str, exclude_event_id: Optional[int] = None) -> int:
+        """
+        Get total expected requests for a specific derived date
+        
+        Args:
+            check_date: The date to check
+            date_type: One of 'call_deadline', 'intake_deadline', 'review_deadline', 'response_deadline'
+            exclude_event_id: Optional event ID to exclude from the count
+            
+        Returns:
+            Total expected requests on that date
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # המר לאובייקט date אם צריך
+        if isinstance(check_date, str):
+            check_date = datetime.strptime(check_date, '%Y-%m-%d').date()
+        
+        # Map date_type to column name
+        column_map = {
+            'call_deadline': 'call_deadline_date',
+            'intake_deadline': 'intake_deadline_date',
+            'review_deadline': 'review_deadline_date',
+            'response_deadline': 'response_deadline_date'
+        }
+        
+        if date_type not in column_map:
+            conn.close()
+            raise ValueError(f'Invalid date_type: {date_type}')
+        
+        column_name = column_map[date_type]
+        
+        query = f'''
+            SELECT COALESCE(SUM(e.expected_requests), 0)
+            FROM events e
+            WHERE e.{column_name} = ? AND e.is_deleted = 0
+        '''
+        params = [check_date]
+        
+        if exclude_event_id is not None:
+            query += ' AND e.event_id != ?'
+            params.append(exclude_event_id)
+        
+        cursor.execute(query, params)
+        total = cursor.fetchone()[0]
+        conn.close()
+        
+        return total if total else 0
+    
+    def check_derived_dates_constraints(self, stage_dates: Dict, expected_requests: int, 
+                                       exclude_event_id: Optional[int] = None) -> Optional[str]:
+        """
+        Check if adding/updating an event would violate max_requests constraints on derived dates
+        Each date type has its own configurable constraint.
+        
+        Args:
+            stage_dates: Dictionary with call_deadline_date, intake_deadline_date, review_deadline_date, response_deadline_date
+            expected_requests: Number of expected requests for the event
+            exclude_event_id: Optional event ID to exclude (for updates)
+            
+        Returns:
+            Error message if constraint is violated, None otherwise
+        """
+        # Map each date type to its specific constraint setting
+        date_configs = {
+            'call_deadline': {
+                'label': 'תאריך סגירת קול קורא',
+                'setting_key': 'max_requests_call_deadline'
+            },
+            'intake_deadline': {
+                'label': 'תאריך סגירת קליטה',
+                'setting_key': 'max_requests_intake_deadline'
+            },
+            'review_deadline': {
+                'label': 'תאריך סיום בדיקה',
+                'setting_key': 'max_requests_review_deadline'
+            },
+            'response_deadline': {
+                'label': 'תאריך הגשת תשובה',
+                'setting_key': 'max_requests_response_deadline'
+            }
+        }
+        
+        # Check each derived date with its specific constraint
+        for date_type, config in date_configs.items():
+            date_key = f'{date_type}_date'
+            if date_key not in stage_dates or stage_dates[date_key] is None:
+                continue
+                
+            check_date = stage_dates[date_key]
+            max_requests = int(self.get_system_setting(config['setting_key']) or '100')
+            current_total = self.get_total_requests_on_derived_date(check_date, date_type, exclude_event_id)
+            new_total = current_total + expected_requests
+            
+            if new_total > max_requests:
+                return (f'חריגה מאילוץ מקסימום בקשות ביום: {config["label"]} ({check_date}) כבר מכיל {current_total} '
+                       f'בקשות צפויות. הוספת {expected_requests} בקשות תגרום לסך של {new_total} '
+                       f'(המגבלה היא {max_requests})')
+        
+        return None
     
     def calculate_stage_dates(self, committee_date, stage_a_days: int, stage_b_days: int, stage_c_days: int, stage_d_days: int) -> Dict:
         """Calculate stage deadline dates based on committee meeting date and stage durations"""
@@ -2259,18 +2406,18 @@ class DatabaseManager:
         }
     
     def update_event_vaada(self, event_id: int, new_vaada_id: int) -> bool:
-        """Update event's committee meeting with max requests constraint validation"""
+        """Update event's committee meeting with max requests constraint validation on all dates"""
         conn = None
         try:
-            # Get max requests setting first (before opening connection)
-            max_requests_per_day = int(self.get_system_setting('max_requests_per_day') or '100')
+            # Get max requests setting for committee date (before opening connection)
+            max_requests_committee = int(self.get_system_setting('max_requests_committee_date') or '100')
             
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            # Get event's current expected_requests and source vaada
+            # Get event's current expected_requests, maslul_id and source vaada
             cursor.execute("""
-                SELECT e.expected_requests, e.vaadot_id, v.vaada_date
+                SELECT e.expected_requests, e.vaadot_id, v.vaada_date, e.maslul_id
                 FROM events e
                 JOIN vaadot v ON e.vaadot_id = v.vaadot_id
                 WHERE e.event_id = ?
@@ -2283,37 +2430,60 @@ class DatabaseManager:
             
             expected_requests = event_data[0]
             source_vaada_id = event_data[1]
+            maslul_id = event_data[3]
             
-            # Get target committee date
-            cursor.execute("SELECT vaada_date FROM vaadot WHERE vaadot_id = ?", (new_vaada_id,))
+            # Get target committee date and maslul stage durations
+            cursor.execute("""
+                SELECT v.vaada_date, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days
+                FROM vaadot v
+                JOIN maslulim m ON m.maslul_id = ?
+                WHERE v.vaadot_id = ?
+            """, (maslul_id, new_vaada_id))
             target_data = cursor.fetchone()
             if not target_data:
                 conn.close()
                 raise ValueError("הועדה היעד לא נמצאה במערכת")
             
-            target_vaada_date = target_data[0]
+            target_vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days = target_data
             
-            # Close connection before calling get_total_requests_on_date (which opens its own connection)
+            # Close connection before calling constraint check functions (which open their own connections)
             conn.close()
             conn = None
             
-            # Check max requests per day constraint for target date (excluding this event)
+            # Check max requests per day constraint for target committee date (excluding this event)
             current_total_requests = self.get_total_requests_on_date(target_vaada_date, exclude_event_id=event_id)
             new_total_requests = current_total_requests + expected_requests
             
-            if new_total_requests > max_requests_per_day:
-                raise ValueError(f'חריגה מאילוץ מקסימום בקשות ביום: התאריך {target_vaada_date} כבר מכיל {current_total_requests} בקשות צפויות. העברת אירוע זה עם {expected_requests} בקשות תגרום לסך של {new_total_requests} (המגבלה היא {max_requests_per_day})')
+            if new_total_requests > max_requests_committee:
+                raise ValueError(f'חריגה מאילוץ מקסימום בקשות ביום ועדה: התאריך {target_vaada_date} כבר מכיל {current_total_requests} בקשות צפויות. העברת אירוע זה עם {expected_requests} בקשות תגרום לסך של {new_total_requests} (המגבלה היא {max_requests_committee})')
+            
+            # Calculate derived dates for the target committee
+            stage_dates = self.calculate_stage_dates(target_vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
+            
+            # Check max requests per day constraint on derived dates (excluding this event)
+            derived_constraint_error = self.check_derived_dates_constraints(stage_dates, expected_requests, exclude_event_id=event_id)
+            if derived_constraint_error:
+                raise ValueError(derived_constraint_error)
             
             # Open new connection for the update
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            # Update event's committee meeting
+            # Update event's committee meeting and derived dates
             cursor.execute("""
                 UPDATE events 
-                SET vaadot_id = ?
+                SET vaadot_id = ?,
+                    call_deadline_date = ?,
+                    intake_deadline_date = ?,
+                    review_deadline_date = ?,
+                    response_deadline_date = ?
                 WHERE event_id = ?
-            """, (new_vaada_id, event_id))
+            """, (new_vaada_id, 
+                  stage_dates['call_deadline_date'], 
+                  stage_dates['intake_deadline_date'],
+                  stage_dates['review_deadline_date'], 
+                  stage_dates['response_deadline_date'], 
+                  event_id))
             
             success = cursor.rowcount > 0
             conn.commit()

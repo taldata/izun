@@ -68,7 +68,13 @@ class ConstraintsService:
         work_start = self.db.get_system_setting('work_start_time') or '08:00'
         work_end = self.db.get_system_setting('work_end_time') or '17:00'
         sla_days_before = self.db.get_int_setting('sla_days_before', 14)
-        max_requests_per_day = self.db.get_int_setting('max_requests_per_day', 100)
+        
+        # Get separate constraint for each date type
+        max_requests_committee_date = self.db.get_int_setting('max_requests_committee_date', 100)
+        max_requests_call_deadline = self.db.get_int_setting('max_requests_call_deadline', 100)
+        max_requests_intake_deadline = self.db.get_int_setting('max_requests_intake_deadline', 100)
+        max_requests_review_deadline = self.db.get_int_setting('max_requests_review_deadline', 100)
+        max_requests_response_deadline = self.db.get_int_setting('max_requests_response_deadline', 100)
 
         constraint_settings = self.db.get_constraint_settings()
         formatted_days = self._format_day_options(work_days)
@@ -88,7 +94,11 @@ class ConstraintsService:
                 'max_meetings_per_day': constraint_settings['max_meetings_per_day'],
                 'max_weekly_meetings': constraint_settings['max_weekly_meetings'],
                 'max_third_week_meetings': constraint_settings['max_third_week_meetings'],
-                'max_requests_per_day': max_requests_per_day
+                'max_requests_committee_date': max_requests_committee_date,
+                'max_requests_call_deadline': max_requests_call_deadline,
+                'max_requests_intake_deadline': max_requests_intake_deadline,
+                'max_requests_review_deadline': max_requests_review_deadline,
+                'max_requests_response_deadline': max_requests_response_deadline
             },
             'sla_days_before': sla_days_before,
             'recommendations': {
@@ -131,7 +141,9 @@ class ConstraintsService:
         merged['business_hours']['range'] = f"{merged['business_hours']['start']} - {merged['business_hours']['end']}"
 
         limits = merged.get('limits', {})
-        for key in ('max_meetings_per_day', 'max_weekly_meetings', 'max_third_week_meetings', 'max_requests_per_day'):
+        for key in ('max_meetings_per_day', 'max_weekly_meetings', 'max_third_week_meetings',
+                   'max_requests_committee_date', 'max_requests_call_deadline', 'max_requests_intake_deadline',
+                   'max_requests_review_deadline', 'max_requests_response_deadline'):
             if form_values.get(key) not in (None, ''):
                 try:
                     limits[key] = int(form_values[key])
@@ -181,7 +193,11 @@ class ConstraintsService:
             'max_meetings_per_day': data.get('max_meetings_per_day', '').strip(),
             'max_weekly_meetings': data.get('max_weekly_meetings', '').strip(),
             'max_third_week_meetings': data.get('max_third_week_meetings', '').strip(),
-            'max_requests_per_day': data.get('max_requests_per_day', '').strip(),
+            'max_requests_committee_date': data.get('max_requests_committee_date', '').strip(),
+            'max_requests_call_deadline': data.get('max_requests_call_deadline', '').strip(),
+            'max_requests_intake_deadline': data.get('max_requests_intake_deadline', '').strip(),
+            'max_requests_review_deadline': data.get('max_requests_review_deadline', '').strip(),
+            'max_requests_response_deadline': data.get('max_requests_response_deadline', '').strip(),
             # Recommendation parameters
             'rec_base_score': data.get('rec_base_score', '').strip(),
             'rec_best_bonus': data.get('rec_best_bonus', '').strip(),
@@ -244,7 +260,11 @@ class ConstraintsService:
         self._validate_int(payload['max_meetings_per_day'], 'max_meetings_per_day', errors, minimum=1, maximum=10)
         self._validate_int(payload['max_weekly_meetings'], 'max_weekly_meetings', errors, minimum=1, maximum=30)
         self._validate_int(payload['max_third_week_meetings'], 'max_third_week_meetings', errors, minimum=1, maximum=30)
-        self._validate_int(payload['max_requests_per_day'], 'max_requests_per_day', errors, minimum=1, maximum=1000)
+        self._validate_int(payload['max_requests_committee_date'], 'max_requests_committee_date', errors, minimum=1, maximum=1000)
+        self._validate_int(payload['max_requests_call_deadline'], 'max_requests_call_deadline', errors, minimum=1, maximum=1000)
+        self._validate_int(payload['max_requests_intake_deadline'], 'max_requests_intake_deadline', errors, minimum=1, maximum=1000)
+        self._validate_int(payload['max_requests_review_deadline'], 'max_requests_review_deadline', errors, minimum=1, maximum=1000)
+        self._validate_int(payload['max_requests_response_deadline'], 'max_requests_response_deadline', errors, minimum=1, maximum=1000)
 
         # Validate recommendation parameters
         self._validate_int(payload['rec_base_score'], 'rec_base_score', errors, minimum=0, maximum=500)
@@ -296,7 +316,11 @@ class ConstraintsService:
             'max_meetings_per_day': payload['max_meetings_per_day'],
             'max_weekly_meetings': payload['max_weekly_meetings'],
             'max_third_week_meetings': payload['max_third_week_meetings'],
-            'max_requests_per_day': payload['max_requests_per_day'],
+            'max_requests_committee_date': payload['max_requests_committee_date'],
+            'max_requests_call_deadline': payload['max_requests_call_deadline'],
+            'max_requests_intake_deadline': payload['max_requests_intake_deadline'],
+            'max_requests_review_deadline': payload['max_requests_review_deadline'],
+            'max_requests_response_deadline': payload['max_requests_response_deadline'],
             # Recommendation parameters
             'rec_base_score': payload['rec_base_score'],
             'rec_best_bonus': payload['rec_best_bonus'],
