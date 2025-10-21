@@ -1894,12 +1894,14 @@ def permissions_matrix():
 @app.route('/user-guide')
 def user_guide_index():
     """User guide index - table of contents"""
-    return render_template('user_guide_index.html')
+    current_user = auth_manager.get_current_user()
+    return render_template('user_guide_index.html', current_user=current_user)
 
 @app.route('/user-guide/full')
 def user_guide_full():
     """User guide - Full single page version"""
-    return render_template('user_guide.html')
+    current_user = auth_manager.get_current_user()
+    return render_template('user_guide.html', current_user=current_user)
 
 @app.route('/user-guide/login')
 def user_guide_login():
