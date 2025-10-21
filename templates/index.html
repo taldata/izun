@@ -936,10 +936,38 @@ function createMonthCalendar(year, month, isCompact = false) {
                 if (showDeadlineDates) {
                     const deadlines = getDeadlineDatesForDate(currentDateStr);
                     if (deadlines.length > 0) {
+                        // Calculate totals for this date
+                        let totalExpected = 0;
+                        let totalActual = 0;
+                        deadlines.forEach(dl => {
+                            totalExpected += dl.event.expected_requests || 0;
+                            totalActual += dl.event.actual_submissions || 0;
+                        });
+                        
                         const deadlinesContainer = document.createElement('div');
                         deadlinesContainer.className = 'deadline-dates-container mt-2';
                         deadlinesContainer.style.borderTop = '1px dashed #dee2e6';
                         deadlinesContainer.style.paddingTop = '4px';
+                        
+                        // Add summary header if there are multiple deadlines
+                        if (deadlines.length > 1) {
+                            const summaryDiv = document.createElement('div');
+                            summaryDiv.className = 'deadline-summary mb-1 px-2 py-1';
+                            summaryDiv.style.fontSize = isCompact ? '0.45rem' : '0.55rem';
+                            summaryDiv.style.backgroundColor = '#f8f9fa';
+                            summaryDiv.style.borderRadius = '3px';
+                            summaryDiv.style.fontWeight = 'bold';
+                            summaryDiv.style.color = '#495057';
+                            summaryDiv.innerHTML = `
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>סה"כ ${deadlines.length} דדליינים</span>
+                                    <span class="badge" style="background-color: #6c757d; font-size: ${isCompact ? '0.4rem' : '0.5rem'};">
+                                        ${totalExpected} צפוי | ${totalActual} בפועל
+                                    </span>
+                                </div>
+                            `;
+                            deadlinesContainer.appendChild(summaryDiv);
+                        }
                         
                         deadlines.forEach(deadline => {
                             const deadlineDiv = document.createElement('div');
@@ -953,16 +981,24 @@ function createMonthCalendar(year, month, isCompact = false) {
                             deadlineDiv.style.fontWeight = '500';
                             deadlineDiv.style.minHeight = isCompact ? '20px' : '24px';
                             
+                            const expected = deadline.event.expected_requests || 0;
+                            const actual = deadline.event.actual_submissions || 0;
+                            
                             deadlineDiv.innerHTML = `
                                 <i class="${deadline.config.icon} me-1" style="font-size: ${isCompact ? '0.4rem' : '0.5rem'};"></i>
-                                <div class="d-flex flex-column">
-                                    <span class="text-truncate fw-bold" style="font-size: ${isCompact ? '0.45rem' : '0.55rem'};">${deadline.config.label}</span>
+                                <div class="d-flex flex-column flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-center gap-1">
+                                        <span class="text-truncate fw-bold" style="font-size: ${isCompact ? '0.45rem' : '0.55rem'};">${deadline.config.label}</span>
+                                        <span class="badge" style="background-color: ${deadline.config.color}; font-size: ${isCompact ? '0.35rem' : '0.45rem'}; white-space: nowrap;">
+                                            ${expected} צפוי | ${actual} בפועל
+                                        </span>
+                                    </div>
                                     <span class="text-truncate" style="font-size: ${isCompact ? '0.35rem' : '0.45rem'}; opacity: 0.8;">${deadline.event.name}</span>
                                     <span class="text-truncate" style="font-size: ${isCompact ? '0.35rem' : '0.45rem'}; opacity: 0.7;">${deadline.event.maslul_name}</span>
                                 </div>
                             `;
                             
-                            deadlineDiv.title = `${deadline.config.label} - ${deadline.event.name} (${deadline.event.maslul_name})`;
+                            deadlineDiv.title = `${deadline.config.label} - ${deadline.event.name} (${deadline.event.maslul_name})\nצפוי: ${expected}, בפועל: ${actual}`;
                             deadlineDiv.style.cursor = 'pointer';
                             
                             // Click to view event details
