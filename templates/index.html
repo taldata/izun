@@ -2,6 +2,41 @@
 
 {% block title %}יומן ועדות ואירועים - איזון עומסים{% endblock %}
 
+{% block extra_head %}
+<style>
+/* Calendar page specific styles */
+body.calendar-page main.container {
+    max-width: 1400px;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+@media (min-width: 1400px) {
+    body.calendar-page main.container {
+        max-width: 1600px;
+    }
+}
+
+@media (min-width: 1600px) {
+    body.calendar-page main.container {
+        max-width: 1800px;
+    }
+}
+
+@media (min-width: 1920px) {
+    body.calendar-page main.container {
+        max-width: 90%;
+    }
+}
+</style>
+<script>
+// Add calendar-page class to body
+document.addEventListener('DOMContentLoaded', function() {
+    document.body.classList.add('calendar-page');
+});
+</script>
+{% endblock %}
+
 {% block content %}
 
 
@@ -3773,9 +3808,7 @@ body {
     font-size: 14px;
 }
 
-.container, .container-fluid {
-    max-width: 100%;
-}
+/* Calendar page styles are now in extra_head block above */
 
 /* Section title - Clean */
 .section-title {
