@@ -529,7 +529,6 @@
 // Calendar functionality
 let currentDate = new Date();
 let monthsToShow = 1; // Default to showing 1 month
-let showDeadlineDates = {{ 'true' if show_deadline_dates else 'false' }}; // Track deadline dates display
 const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
                    'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
@@ -546,6 +545,7 @@ const deadlineTypes = {
 <script type="application/json" id="committees-data">{{ committees|tojson|safe }}</script>
 <script type="application/json" id="events-data">{{ events|tojson|safe }}</script>
 <script type="application/json" id="hativot-data">{{ hativot|tojson|safe }}</script>
+<script type="application/json" id="show-deadline-dates">{{ show_deadline_dates|tojson|safe }}</script>
 <script>
 // Parse data from JSON scripts
 const committeesDataElement = document.getElementById('committees-data');
@@ -553,6 +553,9 @@ const committeesData = committeesDataElement ? JSON.parse(committeesDataElement.
 
 const eventsDataElement = document.getElementById('events-data');
 const eventsData = eventsDataElement ? JSON.parse(eventsDataElement.textContent) : [];
+
+const showDeadlineDatesElement = document.getElementById('show-deadline-dates');
+let showDeadlineDates = showDeadlineDatesElement ? JSON.parse(showDeadlineDatesElement.textContent) : false;
 
 // Debug data
 console.log('Committees data loaded:', committeesData.length, committeesData);
