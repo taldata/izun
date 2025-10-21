@@ -194,9 +194,28 @@ footer {
 
 /* Calendar styling */
 .calendar-day {
-    min-height: 100px;
+    min-height: 85px;
+    max-height: 85px;
+    overflow-y: auto;
     border: 1px solid #dee2e6;
     padding: 0.5rem;
+}
+
+.calendar-day::-webkit-scrollbar {
+    width: 4px;
+}
+
+.calendar-day::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.calendar-day::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 2px;
+}
+
+.calendar-day::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }
 
 .calendar-day.business-day {

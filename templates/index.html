@@ -9,11 +9,11 @@
 <div class="row">
     <div class="col-12">
         <!-- Calendar Header -->
-        <div class="calendar-header-section mb-4">
+        <div class="calendar-header-section mb-2">
             <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3">
-                <h2 class="section-title mb-0 text-primary">
+                <h3 class="section-title mb-0 text-primary" style="font-size: 1.5rem;">
                     <i class="bi bi-calendar3 me-2"></i>יומן ועדות ואירועים
-                </h2>
+                </h3>
                 
                 <!-- Enhanced Calendar Controls Bar -->
                 <div class="calendar-controls-wrapper">
@@ -102,13 +102,13 @@
     </div>
 
         <div class="card">
-            <div class="card-header bg-gradient text-white d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 py-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="card-header bg-gradient text-white d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 py-2" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                 <div>
-                    <h4 class="mb-1" id="currentMonthYear" style="color: #000000; font-weight: bold; text-shadow: 1px 1px 2px rgba(255,255,255,0.8);">
+                    <h5 class="mb-0" id="currentMonthYear" style="color: #000000; font-weight: bold; text-shadow: 1px 1px 2px rgba(255,255,255,0.8);">
                         <span id="monthsDisplay" style="color: #000000;">ספטמבר 2025</span>
-                    </h4>
-                    <small class="opacity-75 d-none d-md-block">לחץ על יום להוספה | גרור פריטים להעברה | לחץ על פריט לעריכה</small>
-                    <small class="opacity-75 d-block d-md-none">לחץ על יום להוספה</small>
+                    </h5>
+                    <small class="opacity-75 d-none d-md-block" style="font-size: 0.75rem;">לחץ על יום להוספה | גרור פריטים להעברה | לחץ על פריט לעריכה</small>
+                    <small class="opacity-75 d-block d-md-none" style="font-size: 0.7rem;">לחץ על יום להוספה</small>
                 </div>
                 <div class="d-flex flex-column flex-sm-row gap-2 w-100 w-md-auto">
                     <button type="button" class="btn btn-light btn-sm d-none d-md-inline-flex" data-bs-toggle="modal" data-bs-target="#addCommitteeModal">
@@ -672,8 +672,8 @@ function createMonthCalendar(year, month, isCompact = false) {
         
         for (let day = 0; day < 7; day++) {
             const cell = document.createElement('td');
-            cell.className = 'calendar-cell position-relative p-2';
-            cell.style.height = isCompact ? '80px' : '120px';
+            cell.className = 'calendar-cell position-relative';
+            cell.style.height = isCompact ? '60px' : '85px';
             cell.style.verticalAlign = 'top';
             
             if (week === 0 && day < startingDayOfWeek) {
@@ -2824,13 +2824,37 @@ document.getElementById('addEventModal').addEventListener('hidden.bs.modal', fun
 </script>
 
 <style>
+#calendarContainer {
+    overflow-x: auto;
+}
+
 .calendar-cell {
-    min-height: 120px;
+    min-height: 85px;
+    max-height: 85px;
+    overflow-y: auto;
     border: 1px solid #e5e7eb !important;
     border-left: 3px solid #e5e7eb !important;
     background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
     position: relative;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 0.4rem !important;
+}
+
+.calendar-cell::-webkit-scrollbar {
+    width: 4px;
+}
+
+.calendar-cell::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.calendar-cell::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 2px;
+}
+
+.calendar-cell::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }
 
 .calendar-cell::before {
@@ -2857,7 +2881,7 @@ document.getElementById('addEventModal').addEventListener('hidden.bs.modal', fun
 
 /* Modern day number styling */
 .calendar-cell .fw-bold {
-    font-size: 1.1rem;
+    font-size: 0.95rem;
     font-weight: 700;
     color: #1f2937;
     transition: all 0.3s ease;
@@ -2868,8 +2892,10 @@ document.getElementById('addEventModal').addEventListener('hidden.bs.modal', fun
 }
 
 .badge {
-    font-size: 0.7rem;
-    margin-bottom: 2px;
+    font-size: 0.65rem;
+    margin-bottom: 1px;
+    padding: 2px 6px;
+    line-height: 1.2;
 }
 
 .table th {
@@ -2877,9 +2903,9 @@ document.getElementById('addEventModal').addEventListener('hidden.bs.modal', fun
     font-weight: 700;
     color: #334155;
     text-transform: uppercase;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     letter-spacing: 0.05em;
-    padding: 14px 12px;
+    padding: 8px 6px;
     border-bottom: 2px solid #e2e8f0;
 }
 
@@ -2942,19 +2968,51 @@ document.getElementById('addEventModal').addEventListener('hidden.bs.modal', fun
     }
     
     .calendar-cell {
-        min-height: 60px;
+        min-height: 55px;
+        max-height: 55px;
+    }
+    
+    .calendar-cell .fw-bold {
+        font-size: 0.85rem;
+    }
+    
+    .badge {
+        font-size: 0.55rem;
+        padding: 1px 4px;
+    }
+}
+
+/* Large screens optimization */
+@media (min-width: 1400px) {
+    .calendar-cell {
+        min-height: 95px;
+        max-height: 95px;
+    }
+}
+
+/* Standard laptop screens */
+@media (min-width: 769px) and (max-width: 1399px) {
+    .calendar-cell {
+        min-height: 80px;
+        max-height: 80px;
     }
 }
 
 /* Compact view for multi-month */
 .month-calendar.compact .calendar-cell {
-    min-height: 60px;
+    min-height: 65px;
+    max-height: 65px;
     padding: 0.25rem;
 }
 
+.month-calendar.compact .calendar-cell .fw-bold {
+    font-size: 0.85rem;
+}
+
 .month-calendar.compact .badge {
-    font-size: 0.6rem;
+    font-size: 0.55rem;
     margin-bottom: 1px;
+    padding: 1px 4px;
 }
 
 /* Drag & Drop Styles */
@@ -3176,11 +3234,11 @@ document.getElementById('addEventModal').addEventListener('hidden.bs.modal', fun
 /* Clean Calendar Controls Styling */
 .calendar-header-section {
     background: #ffffff;
-    padding: 20px;
+    padding: 12px 16px;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     border: 1px solid #e9ecef;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
 }
 
 .calendar-controls-wrapper {
@@ -3191,11 +3249,11 @@ document.getElementById('addEventModal').addEventListener('hidden.bs.modal', fun
 .calendar-controls-container {
     display: flex;
     flex-wrap: wrap;
-    gap: 20px;
+    gap: 16px;
     align-items: center;
     justify-content: flex-end;
     background: #f8f9fa;
-    padding: 16px 20px;
+    padding: 12px 16px;
     border-radius: 10px;
     border: 1px solid #dee2e6;
 }
@@ -3402,12 +3460,12 @@ document.getElementById('addEventModal').addEventListener('hidden.bs.modal', fun
 
 @media (max-width: 575.98px) {
     .calendar-header-section {
-        padding: 16px;
+        padding: 12px;
     }
     
     .calendar-controls-container {
-        padding: 12px;
-        gap: 12px;
+        padding: 10px;
+        gap: 10px;
     }
     
     .control-header span {
