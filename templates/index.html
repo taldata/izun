@@ -952,16 +952,17 @@ function createMonthCalendar(year, month, isCompact = false) {
                         // Add summary header if there are multiple deadlines
                         if (deadlines.length > 1) {
                             const summaryDiv = document.createElement('div');
-                            summaryDiv.className = 'deadline-summary mb-1 px-2 py-1';
-                            summaryDiv.style.fontSize = isCompact ? '0.45rem' : '0.55rem';
-                            summaryDiv.style.backgroundColor = '#f8f9fa';
-                            summaryDiv.style.borderRadius = '3px';
+                            summaryDiv.className = 'deadline-summary mb-2 px-2 py-2';
+                            summaryDiv.style.fontSize = isCompact ? '0.5rem' : '0.6rem';
+                            summaryDiv.style.backgroundColor = '#e9ecef';
+                            summaryDiv.style.borderRadius = '4px';
                             summaryDiv.style.fontWeight = 'bold';
-                            summaryDiv.style.color = '#495057';
+                            summaryDiv.style.color = '#212529';
+                            summaryDiv.style.border = '1px solid #dee2e6';
                             summaryDiv.innerHTML = `
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <span>סה"כ ${deadlines.length} דדליינים</span>
-                                    <span class="badge" style="background-color: #6c757d; font-size: ${isCompact ? '0.4rem' : '0.5rem'};">
+                                    <span style="font-weight: 700;">סה"כ ${deadlines.length} דדליינים</span>
+                                    <span class="badge" style="background-color: #495057; font-size: ${isCompact ? '0.5rem' : '0.6rem'}; font-weight: 700; padding: 4px 8px;">
                                         ${totalExpected} צפוי | ${totalActual} בפועל
                                     </span>
                                 </div>
@@ -972,29 +973,29 @@ function createMonthCalendar(year, month, isCompact = false) {
                         deadlines.forEach(deadline => {
                             const deadlineDiv = document.createElement('div');
                             deadlineDiv.className = 'deadline-badge d-flex align-items-start mb-1';
-                            deadlineDiv.style.fontSize = isCompact ? '0.5rem' : '0.6rem';
-                            deadlineDiv.style.padding = isCompact ? '3px 5px' : '4px 7px';
+                            deadlineDiv.style.fontSize = isCompact ? '0.55rem' : '0.65rem';
+                            deadlineDiv.style.padding = isCompact ? '4px 6px' : '5px 8px';
                             deadlineDiv.style.borderRadius = '4px';
-                            deadlineDiv.style.backgroundColor = `${deadline.config.color}20`;
-                            deadlineDiv.style.borderRight = `3px solid ${deadline.config.color}`;
+                            deadlineDiv.style.backgroundColor = `${deadline.config.color}30`;
+                            deadlineDiv.style.borderRight = `4px solid ${deadline.config.color}`;
                             deadlineDiv.style.color = deadline.config.color;
-                            deadlineDiv.style.fontWeight = '500';
-                            deadlineDiv.style.minHeight = isCompact ? '20px' : '24px';
+                            deadlineDiv.style.fontWeight = '600';
+                            deadlineDiv.style.minHeight = isCompact ? '24px' : '28px';
                             
                             const expected = deadline.event.expected_requests || 0;
                             const actual = deadline.event.actual_submissions || 0;
                             
                             deadlineDiv.innerHTML = `
-                                <i class="${deadline.config.icon} me-1" style="font-size: ${isCompact ? '0.4rem' : '0.5rem'};"></i>
+                                <i class="${deadline.config.icon} me-1" style="font-size: ${isCompact ? '0.5rem' : '0.6rem'};"></i>
                                 <div class="d-flex flex-column flex-grow-1">
                                     <div class="d-flex justify-content-between align-items-center gap-1">
-                                        <span class="text-truncate fw-bold" style="font-size: ${isCompact ? '0.45rem' : '0.55rem'};">${deadline.config.label}</span>
-                                        <span class="badge" style="background-color: ${deadline.config.color}; font-size: ${isCompact ? '0.35rem' : '0.45rem'}; white-space: nowrap;">
+                                        <span class="text-truncate fw-bold" style="font-size: ${isCompact ? '0.5rem' : '0.6rem'};">${deadline.config.label}</span>
+                                        <span class="badge" style="background-color: ${deadline.config.color}; font-size: ${isCompact ? '0.45rem' : '0.55rem'}; white-space: nowrap; font-weight: 700;">
                                             ${expected} צפוי | ${actual} בפועל
                                         </span>
                                     </div>
-                                    <span class="text-truncate" style="font-size: ${isCompact ? '0.35rem' : '0.45rem'}; opacity: 0.8;">${deadline.event.name}</span>
-                                    <span class="text-truncate" style="font-size: ${isCompact ? '0.35rem' : '0.45rem'}; opacity: 0.7;">${deadline.event.maslul_name}</span>
+                                    <span class="text-truncate fw-bold" style="font-size: ${isCompact ? '0.45rem' : '0.55rem'}; opacity: 0.95;">${deadline.event.name}</span>
+                                    <span class="text-truncate fw-semibold" style="font-size: ${isCompact ? '0.45rem' : '0.55rem'}; opacity: 0.9;">${deadline.event.maslul_name}</span>
                                 </div>
                             `;
                             
