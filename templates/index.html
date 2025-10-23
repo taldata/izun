@@ -2804,25 +2804,98 @@ function saveDivisionColors() {
     });
 }
 
-function showAlert(message, type) {
-    // Create a simple alert
-    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+function showAlert(message, type, options = {}) {
+    // Create enhanced alert
+    const alertClass = type === 'success' ? 'alert-success' :
+                      type === 'error' ? 'alert-danger' :
+                      type === 'warning' ? 'alert-warning' : 'alert-info';
+
+    const iconClass = type === 'success' ? 'check-circle' :
+                     type === 'error' ? 'exclamation-triangle' :
+                     type === 'warning' ? 'exclamation-circle' : 'info-circle';
+
+    const autoHide = options.autoHide !== false;
+    const duration = options.duration || 12000; // 12 seconds
+
     const alertDiv = document.createElement('div');
-    alertDiv.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
-    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    alertDiv.className = `alert ${alertClass} alert-dismissible fade show notification-enhanced position-fixed`;
+    alertDiv.style.cssText = `
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        max-width: 450px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        border: none;
+        animation: slideInNotification 0.3s ease-out;
     `;
-    
+
+    alertDiv.innerHTML = `
+        <div class="notification-content">
+            <i class="bi bi-${iconClass} me-2 notification-icon"></i>
+            <span class="notification-message">${message}</span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="סגור"></button>
+        </div>
+        ${autoHide ? '<div class="notification-progress"></div>' : ''}
+    `;
+
     document.body.appendChild(alertDiv);
-    
-    // Auto-remove after 3 seconds
-    setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.remove();
+
+    // Add progress bar animation
+    if (autoHide) {
+        const progressBar = alertDiv.querySelector('.notification-progress');
+        if (progressBar) {
+            progressBar.style.cssText = `
+                position: absolute;
+                bottom: 0;
+                right: 0;
+                height: 3px;
+                background: currentColor;
+                opacity: 0.3;
+                animation: progressBar ${duration}ms linear;
+            `;
         }
-    }, 3000);
+
+        // Auto-hide with animation
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.style.animation = 'slideOutNotification 0.3s ease-in forwards';
+                setTimeout(() => {
+                    if (alertDiv.parentNode) {
+                        alertDiv.remove();
+                    }
+                }, 300);
+            }
+        }, duration);
+    }
+
+    // Pause auto-hide on hover
+    if (autoHide) {
+        let timeoutId;
+        alertDiv.addEventListener('mouseenter', () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            const progressBar = alertDiv.querySelector('.notification-progress');
+            if (progressBar) {
+                progressBar.style.animationPlayState = 'paused';
+            }
+        });
+
+        alertDiv.addEventListener('mouseleave', () => {
+            const progressBar = alertDiv.querySelector('.notification-progress');
+            if (progressBar) {
+                progressBar.style.animationPlayState = 'running';
+            }
+            timeoutId = setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.style.animation = 'slideOutNotification 0.3s ease-in forwards';
+                    setTimeout(() => {
+                        if (alertDiv.parentNode) {
+                            alertDiv.remove();
+                        }
+                    }, 300);
+                }
+            }, duration);
+        });
+    }
 }
 
 // ===== Committee Recommendations for Event Form =====

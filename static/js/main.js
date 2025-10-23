@@ -7,14 +7,71 @@ document.addEventListener('DOMContentLoaded', function() {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
 
-    // Auto-hide alerts after 5 seconds
-    setTimeout(function() {
-        var alerts = document.querySelectorAll('.alert');
-        alerts.forEach(function(alert) {
-            var bsAlert = new bootstrap.Alert(alert);
-            bsAlert.close();
+    // Auto-hide alerts after 10 seconds with hover pause
+    var alertTimeouts = new Map();
+
+    function setupAlertAutoHide(alert) {
+        if (alert.hasAttribute('data-no-auto-hide')) return;
+
+        var timeoutId;
+        var autoHideDelay = 10000; // 10 seconds
+
+        function startAutoHide() {
+            timeoutId = setTimeout(function() {
+                var bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            }, autoHideDelay);
+            alertTimeouts.set(alert, timeoutId);
+        }
+
+        function stopAutoHide() {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+                alertTimeouts.delete(alert);
+            }
+        }
+
+        // Start auto-hide
+        startAutoHide();
+
+        // Pause on hover
+        alert.addEventListener('mouseenter', function() {
+            stopAutoHide();
         });
-    }, 5000);
+
+        // Resume on mouse leave
+        alert.addEventListener('mouseleave', function() {
+            startAutoHide();
+        });
+
+        // Clear timeout if manually dismissed
+        alert.addEventListener('close.bs.alert', function() {
+            stopAutoHide();
+        });
+    }
+
+    // Setup auto-hide for existing alerts
+    document.querySelectorAll('.alert').forEach(setupAlertAutoHide);
+
+    // Setup auto-hide for dynamically added alerts
+    var observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            mutation.addedNodes.forEach(function(node) {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    if (node.classList && node.classList.contains('alert')) {
+                        setupAlertAutoHide(node);
+                    }
+                    // Check child elements too
+                    node.querySelectorAll && node.querySelectorAll('.alert').forEach(setupAlertAutoHide);
+                }
+            });
+        });
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
 
     // Form validation
     var forms = document.querySelectorAll('.needs-validation');
@@ -279,37 +336,158 @@ function formatDate(dateString, locale = 'he-IL') {
     });
 }
 
-function showNotification(message, type = 'info') {
-    var alertClass = type === 'error' ? 'alert-danger' : 'alert-success';
-    var iconClass = type === 'error' ? 'exclamation-triangle' : 'check-circle';
-    
+function showNotification(message, type = 'info', options = {}) {
+    var alertClass = type === 'error' ? 'alert-danger' :
+                    type === 'warning' ? 'alert-warning' :
+                    type === 'info' ? 'alert-info' : 'alert-success';
+
+    var iconClass = type === 'error' ? 'exclamation-triangle' :
+                   type === 'warning' ? 'exclamation-circle' :
+                   type === 'info' ? 'info-circle' : 'check-circle';
+
+    var autoHide = options.autoHide !== false; // Default to true
+    var duration = options.duration || 12000; // 12 seconds instead of 5
+
     var alertHtml = `
-        <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
-            <i class="bi bi-${iconClass} me-2"></i>
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="alert ${alertClass} alert-dismissible fade show notification-enhanced" role="alert"
+             ${!autoHide ? 'data-no-auto-hide' : ''}>
+            <div class="notification-content">
+                <i class="bi bi-${iconClass} me-2 notification-icon"></i>
+                <span class="notification-message">${message}</span>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="סגור"></button>
+            </div>
+            ${autoHide ? '<div class="notification-progress"></div>' : ''}
         </div>
     `;
-    
+
     var container = document.querySelector('.container');
     if (container) {
         container.insertAdjacentHTML('afterbegin', alertHtml);
-        
-        // Auto-hide after 5 seconds
-        setTimeout(function() {
-            var alert = container.querySelector('.alert');
-            if (alert) {
-                var bsAlert = new bootstrap.Alert(alert);
-                bsAlert.close();
+
+        var alert = container.querySelector('.alert');
+        if (alert) {
+            // Add enhanced styling
+            alert.style.cssText = `
+                position: relative;
+                overflow: hidden;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                border: none;
+                animation: slideInNotification 0.3s ease-out;
+            `;
+
+            if (autoHide) {
+                // Add progress bar animation
+                var progressBar = alert.querySelector('.notification-progress');
+                if (progressBar) {
+                    progressBar.style.cssText = `
+                        position: absolute;
+                        bottom: 0;
+                        left: 0;
+                        height: 3px;
+                        background: currentColor;
+                        opacity: 0.3;
+                        animation: progressBar ${duration}ms linear;
+                    `;
+                }
+
+                // Auto-hide after specified duration
+                setTimeout(function() {
+                    if (alert && alert.parentNode) {
+                        alert.style.animation = 'slideOutNotification 0.3s ease-in forwards';
+                        setTimeout(function() {
+                            var bsAlert = new bootstrap.Alert(alert);
+                            bsAlert.close();
+                        }, 300);
+                    }
+                }, duration);
             }
-        }, 5000);
+        }
     }
 }
+
+// Function to create sticky notifications that don't auto-hide
+function showStickyNotification(message, type = 'info', title = '') {
+    var alertClass = type === 'error' ? 'alert-danger' :
+                    type === 'warning' ? 'alert-warning' :
+                    type === 'info' ? 'alert-info' : 'alert-success';
+
+    var iconClass = type === 'error' ? 'exclamation-triangle' :
+                   type === 'warning' ? 'exclamation-circle' :
+                   type === 'info' ? 'info-circle' : 'check-circle';
+
+    var alertHtml = `
+        <div class="alert ${alertClass} alert-dismissible fade show notification-enhanced sticky-notification" role="alert" data-no-auto-hide>
+            <div class="notification-content">
+                <div class="notification-header">
+                    ${title ? `<h6 class="notification-title">${title}</h6>` : ''}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="סגור"></button>
+                </div>
+                <div class="notification-body">
+                    <i class="bi bi-${iconClass} me-2 notification-icon"></i>
+                    <span class="notification-message">${message}</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    var container = document.querySelector('.container');
+    if (container) {
+        container.insertAdjacentHTML('afterbegin', alertHtml);
+
+        var alert = container.querySelector('.alert');
+        if (alert) {
+            // Add enhanced styling for sticky notifications
+            alert.style.cssText = `
+                position: relative;
+                overflow: hidden;
+                box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+                border: 2px solid currentColor;
+                border-radius: 12px;
+                animation: slideInNotification 0.3s ease-out;
+                background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.9) 100%);
+                backdrop-filter: blur(10px);
+            `;
+
+            // Add click to dismiss for sticky notifications
+            alert.addEventListener('click', function(e) {
+                if (e.target === alert) {
+                    var bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                }
+            });
+        }
+    }
+}
+
+// Function to show success notifications with different durations
+function showSuccessNotification(message, options = {}) {
+    return showNotification(message, 'success', { duration: 8000, ...options });
+}
+
+function showErrorNotification(message, options = {}) {
+    return showNotification(message, 'error', { duration: 15000, ...options }); // Longer for errors
+}
+
+function showWarningNotification(message, options = {}) {
+    return showNotification(message, 'warning', { duration: 10000, ...options });
+}
+
+function showInfoNotification(message, options = {}) {
+    return showNotification(message, 'info', { duration: 6000, ...options });
+}
+
+// Make notification functions globally available
+window.showNotification = showNotification;
+window.showStickyNotification = showStickyNotification;
+window.showSuccessNotification = showSuccessNotification;
+window.showErrorNotification = showErrorNotification;
+window.showWarningNotification = showWarningNotification;
+window.showInfoNotification = showInfoNotification;
 
 // Global error handler
 window.addEventListener('error', function(e) {
     console.error('JavaScript Error:', e.error);
     // Optionally show user-friendly error message
-    // showNotification('אירעה שגיאה במערכת. אנא נסה שוב.', 'error');
+    // showErrorNotification('אירעה שגיאה במערכת. אנא נסה שוב.');
 });
 

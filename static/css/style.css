@@ -181,6 +181,137 @@ footer {
     }
 }
 
+/* Enhanced notification animations */
+.notification-enhanced {
+    position: relative;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+}
+
+.notification-content {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+}
+
+.notification-icon {
+    font-size: 1.1em;
+    flex-shrink: 0;
+}
+
+.notification-message {
+    flex: 1;
+    line-height: 1.4;
+}
+
+.notification-enhanced .btn-close {
+    margin-left: 0.5rem;
+    flex-shrink: 0;
+}
+
+@keyframes slideInNotification {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideOutNotification {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+        max-height: 200px;
+        margin-bottom: 1rem;
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100%);
+        max-height: 0;
+        margin-bottom: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+}
+
+@keyframes progressBar {
+    from {
+        width: 100%;
+    }
+    to {
+        width: 0%;
+    }
+}
+
+/* Enhanced alert styling */
+.alert {
+    transition: all 0.3s ease-in-out;
+}
+
+.alert:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+}
+
+/* Sticky notification styling */
+.sticky-notification {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sticky-notification:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+}
+
+.notification-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+.notification-title {
+    margin: 0;
+    font-weight: 600;
+    color: inherit;
+}
+
+.notification-body {
+    display: flex;
+    align-items: center;
+}
+
+.notification-body .notification-icon {
+    font-size: 1.2em;
+}
+
+/* Different notification types styling */
+.notification-enhanced.alert-success {
+    background: linear-gradient(135deg, #d1e7dd 0%, #c3e6cb 100%);
+    color: #0a3622;
+}
+
+.notification-enhanced.alert-danger {
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+    color: #58151c;
+}
+
+.notification-enhanced.alert-warning {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    color: #664d03;
+}
+
+.notification-enhanced.alert-info {
+    background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+    color: #0c5460;
+}
+
 /* Status indicators */
 .status-available {
     color: #198754;
