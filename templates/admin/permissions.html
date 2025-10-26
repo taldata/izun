@@ -37,11 +37,11 @@
         background: linear-gradient(45deg, #ff6b6b, #ee5a24);
     }
     
-    .role-manager {
+    .role-editor {
         background: linear-gradient(45deg, #4834d4, #686de0);
     }
     
-    .role-user {
+    .role-viewer {
         background: linear-gradient(45deg, #00d2d3, #54a0ff);
     }
     
@@ -94,11 +94,11 @@
         border-left-color: #ff6b6b;
     }
     
-    .stats-card.manager-stat {
+    .stats-card.editor-stat {
         border-left-color: #4834d4;
     }
     
-    .stats-card.user-stat {
+    .stats-card.viewer-stat {
         border-left-color: #00d2d3;
     }
     
@@ -165,29 +165,29 @@
                     <div class="permission-icon" style="color: #ff6b6b; font-size: 2.5rem;">👑</div>
                     <div class="flex-grow-1">
                         <h5 class="mb-0">Admin - מנהל מערכת</h5>
-                        <p class="mb-0 text-muted">שליטה מלאה על כל המערכת</p>
+                        <p class="mb-0 text-muted">שליטה מלאה + עוקף אילוצים</p>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="stats-card manager-stat">
+            <div class="stats-card editor-stat">
                 <div class="d-flex align-items-center">
-                    <div class="permission-icon" style="color: #4834d4; font-size: 2.5rem;">👨‍💼</div>
+                    <div class="permission-icon" style="color: #4834d4; font-size: 2.5rem;">✏️</div>
                     <div class="flex-grow-1">
-                        <h5 class="mb-0">Manager - מנהל חטיבה</h5>
-                        <p class="mb-0 text-muted">ניהול מלא של החטיבה</p>
+                        <h5 class="mb-0">Editor - עורך</h5>
+                        <p class="mb-0 text-muted">קריאה ועריכה בחטיבות שלו</p>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="stats-card user-stat">
+            <div class="stats-card viewer-stat">
                 <div class="d-flex align-items-center">
-                    <div class="permission-icon" style="color: #00d2d3; font-size: 2.5rem;">👤</div>
+                    <div class="permission-icon" style="color: #00d2d3; font-size: 2.5rem;">👁️</div>
                     <div class="flex-grow-1">
-                        <h5 class="mb-0">User - משתמש רגיל</h5>
-                        <p class="mb-0 text-muted">עריכה בחטיבה בתקופת עריכה</p>
+                        <h5 class="mb-0">Viewer - צופה</h5>
+                        <p class="mb-0 text-muted">הרשאות קריאה בלבד</p>
                     </div>
                 </div>
             </div>
@@ -227,8 +227,8 @@
                     <thead>
                         <tr>
                             <th style="width: 40%;">פעולה</th>
-                            <th style="width: 20%; text-align: center;">👤 User</th>
-                            <th style="width: 20%; text-align: center;">👨‍💼 Manager</th>
+                            <th style="width: 20%; text-align: center;">👁️ Viewer</th>
+                            <th style="width: 20%; text-align: center;">✏️ Editor</th>
                             <th style="width: 20%; text-align: center;">👑 Admin</th>
                         </tr>
                     </thead>
@@ -262,26 +262,26 @@
                         </tr>
                         <tr>
                             <td>יצירת אירוע</td>
-                            <td class="text-center"><span class="permission-partial">⚠️</span> בחטיבה שלו 🔒</td>
-                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבות שלו</td>
                             <td class="text-center"><span class="permission-allowed">✅</span> בכל מקום</td>
                         </tr>
                         <tr>
                             <td>עריכת אירוע</td>
-                            <td class="text-center"><span class="permission-partial">⚠️</span> שלו בלבד 🔒</td>
-                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבות שלו</td>
                             <td class="text-center"><span class="permission-allowed">✅</span> כל אירוע</td>
                         </tr>
                         <tr>
                             <td>מחיקת אירוע</td>
-                            <td class="text-center"><span class="permission-denied">❌</span> גם bulk</td>
-                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו + bulk</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבות שלו + bulk</td>
                             <td class="text-center"><span class="permission-allowed">✅</span> כל אירוע + bulk</td>
                         </tr>
                         <tr>
                             <td>הזזת אירוע (Drag & Drop)</td>
-                            <td class="text-center"><span class="permission-partial">⚠️</span> שלו בלבד 🔒</td>
-                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבות שלו</td>
                             <td class="text-center"><span class="permission-allowed">✅</span> כל אירוע</td>
                         </tr>
                         
@@ -292,25 +292,25 @@
                         <tr>
                             <td>יצירת ועדה</td>
                             <td class="text-center"><span class="permission-denied">❌</span></td>
-                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
-                            <td class="text-center"><span class="permission-allowed">✅</span> בכל מקום</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבות שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בכל מקום + עוקף אילוצים ⚠️</td>
                         </tr>
                         <tr>
                             <td>עריכת ועדה</td>
                             <td class="text-center"><span class="permission-denied">❌</span></td>
-                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבות שלו</td>
                             <td class="text-center"><span class="permission-allowed">✅</span> כל ועדה</td>
                         </tr>
                         <tr>
                             <td>מחיקת ועדה</td>
-                            <td class="text-center"><span class="permission-denied">❌</span> גם bulk</td>
-                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו + bulk</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבות שלו + bulk</td>
                             <td class="text-center"><span class="permission-allowed">✅</span> כל ועדה + bulk</td>
                         </tr>
                         <tr>
                             <td>הזזת ועדה (Drag & Drop)</td>
                             <td class="text-center"><span class="permission-denied">❌</span></td>
-                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבות שלו</td>
                             <td class="text-center"><span class="permission-allowed">✅</span> כל ועדה</td>
                         </tr>
                         
@@ -321,19 +321,19 @@
                         <tr>
                             <td>יצירת מסלול</td>
                             <td class="text-center"><span class="permission-denied">❌</span></td>
-                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
                             <td class="text-center"><span class="permission-allowed">✅</span> בכל חטיבה</td>
                         </tr>
                         <tr>
                             <td>עריכת מסלול</td>
                             <td class="text-center"><span class="permission-denied">❌</span></td>
-                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
                             <td class="text-center"><span class="permission-allowed">✅</span> כל מסלול</td>
                         </tr>
                         <tr>
                             <td>מחיקת/השבתת מסלול</td>
                             <td class="text-center"><span class="permission-denied">❌</span></td>
-                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-denied">❌</span></td>
                             <td class="text-center"><span class="permission-allowed">✅</span> כל מסלול</td>
                         </tr>
                         
@@ -367,20 +367,20 @@
                         <tr>
                             <td>יצירת סוג ועדה</td>
                             <td class="text-center"><span class="permission-denied">❌</span></td>
-                            <td class="text-center"><span class="permission-partial">⚠️</span> לחטיבה שלו</td>
-                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבות שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בכל חטיבה</td>
                         </tr>
                         <tr>
                             <td>עריכת סוג ועדה</td>
                             <td class="text-center"><span class="permission-denied">❌</span></td>
-                            <td class="text-center"><span class="permission-partial">⚠️</span> לחטיבה שלו</td>
-                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבות שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל סוג</td>
                         </tr>
                         <tr>
                             <td>השבתת סוג ועדה</td>
                             <td class="text-center"><span class="permission-denied">❌</span></td>
-                            <td class="text-center"><span class="permission-partial">⚠️</span> לחטיבה שלו</td>
-                            <td class="text-center"><span class="permission-allowed">✅</span></td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבות שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> כל סוג</td>
                         </tr>
                         
                         <!-- Auto Schedule Permissions -->
@@ -390,13 +390,13 @@
                         <tr>
                             <td>יצירת תזמון אוטומטי</td>
                             <td class="text-center"><span class="permission-denied">❌</span></td>
-                            <td class="text-center"><span class="permission-allowed">✅</span> לחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבות שלו</td>
                             <td class="text-center"><span class="permission-allowed">✅</span> לכל חטיבה</td>
                         </tr>
                         <tr>
                             <td>אישור הצעות תזמון</td>
                             <td class="text-center"><span class="permission-denied">❌</span></td>
-                            <td class="text-center"><span class="permission-allowed">✅</span> לחטיבה שלו</td>
+                            <td class="text-center"><span class="permission-allowed">✅</span> בחטיבות שלו</td>
                             <td class="text-center"><span class="permission-allowed">✅</span> לכל חטיבה</td>
                         </tr>
                         
@@ -477,12 +477,12 @@
 
     <!-- Detailed Role Cards -->
     <div class="row">
-        <!-- User Role Card -->
+        <!-- Viewer Role Card -->
         <div class="col-lg-4">
             <div class="permission-card">
-                <div class="role-header role-user">
-                    <i class="bi bi-person-circle me-2"></i>
-                    משתמש רגיל (User)
+                <div class="role-header role-viewer">
+                    <i class="bi bi-eye me-2"></i>
+                    צופה (Viewer)
                 </div>
                 <div class="card-body p-0">
                     <div class="permission-item">
@@ -496,28 +496,19 @@
                     </div>
                     <div class="permission-item">
                         <div class="d-flex align-items-center">
-                            <span class="permission-icon permission-partial">⚠️</span>
+                            <span class="permission-icon permission-allowed">✅</span>
                             <div>
-                                <strong>יצירת אירועים</strong>
-                                <div class="permission-note">בחטיבה שלו, בתקופת עריכה בלבד</div>
+                                <strong>גישה למדריך משתמש</strong>
+                                <div class="permission-note">מידע והנחיות שימוש</div>
                             </div>
                         </div>
                     </div>
                     <div class="permission-item">
                         <div class="d-flex align-items-center">
-                            <span class="permission-icon permission-partial">⚠️</span>
+                            <span class="permission-icon permission-allowed">✅</span>
                             <div>
-                                <strong>עריכת אירועים</strong>
-                                <div class="permission-note">רק אירועים שהוא יצר, בתקופת עריכה</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="permission-item">
-                        <div class="d-flex align-items-center">
-                            <span class="permission-icon permission-denied">❌</span>
-                            <div>
-                                <strong>יצירת ועדות</strong>
-                                <div class="permission-note">רק מנהלים יכולים ליצור ועדות</div>
+                                <strong>טבלת אירועים</strong>
+                                <div class="permission-note">צפייה במידע מפורט</div>
                             </div>
                         </div>
                     </div>
@@ -525,8 +516,8 @@
                         <div class="d-flex align-items-center">
                             <span class="permission-icon permission-denied">❌</span>
                             <div>
-                                <strong>הזזת ועדות</strong>
-                                <div class="permission-note">רק מנהלים יכולים להזיז ועדות</div>
+                                <strong>יצירה ועריכה</strong>
+                                <div class="permission-note">אין הרשאות עריכה כלל</div>
                             </div>
                         </div>
                     </div>
@@ -535,7 +526,7 @@
                             <span class="permission-icon permission-denied">❌</span>
                             <div>
                                 <strong>מחיקה</strong>
-                                <div class="permission-note">אין הרשאות מחיקה (כולל bulk)</div>
+                                <div class="permission-note">אין הרשאות מחיקה</div>
                             </div>
                         </div>
                     </div>
@@ -543,8 +534,17 @@
                         <div class="d-flex align-items-center">
                             <span class="permission-icon permission-denied">❌</span>
                             <div>
-                                <strong>הגדרות מערכת</strong>
-                                <div class="permission-note">אין גישה להגדרות</div>
+                                <strong>הגדרות</strong>
+                                <div class="permission-note">אין גישה להגדרות כלל</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-denied">❌</span>
+                            <div>
+                                <strong>תזמון אוטומטי</strong>
+                                <div class="permission-note">רק צפייה במערכת</div>
                             </div>
                         </div>
                     </div>
@@ -552,12 +552,12 @@
             </div>
         </div>
 
-        <!-- Manager Role Card -->
+        <!-- Editor Role Card -->
         <div class="col-lg-4">
             <div class="permission-card">
-                <div class="role-header role-manager">
-                    <i class="bi bi-person-badge me-2"></i>
-                    מנהל חטיבה (Manager)
+                <div class="role-header role-editor">
+                    <i class="bi bi-pencil-square me-2"></i>
+                    עורך (Editor)
                 </div>
                 <div class="card-body p-0">
                     <div class="permission-item">
@@ -573,8 +573,8 @@
                         <div class="d-flex align-items-center">
                             <span class="permission-icon permission-allowed">✅</span>
                             <div>
-                                <strong>ניהול מלא של החטיבה</strong>
-                                <div class="permission-note">ועדות, אירועים ומסלולים בחטיבה שלו</div>
+                                <strong>עריכה בחטיבות שלו</strong>
+                                <div class="permission-note">ועדות, אירועים וסוגי ועדות</div>
                             </div>
                         </div>
                     </div>
@@ -583,7 +583,7 @@
                             <span class="permission-icon permission-allowed">✅</span>
                             <div>
                                 <strong>יצירת ועדות</strong>
-                                <div class="permission-note">בחטיבה שלו בלבד</div>
+                                <div class="permission-note">בחטיבות המשויכות אליו</div>
                             </div>
                         </div>
                     </div>
@@ -591,8 +591,8 @@
                         <div class="d-flex align-items-center">
                             <span class="permission-icon permission-allowed">✅</span>
                             <div>
-                                <strong>הזזת ועדות</strong>
-                                <div class="permission-note">בחטיבה שלו בלבד</div>
+                                <strong>הזזה ומחיקה</strong>
+                                <div class="permission-note">בחטיבות שלו + bulk operations</div>
                             </div>
                         </div>
                     </div>
@@ -601,7 +601,7 @@
                             <span class="permission-icon permission-allowed">✅</span>
                             <div>
                                 <strong>תזמון אוטומטי</strong>
-                                <div class="permission-note">יצירה ואישור לחטיבה שלו</div>
+                                <div class="permission-note">יצירה ואישור בחטיבות שלו</div>
                             </div>
                         </div>
                     </div>
@@ -609,8 +609,8 @@
                         <div class="d-flex align-items-center">
                             <span class="permission-icon permission-allowed">✅</span>
                             <div>
-                                <strong>עריכה ללא הגבלה</strong>
-                                <div class="permission-note">גם מחוץ לתקופת עריכה</div>
+                                <strong>סל מחזור</strong>
+                                <div class="permission-note">שחזור פריטים מחוקים</div>
                             </div>
                         </div>
                     </div>
@@ -693,6 +693,15 @@
                         <div class="d-flex align-items-center">
                             <span class="permission-icon permission-allowed">✅</span>
                             <div>
+                                <strong>עקיפת אילוצים ⚠️</strong>
+                                <div class="permission-note">יצירת ועדות גם עם אילוצים - קבלת אזהרות בלבד</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="permission-item">
+                        <div class="d-flex align-items-center">
+                            <span class="permission-icon permission-allowed">✅</span>
+                            <div>
                                 <strong>יומן ביקורת</strong>
                                 <div class="permission-note">צפייה בכל פעולות המשתמשים</div>
                             </div>
@@ -708,10 +717,11 @@
         <div class="card-body">
             <h5><i class="bi bi-lightbulb me-2 text-warning"></i>הערות חשובות</h5>
             <ul class="mb-0">
-                <li><strong>תקופת עריכה (🔒):</strong> משתמשים רגילים יכולים לערוך רק כאשר תקופת העריכה פתוחה. מנהלים ואדמינים יכולים לערוך תמיד.</li>
-                <li><strong>הגבלת חטיבה:</strong> משתמשים ומנהלים מוגבלים לחטיבה שהם משויכים אליה. רק אדמין יכול לעבוד על כל החטיבות.</li>
+                <li><strong>גישה לחטיבות:</strong> Viewer - צפייה בלבד. Editor - עריכה בחטיבות המשויכות. Admin - גישה מלאה לכל החטיבות.</li>
+                <li><strong>חטיבות מרובות:</strong> משתמשים יכולים להיות משויכים למספר חטיבות. Editors יכולים לערוך בכל החטיבות שמשויכות אליהם.</li>
+                <li><strong>עקיפת אילוצים (⚠️):</strong> רק Admin יכול לעקוף אילוצים של המערכת (ועדה בתאריך תפוס, חריגה ממכסות). המערכת תציג אזהרות אבל תאפשר המשך.</li>
                 <li><strong>הרשאות Active Directory:</strong> משתמשים שמתחברים דרך AD יכולים לקבל הרשאות אוטומטית לפי קבוצות AD.</li>
-                <li><strong>Drag & Drop:</strong> רק מנהלים ואדמינים יכולים להזיז ועדות. כל המשתמשים יכולים להזיז אירועים (בהתאם להרשאותיהם).</li>
+                <li><strong>Drag & Drop:</strong> רק Editors ו-Admins יכולים להזיז ועדות ואירועים בהתאם לחטיבות שלהם.</li>
                 <li><strong>יומן ביקורת:</strong> כל פעולה נרשמת ביומן הביקורת ונגישה למנהל המערכת בלבד.</li>
             </ul>
         </div>
