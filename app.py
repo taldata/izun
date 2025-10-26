@@ -74,6 +74,74 @@ def logout():
     flash('התנתקת מהמערכת בהצלחה', 'success')
     return redirect(url_for('auth_azure'))
 
+@app.route('/debug_session')
+@login_required
+def debug_session():
+    """Debug route to show current session data"""
+    session_data = {
+        'user_id': session.get('user_id'),
+        'username': session.get('username'),
+        'role': session.get('role'),
+        'full_name': session.get('full_name'),
+        'hativa_id': session.get('hativa_id'),
+        'auth_source': session.get('auth_source')
+    }
+    
+    # Get user from database
+    user = db.get_user_by_id(session.get('user_id')) if session.get('user_id') else None
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html dir="rtl">
+    <head>
+        <title>Debug Session</title>
+        <style>
+            body {{ font-family: Arial; margin: 40px; background: #f5f5f5; }}
+            .card {{ background: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+            h2 {{ color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }}
+            .data {{ margin: 10px 0; }}
+            .label {{ font-weight: bold; color: #555; }}
+            .value {{ color: #007bff; }}
+            .role {{ font-size: 24px; font-weight: bold; padding: 10px; border-radius: 4px; }}
+            .admin {{ background: #28a745; color: white; }}
+            .user {{ background: #ffc107; color: black; }}
+            .manager {{ background: #17a2b8; color: white; }}
+        </style>
+    </head>
+    <body>
+        <h1>🔍 Debug Session Information</h1>
+        
+        <div class="card">
+            <h2>📋 Current Session Data</h2>
+            <div class="data"><span class="label">User ID:</span> <span class="value">{session_data.get('user_id')}</span></div>
+            <div class="data"><span class="label">Username:</span> <span class="value">{session_data.get('username')}</span></div>
+            <div class="data"><span class="label">Full Name:</span> <span class="value">{session_data.get('full_name')}</span></div>
+            <div class="data"><span class="label">Auth Source:</span> <span class="value">{session_data.get('auth_source')}</span></div>
+            <div class="data"><span class="label">Hativa ID:</span> <span class="value">{session_data.get('hativa_id')}</span></div>
+            <div class="data">
+                <span class="label">Role in Session:</span> 
+                <span class="role {session_data.get('role')}">{session_data.get('role') or 'None'}</span>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>💾 User Data from Database</h2>
+            {f'<div class="data"><span class="label">Role in DB:</span> <span class="role {user.get("role")}">{user.get("role")}</span></div>' if user else '<p style="color: red;">❌ User not found in database</p>'}
+            {f'<div class="data"><span class="label">Is Active:</span> <span class="value">{"✅ Yes" if user.get("is_active") else "❌ No"}</span></div>' if user else ''}
+        </div>
+        
+        <div class="card">
+            <h2>🔧 Actions</h2>
+            <a href="/refresh_session" style="display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px;">🔄 Refresh Session</a>
+            <a href="/admin/users" style="display: inline-block; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; margin: 5px;">👥 Admin Users</a>
+            <a href="/" style="display: inline-block; padding: 10px 20px; background: #6c757d; color: white; text-decoration: none; border-radius: 4px; margin: 5px;">🏠 Home</a>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html
+
 @app.route('/refresh_session')
 @login_required
 def refresh_session():
