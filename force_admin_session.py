@@ -8,7 +8,10 @@ import sqlite3
 
 def verify_admin_users():
     """Verify admin users in database"""
-    conn = sqlite3.connect('committee_system.db')
+    import os
+    db_path = '/var/data/committee_system.db' if os.path.exists('/var/data') else 'committee_system.db'
+    print(f"📁 Database path: {db_path}\n")
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
     print("=" * 70)
