@@ -78,14 +78,14 @@ class AuthManager:
 
 # Decorators for route protection
 def login_required(f):
-    """Decorator to require login"""
+    """Decorator to require login - redirects to Azure AD SSO"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
             if request.is_json:
                 return jsonify({'error': 'נדרשת התחברות'}), 401
-            flash('נדרשת התחברות למערכת', 'error')
-            return redirect(url_for('login'))
+            # Redirect directly to SSO instead of login page
+            return redirect(url_for('auth_azure'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -96,8 +96,8 @@ def admin_required(f):
         if 'user_id' not in session:
             if request.is_json:
                 return jsonify({'error': 'נדרשת התחברות'}), 401
-            flash('נדרשת התחברות למערכת', 'error')
-            return redirect(url_for('login'))
+            # Redirect directly to SSO instead of login page
+            return redirect(url_for('auth_azure'))
         
         if session.get('role') != 'admin':
             if request.is_json:
@@ -115,8 +115,8 @@ def editor_required(f):
         if 'user_id' not in session:
             if request.is_json:
                 return jsonify({'error': 'נדרשת התחברות'}), 401
-            flash('נדרשת התחברות למערכת', 'error')
-            return redirect(url_for('login'))
+            # Redirect directly to SSO instead of login page
+            return redirect(url_for('auth_azure'))
         
         role = session.get('role')
         if role not in ['editor', 'admin']:
@@ -135,8 +135,8 @@ def editing_permission_required(f):
         if 'user_id' not in session:
             if request.is_json:
                 return jsonify({'error': 'נדרשת התחברות'}), 401
-            flash('נדרשת התחברות למערכת', 'error')
-            return redirect(url_for('login'))
+            # Redirect directly to SSO instead of login page
+            return redirect(url_for('auth_azure'))
         
         # Get target hativa_id from form data or URL params
         target_hativa_id = None
