@@ -83,8 +83,13 @@ def refresh_session():
         return redirect(url_for('auth_azure'))
     
     try:
+        # Log current session state
+        app.logger.info(f"=== REFRESH SESSION START ===")
+        app.logger.info(f"Current session - user_id: {session.get('user_id')}, role: {session.get('role')}, username: {session.get('username')}")
+        
         # Get fresh user data from database
         user = db.get_user_by_id(session['user_id'])
+        app.logger.info(f"User from DB: {user}")
         
         if not user:
             flash('משתמש לא נמצא', 'error')
@@ -98,17 +103,27 @@ def refresh_session():
         
         # Update session with fresh data from database
         old_role = session.get('role')
-        session['role'] = user['role']
+        new_role = user['role']
+        
+        app.logger.info(f"Updating session - old_role: {old_role}, new_role: {new_role}")
+        
+        session['role'] = new_role
         session['username'] = user['username']
         session['full_name'] = user['full_name']
         session['hativa_id'] = user.get('hativa_id')
         
-        if old_role != user['role']:
-            flash(f'הרשאות עודכנו: {old_role} → {user["role"]}', 'success')
-        else:
-            flash('Session עודכן בהצלחה', 'success')
+        app.logger.info(f"Session after update - role: {session.get('role')}")
         
-        app.logger.info(f"Session refreshed for user {user['username']}: role={user['role']}")
+        if old_role != new_role:
+            msg = f'✅ הרשאות עודכנו: {old_role} → {new_role}'
+            flash(msg, 'success')
+            app.logger.info(msg)
+        else:
+            msg = f'✅ Session רענון בהצלחה. Role נוכחי: {new_role}'
+            flash(msg, 'info')
+            app.logger.info(msg)
+        
+        app.logger.info(f"=== REFRESH SESSION END ===")
         
         return redirect(url_for('index'))
         
