@@ -3,7 +3,8 @@
 
 """
 Active Directory Authentication Service
-Handles LDAP authentication and user synchronization with Active Directory
+Handles LDAP and Azure AD OAuth authentication and user synchronization
+Supports both traditional AD (LDAP) and Azure AD (OAuth 2.0/OIDC)
 """
 
 import ldap3
@@ -11,6 +12,11 @@ from ldap3 import Server, Connection, ALL, SUBTREE
 from ldap3.core.exceptions import LDAPException, LDAPBindError
 from typing import Optional, Dict, List, Tuple
 import logging
+import msal
+import requests
+import jwt
+from datetime import datetime, timedelta
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +33,9 @@ class ADService:
         """
         self.db = db_manager
         self.enabled = False
+        self.auth_method = 'ldap'  # 'ldap' or 'oauth'
+        
+        # LDAP Settings
         self.server_url = None
         self.base_dn = None
         self.bind_dn = None
@@ -38,24 +47,47 @@ class ADService:
         self.use_tls = False
         self.port = 636  # Default LDAPS port
         
+        # Azure AD OAuth Settings
+        self.azure_tenant_id = None
+        self.azure_client_id = None
+        self.azure_client_secret = None
+        self.azure_authority = None
+        self.azure_redirect_uri = None
+        # Note: openid, profile, offline_access are added automatically by MSAL
+        self.azure_scope = ['User.Read']
+        
         # Load settings from database
         self._load_settings()
     
     def _load_settings(self):
-        """Load AD configuration from database"""
+        """Load AD configuration from environment variables and database"""
         try:
+            # General settings from database
             self.enabled = self.db.get_system_setting('ad_enabled') == '1'
-            self.server_url = self.db.get_system_setting('ad_server_url') or ''
-            self.base_dn = self.db.get_system_setting('ad_base_dn') or ''
-            self.bind_dn = self.db.get_system_setting('ad_bind_dn') or ''
-            self.bind_password = self.db.get_system_setting('ad_bind_password') or ''
-            self.user_search_base = self.db.get_system_setting('ad_user_search_base') or self.base_dn
-            self.user_search_filter = self.db.get_system_setting('ad_user_search_filter') or '(sAMAccountName={username})'
-            self.group_search_base = self.db.get_system_setting('ad_group_search_base') or self.base_dn
-            self.use_ssl = self.db.get_system_setting('ad_use_ssl') != '0'
-            self.use_tls = self.db.get_system_setting('ad_use_tls') == '1'
-            port_str = self.db.get_system_setting('ad_port')
-            self.port = int(port_str) if port_str else (636 if self.use_ssl else 389)
+            self.auth_method = 'oauth'  # Always OAuth for Azure AD
+            
+            # LDAP Settings (not used for Azure AD, kept for compatibility)
+            self.server_url = ''
+            self.base_dn = ''
+            self.bind_dn = ''
+            self.bind_password = ''
+            self.user_search_base = ''
+            self.user_search_filter = '(sAMAccountName={username})'
+            self.group_search_base = ''
+            self.use_ssl = True
+            self.use_tls = False
+            self.port = 636
+            
+            # Azure AD OAuth Settings from environment variables (.env)
+            self.azure_tenant_id = os.getenv('AZURE_TENANT_ID', '')
+            self.azure_client_id = os.getenv('AZURE_CLIENT_ID', '')
+            self.azure_client_secret = os.getenv('AZURE_CLIENT_SECRET', '')
+            self.azure_redirect_uri = os.getenv('AZURE_REDIRECT_URI', '')
+            
+            if self.azure_tenant_id:
+                self.azure_authority = f"https://login.microsoftonline.com/{self.azure_tenant_id}"
+            
+            logger.info(f"Azure AD settings loaded from .env: Tenant={self.azure_tenant_id[:8]}..., Client={self.azure_client_id[:8]}...")
         except Exception as e:
             logger.error(f"Error loading AD settings: {e}")
             self.enabled = False
@@ -66,6 +98,10 @@ class ADService:
     
     def is_enabled(self) -> bool:
         """Check if AD authentication is enabled"""
+        # For Azure AD OAuth, check if credentials are configured
+        if self.auth_method == 'oauth':
+            return bool(self.azure_tenant_id and self.azure_client_id and self.azure_client_secret)
+        # For LDAP, check traditional settings
         return self.enabled and bool(self.server_url)
     
     def test_connection(self) -> Tuple[bool, str]:
@@ -288,35 +324,46 @@ class ADService:
             User ID or None on error
         """
         try:
-            # Check if user already exists
-            existing_user = self.db.get_user_by_username(ad_user_info['username'])
+            username = ad_user_info.get('username')
+            email = ad_user_info.get('email', '')
+            full_name = ad_user_info.get('full_name', '')
+            
+            logger.info(f"Syncing user to local DB - Username: {username}, Email: {email}, Role: {default_role}, Hativa: {hativa_id}")
+            
+            # Check if user already exists (by username OR email)
+            existing_user = self.db.get_user_by_username(username)
+            if not existing_user:
+                # Also check by email (in case username changed but email same)
+                existing_user = self.db.get_user_by_email(email)
             
             if existing_user:
                 # Update existing user info from AD
                 user_id = existing_user['user_id']
+                logger.info(f"User exists with ID: {user_id}. Updating info...")
                 self.db.update_ad_user_info(
                     user_id=user_id,
-                    email=ad_user_info['email'],
-                    full_name=ad_user_info['full_name']
+                    email=email,
+                    full_name=full_name
                 )
-                logger.info(f"Updated AD user info for: {ad_user_info['username']}")
+                logger.info(f"Updated AD user info for: {username}")
                 return user_id
             else:
                 # Create new user
+                logger.info(f"User does not exist. Creating new user...")
                 # AD users don't need a password hash in local DB
                 user_id = self.db.create_ad_user(
-                    username=ad_user_info['username'],
-                    email=ad_user_info['email'],
-                    full_name=ad_user_info['full_name'],
+                    username=username,
+                    email=email,
+                    full_name=full_name,
                     role=default_role,
                     hativa_id=hativa_id,
                     ad_dn=ad_user_info.get('dn', '')
                 )
-                logger.info(f"Created new AD user: {ad_user_info['username']}")
+                logger.info(f"Created new AD user: {username} with ID: {user_id}")
                 return user_id
                 
         except Exception as e:
-            logger.error(f"Error syncing AD user to local DB: {e}")
+            logger.error(f"Error syncing AD user to local DB: {e}", exc_info=True)
             return None
     
     def get_default_role_from_groups(self, groups: List[str]) -> str:
@@ -343,4 +390,230 @@ class ADService:
         
         # Default to regular user
         return 'user'
+    
+    # ============================================================================
+    # Azure AD OAuth 2.0 Methods
+    # ============================================================================
+    
+    def get_azure_auth_url(self, state: str = None) -> str:
+        """
+        Get Azure AD authorization URL for OAuth flow
+        
+        Args:
+            state: State parameter for CSRF protection
+            
+        Returns:
+            Authorization URL
+        """
+        if not self.azure_client_id or not self.azure_tenant_id:
+            logger.error("Azure AD not configured properly")
+            return None
+        
+        logger.info(f"Creating Azure AD auth URL with redirect_uri: {self.azure_redirect_uri}")
+        logger.info(f"Using scopes: {self.azure_scope}")
+        
+        msal_app = self._get_msal_app()
+        
+        # Request parameters for Azure AD OAuth
+        auth_url = msal_app.get_authorization_request_url(
+            scopes=self.azure_scope,
+            state=state,
+            redirect_uri=self.azure_redirect_uri,
+            response_type='code',
+            response_mode='query',
+            prompt='select_account'
+        )
+        
+        logger.info(f"Generated auth URL: {auth_url[:150]}...")
+        
+        return auth_url
+    
+    def _get_msal_app(self):
+        """Create MSAL confidential client application"""
+        return msal.ConfidentialClientApplication(
+            client_id=self.azure_client_id,
+            client_credential=self.azure_client_secret,
+            authority=self.azure_authority
+        )
+    
+    def authenticate_with_code(self, auth_code: str) -> Tuple[bool, Optional[Dict], str]:
+        """
+        Authenticate user with authorization code from OAuth flow
+        
+        Args:
+            auth_code: Authorization code from callback
+            
+        Returns:
+            Tuple of (success, user_info_dict, message)
+        """
+        # Check if Azure AD credentials are configured
+        if not self.azure_tenant_id or not self.azure_client_id or not self.azure_client_secret:
+            return False, None, "אימות Azure AD לא מוגדר - חסרים פרטים ב-.env"
+        
+        try:
+            msal_app = self._get_msal_app()
+            
+            # Exchange code for token
+            result = msal_app.acquire_token_by_authorization_code(
+                code=auth_code,
+                scopes=self.azure_scope,
+                redirect_uri=self.azure_redirect_uri
+            )
+            
+            if "error" in result:
+                error_desc = result.get("error_description", result.get("error"))
+                logger.error(f"Azure AD token error: {error_desc}")
+                return False, None, f"שגיאה באימות: {error_desc}"
+            
+            if "access_token" not in result:
+                logger.error("No access token in Azure AD response")
+                return False, None, "לא התקבל טוקן גישה"
+            
+            # Get user info from token or Graph API
+            user_info = self._get_user_info_from_token(result)
+            
+            if not user_info:
+                return False, None, "שגיאה בקבלת פרטי משתמש"
+            
+            return True, user_info, "אימות הצליח"
+            
+        except Exception as e:
+            logger.error(f"Azure AD authentication error: {e}")
+            return False, None, f"שגיאה באימות: {str(e)}"
+    
+    def _get_user_info_from_token(self, token_response: Dict) -> Optional[Dict]:
+        """
+        Extract user information from token response
+        
+        Args:
+            token_response: MSAL token response
+            
+        Returns:
+            User info dictionary
+        """
+        try:
+            logger.info("Extracting user info from token response...")
+            
+            # Decode ID token (if present)
+            if "id_token" in token_response:
+                logger.info("ID token found. Decoding...")
+                id_token = token_response["id_token"]
+                # Decode without verification (already verified by MSAL)
+                claims = jwt.decode(id_token, options={"verify_signature": False})
+                
+                logger.info(f"Token claims: {list(claims.keys())}")
+                
+                user_info = {
+                    'username': claims.get('preferred_username', claims.get('upn', claims.get('email', ''))).split('@')[0],
+                    'email': claims.get('preferred_username', claims.get('upn', claims.get('email', ''))),
+                    'full_name': claims.get('name', ''),
+                    'given_name': claims.get('given_name', ''),
+                    'surname': claims.get('family_name', ''),
+                    'oid': claims.get('oid', ''),  # Object ID in Azure AD
+                    'tid': claims.get('tid', ''),  # Tenant ID
+                    'groups': []
+                }
+                
+                logger.info(f"Extracted user info: username={user_info['username']}, email={user_info['email']}, full_name={user_info['full_name']}")
+                return user_info
+            
+            # Fallback: Use Graph API to get user info
+            if "access_token" in token_response:
+                logger.info("No ID token. Using Graph API to get user info...")
+                return self._get_user_from_graph(token_response["access_token"])
+            
+            logger.error("No ID token or access token found in response")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error extracting user info from token: {e}", exc_info=True)
+            return None
+    
+    def _get_user_from_graph(self, access_token: str) -> Optional[Dict]:
+        """
+        Get user information from Microsoft Graph API
+        
+        Args:
+            access_token: OAuth access token
+            
+        Returns:
+            User info dictionary
+        """
+        try:
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json'
+            }
+            
+            # Get user profile
+            response = requests.get(
+                'https://graph.microsoft.com/v1.0/me',
+                headers=headers
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"Graph API error: {response.status_code} - {response.text}")
+                return None
+            
+            user_data = response.json()
+            
+            user_info = {
+                'username': user_data.get('userPrincipalName', '').split('@')[0],
+                'email': user_data.get('userPrincipalName', user_data.get('mail', '')),
+                'full_name': user_data.get('displayName', ''),
+                'given_name': user_data.get('givenName', ''),
+                'surname': user_data.get('surname', ''),
+                'oid': user_data.get('id', ''),
+                'groups': []
+            }
+            
+            # Optionally get group membership
+            try:
+                groups_response = requests.get(
+                    'https://graph.microsoft.com/v1.0/me/memberOf',
+                    headers=headers
+                )
+                if groups_response.status_code == 200:
+                    groups_data = groups_response.json()
+                    user_info['groups'] = [g.get('displayName', '') for g in groups_data.get('value', [])]
+            except Exception as ge:
+                logger.warning(f"Could not fetch groups: {ge}")
+            
+            return user_info
+            
+        except Exception as e:
+            logger.error(f"Error calling Graph API: {e}")
+            return None
+    
+    def test_azure_connection(self) -> Tuple[bool, str]:
+        """
+        Test Azure AD configuration
+        
+        Returns:
+            Tuple of (success, message)
+        """
+        if not self.azure_client_id or not self.azure_tenant_id:
+            return False, "הגדרות Azure AD חסרות (Tenant ID או Client ID)"
+        
+        if not self.azure_client_secret:
+            return False, "Client Secret חסר"
+        
+        if not self.azure_redirect_uri:
+            return False, "Redirect URI חסר"
+        
+        try:
+            # Try to create MSAL app and get auth URL
+            msal_app = self._get_msal_app()
+            auth_url = msal_app.get_authorization_request_url(
+                scopes=self.azure_scope,
+                redirect_uri=self.azure_redirect_uri
+            )
+            
+            if auth_url:
+                return True, "הגדרות Azure AD תקינות"
+            else:
+                return False, "לא ניתן ליצור URL אימות"
+                
+        except Exception as e:
+            return False, f"שגיאה בבדיקת הגדרות: {str(e)}"
 

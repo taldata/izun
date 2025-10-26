@@ -28,7 +28,11 @@ class DatabaseManager:
         self.init_database()
     
     def get_connection(self):
-        return sqlite3.connect(self.db_path)
+        """Get database connection with timeout and optimizations"""
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for better concurrency
+        conn.execute("PRAGMA busy_timeout=30000")  # 30 seconds timeout
+        return conn
     
     def init_database(self):
         """Initialize database with all required tables"""
@@ -1504,6 +1508,36 @@ class DatabaseManager:
             'hativa_ids': hativa_ids
         }
     
+    def get_user_by_email(self, email: str) -> Optional[Dict]:
+        """Get user by email"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT user_id, username, email, password_hash, full_name, role, 
+                   is_active, auth_source, ad_dn, created_at, last_login
+            FROM users
+            WHERE email = ? AND is_active = 1
+        ''', (email,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return None
+        
+        return {
+            'user_id': row[0],
+            'username': row[1],
+            'email': row[2],
+            'password_hash': row[3],
+            'full_name': row[4],
+            'role': row[5],
+            'is_active': row[6],
+            'auth_source': row[7],
+            'ad_dn': row[8],
+            'created_at': row[9],
+            'last_login': row[10]
+        }
+    
     def update_last_login(self, user_id: int):
         """Update user's last login timestamp"""
         conn = self.get_connection()
@@ -2751,16 +2785,30 @@ class DatabaseManager:
         Returns:
             User ID
         """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO users (username, email, password_hash, full_name, role, hativa_id, auth_source, ad_dn)
-            VALUES (?, ?, NULL, ?, ?, ?, 'ad', ?)
-        ''', (username, email, full_name, role, hativa_id, ad_dn))
-        user_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return user_id
+        import time
+        
+        # Retry logic for database locked errors
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                conn = self.get_connection()
+                cursor = conn.cursor()
+                # Azure AD users don't use password authentication, but DB requires a value
+                # Use a placeholder that cannot be used for login
+                dummy_password = 'AZURE_AD_NO_PASSWORD_AUTH'
+                cursor.execute('''
+                    INSERT INTO users (username, email, password_hash, full_name, role, hativa_id, auth_source, ad_dn)
+                    VALUES (?, ?, ?, ?, ?, ?, 'ad', ?)
+                ''', (username, email, dummy_password, full_name, role, hativa_id, ad_dn))
+                user_id = cursor.lastrowid
+                conn.commit()
+                conn.close()
+                return user_id
+            except sqlite3.OperationalError as e:
+                if 'locked' in str(e) and attempt < max_retries - 1:
+                    time.sleep(0.5)  # Wait before retry
+                    continue
+                raise  # Re-raise if not a lock error or final attempt
     
     def update_ad_user_info(self, user_id: int, email: str, full_name: str) -> bool:
         """

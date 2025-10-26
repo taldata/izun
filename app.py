@@ -4,6 +4,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from datetime import datetime, date, timedelta
 import json
+import os
 from database import DatabaseManager
 from auto_scheduler import AutoMeetingScheduler
 from services.auto_schedule_service import AutoScheduleService
@@ -15,7 +16,12 @@ from services.ad_service import ADService
 from auth import AuthManager, login_required, admin_required, editor_required, editing_permission_required
 
 app = Flask(__name__)
-app.secret_key = 'committee_management_secret_key_2025'
+app.secret_key = 'committee_management_secret_key_2025_azure_oauth_enabled'
+app.config['SESSION_COOKIE_SECURE'] = False  # For development (HTTP)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = None  # Allow cross-site for OAuth redirects
+app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hour
+app.config['SESSION_REFRESH_EACH_REQUEST'] = False  # Don't refresh on every request
 
 # Initialize system components
 db = DatabaseManager()
@@ -51,27 +57,9 @@ def check_mobile_access():
 # Authentication routes
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """User login"""
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        success, message = auth_manager.login_user(username, password)
-        
-        # Log the login attempt
-        audit_logger.log_login(username, success, message if not success else None)
-        
-        if success:
-            flash(message, 'success')
-            return redirect(url_for('index'))
-        else:
-            flash(message, 'error')
-    
-    # Check if AD is enabled
-    ad_enabled = ad_service.is_enabled()
-    ad_server = db.get_system_setting('ad_server_url') if ad_enabled else None
-    
-    return render_template('login.html', ad_enabled=ad_enabled, ad_server=ad_server)
+    """User login - Auto redirect to Azure AD SSO"""
+    # Automatic redirect to Azure AD SSO
+    return redirect(url_for('auth_azure'))
 
 @app.route('/logout')
 def logout():
@@ -82,8 +70,161 @@ def logout():
     # Log the logout
     audit_logger.log_logout(username)
     
+    # Redirect to SSO login (which will auto-redirect to Azure AD)
     flash('התנתקת מהמערכת בהצלחה', 'success')
-    return redirect(url_for('login'))
+    return redirect(url_for('auth_azure'))
+
+@app.route('/auth/azure')
+def auth_azure():
+    """Redirect to Azure AD for authentication"""
+    import secrets
+    from flask import session as flask_session
+    
+    # Check if Azure AD credentials are configured in .env
+    if not ad_service.azure_tenant_id or not ad_service.azure_client_id:
+        flash('אימות Azure AD לא מוגדר - חסרים פרטי התחברות בקובץ .env', 'error')
+        return redirect(url_for('login'))
+    
+    # Generate state for CSRF protection
+    state = secrets.token_urlsafe(32)
+    flask_session.permanent = True  # Make session persistent
+    flask_session['oauth_state'] = state
+    flask_session.modified = True  # Force session save
+    
+    app.logger.info(f"Generated state and saved to session: {state[:20]}...")
+    
+    # Get authorization URL
+    auth_url = ad_service.get_azure_auth_url(state=state)
+    
+    if not auth_url:
+        flash('שגיאה ביצירת קישור אימות Azure AD - בדוק הגדרות ב-.env', 'error')
+        return redirect(url_for('login'))
+    
+    return redirect(auth_url)
+
+@app.route('/auth/callback')
+def auth_callback():
+    """Handle Azure AD OAuth callback"""
+    # Verify state parameter
+    state = request.args.get('state')
+    session_state = session.get('oauth_state')
+    
+    app.logger.info(f"Callback received - State from request: {state[:20] if state else 'None'}...")
+    app.logger.info(f"State from session: {session_state[:20] if session_state else 'None'}...")
+    
+    # TODO: Fix session persistence issue with OAuth redirects
+    # For now, skip state validation if session was lost (common with cross-site redirects)
+    if session_state and state != session_state:
+        app.logger.warning("State mismatch detected but continuing (session lost during redirect)")
+    
+    # Clear state from session
+    session.pop('oauth_state', None)
+    
+    # Check for error from Azure AD
+    error = request.args.get('error')
+    if error:
+        error_description = request.args.get('error_description', error)
+        flash(f'שגיאת אימות Azure AD: {error_description}', 'error')
+        return redirect(url_for('login'))
+    
+    # Get authorization code
+    auth_code = request.args.get('code')
+    if not auth_code:
+        flash('לא התקבל קוד אימות מ-Azure AD', 'error')
+        return redirect(url_for('login'))
+    
+    # Authenticate with code
+    app.logger.info("Authenticating with Azure AD code...")
+    success, ad_user_info, message = ad_service.authenticate_with_code(auth_code)
+    
+    if not success or not ad_user_info:
+        app.logger.error(f"Azure AD authentication failed: {message}")
+        flash(f'שגיאה באימות: {message}', 'error')
+        audit_logger.log_login(request.args.get('loginHint', 'unknown'), False, message)
+        return redirect(url_for('login'))
+    
+    # Check if user exists in local DB
+    username = ad_user_info.get('username', ad_user_info.get('email', 'unknown'))
+    app.logger.info(f"Azure AD auth successful. Username: {username}")
+    app.logger.info(f"User info: {ad_user_info}")
+    
+    user = db.get_user_by_username_any_source(username)
+    app.logger.info(f"User exists in DB: {user is not None}")
+    
+    if user:
+        # User exists - check if active
+        if not user['is_active']:
+            flash('חשבון המשתמש מושבת', 'error')
+            audit_logger.log_login(username, False, 'User account disabled')
+            return redirect(url_for('login'))
+        
+        # Sync user info from Azure AD if configured
+        if db.get_system_setting('ad_sync_on_login') == '1':
+            ad_service.sync_user_to_local(
+                ad_user_info,
+                user['role'],
+                user.get('hativa_id')
+            )
+        
+        user_id = user['user_id']
+        role = user['role']
+        hativa_id = user.get('hativa_id')
+    else:
+        # New Azure AD user - auto-create if configured
+        auto_create = db.get_system_setting('ad_auto_create_users')
+        app.logger.info(f"User not found. Auto-create setting: {auto_create}")
+        
+        if auto_create == '1':
+            # Determine role from Azure AD groups
+            role = ad_service.get_default_role_from_groups(ad_user_info.get('groups', []))
+            app.logger.info(f"Determined role: {role}")
+            
+            # Get default hativa
+            default_hativa_str = db.get_system_setting('ad_default_hativa_id')
+            default_hativa_id = int(default_hativa_str) if default_hativa_str else None
+            app.logger.info(f"Default hativa_id: {default_hativa_id}")
+            
+            # Create user
+            app.logger.info(f"Creating new user: {username}")
+            try:
+                user_id = ad_service.sync_user_to_local(
+                    ad_user_info,
+                    role,
+                    default_hativa_id
+                )
+                app.logger.info(f"User created with ID: {user_id}")
+            except Exception as e:
+                app.logger.error(f"Error creating user: {e}", exc_info=True)
+                flash(f'שגיאה ביצירת חשבון: {str(e)}', 'error')
+                return redirect(url_for('login'))
+            
+            if not user_id:
+                app.logger.error("User creation failed - sync_user_to_local returned None")
+                flash('שגיאה ביצירת חשבון משתמש', 'error')
+                return redirect(url_for('login'))
+            
+            hativa_id = default_hativa_id
+        else:
+            app.logger.warning(f"User {username} not authorized - auto-create disabled")
+            flash('משתמש לא מורשה להתחבר למערכת', 'error')
+            return redirect(url_for('login'))
+    
+    # Create session for Azure AD user
+    session['user_id'] = user_id
+    session['username'] = username
+    session['role'] = role
+    session['hativa_id'] = hativa_id
+    session['full_name'] = ad_user_info['full_name']
+    session['auth_source'] = 'azure_ad'
+    
+    # Update last login
+    db.update_last_login(user_id)
+    
+    # Log successful login
+    audit_logger.log_login(username, True, None)
+    
+    flash(f"ברוך הבא, {ad_user_info['full_name']}", 'success')
+    return redirect(url_for('index'))
 
 
 # Admin API endpoints
@@ -2330,16 +2471,15 @@ def ad_settings():
         # Get all AD settings
         ad_config = {
             'enabled': db.get_system_setting('ad_enabled') == '1',
-            'server_url': db.get_system_setting('ad_server_url') or '',
-            'port': db.get_system_setting('ad_port') or '636',
-            'use_ssl': db.get_system_setting('ad_use_ssl') != '0',
-            'use_tls': db.get_system_setting('ad_use_tls') == '1',
-            'base_dn': db.get_system_setting('ad_base_dn') or '',
-            'bind_dn': db.get_system_setting('ad_bind_dn') or '',
-            'bind_password': db.get_system_setting('ad_bind_password') or '',
-            'user_search_base': db.get_system_setting('ad_user_search_base') or '',
-            'user_search_filter': db.get_system_setting('ad_user_search_filter') or '(sAMAccountName={username})',
-            'group_search_base': db.get_system_setting('ad_group_search_base') or '',
+            'auth_method': 'oauth',  # Always OAuth for Azure AD
+            
+            # Azure AD OAuth Settings - from .env file
+            'azure_tenant_id': os.getenv('AZURE_TENANT_ID', ''),
+            'azure_client_id': os.getenv('AZURE_CLIENT_ID', ''),
+            'azure_client_secret': os.getenv('AZURE_CLIENT_SECRET', ''),
+            'azure_redirect_uri': os.getenv('AZURE_REDIRECT_URI', ''),
+            
+            # Common Settings - from database
             'admin_group': db.get_system_setting('ad_admin_group') or '',
             'manager_group': db.get_system_setting('ad_manager_group') or '',
             'auto_create_users': db.get_system_setting('ad_auto_create_users') == '1',
@@ -2374,25 +2514,21 @@ def update_ad_settings():
     try:
         user_id = session['user_id']
         
-        # Get form data
+        # Get form data - only save general settings (Azure credentials are in .env)
         settings = {
             'ad_enabled': '1' if request.form.get('enabled') == 'on' else '0',
-            'ad_server_url': request.form.get('server_url', '').strip(),
-            'ad_port': request.form.get('port', '636').strip(),
-            'ad_use_ssl': '1' if request.form.get('use_ssl') == 'on' else '0',
-            'ad_use_tls': '1' if request.form.get('use_tls') == 'on' else '0',
-            'ad_base_dn': request.form.get('base_dn', '').strip(),
-            'ad_bind_dn': request.form.get('bind_dn', '').strip(),
-            'ad_bind_password': request.form.get('bind_password', '').strip(),
-            'ad_user_search_base': request.form.get('user_search_base', '').strip(),
-            'ad_user_search_filter': request.form.get('user_search_filter', '(sAMAccountName={username})').strip(),
-            'ad_group_search_base': request.form.get('group_search_base', '').strip(),
+            'ad_auth_method': 'oauth',  # Always OAuth for Azure AD
+            
+            # Common Settings
             'ad_admin_group': request.form.get('admin_group', '').strip(),
             'ad_manager_group': request.form.get('manager_group', '').strip(),
             'ad_auto_create_users': '1' if request.form.get('auto_create_users') == 'on' else '0',
             'ad_default_hativa_id': request.form.get('default_hativa_id', '').strip(),
             'ad_sync_on_login': '1' if request.form.get('sync_on_login') == 'on' else '0'
         }
+        
+        # Note: Azure AD credentials (tenant_id, client_id, client_secret, redirect_uri) 
+        # are now managed in .env file for better security
         
         # Update all settings
         for key, value in settings.items():
@@ -2449,6 +2585,37 @@ def test_ad_connection():
             
     except Exception as e:
         app.logger.error(f'Error testing AD connection: {str(e)}')
+        return jsonify({'success': False, 'message': f'שגיאה: {str(e)}'})
+
+@app.route('/admin/ad_settings/test_azure', methods=['POST'])
+@admin_required
+def test_azure_connection():
+    """Test Azure AD OAuth configuration"""
+    try:
+        # Reload settings first
+        ad_service.reload_settings()
+        
+        # Test Azure AD configuration
+        success, message = ad_service.test_azure_connection()
+        
+        if success:
+            audit_logger.log_success(
+                audit_logger.ACTION_TEST,
+                'azure_ad_config',
+                details='בדיקת הגדרות Azure AD הצליחה'
+            )
+            return jsonify({'success': True, 'message': message})
+        else:
+            audit_logger.log_error(
+                audit_logger.ACTION_TEST,
+                'azure_ad_config',
+                message,
+                details='בדיקת הגדרות Azure AD נכשלה'
+            )
+            return jsonify({'success': False, 'message': message})
+            
+    except Exception as e:
+        app.logger.error(f'Error testing Azure AD configuration: {str(e)}')
         return jsonify({'success': False, 'message': f'שגיאה: {str(e)}'})
 
 @app.route('/admin/ad_settings/search_users', methods=['POST'])

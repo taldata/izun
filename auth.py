@@ -19,6 +19,7 @@ class AuthManager:
         """Legacy SHA-256 hash (for backward compatibility)"""
         return hashlib.sha256(password.encode()).hexdigest()
     
+    # Password verification methods kept for backward compatibility with user management
     def verify_password(self, password: str, password_hash: str) -> bool:
         """Verify password against hash (supports both bcrypt and legacy SHA-256)"""
         if not password_hash:
@@ -34,108 +35,8 @@ class AuthManager:
             # Legacy SHA-256 verification
             return self.hash_password_legacy(password) == password_hash
     
-    def login_user(self, username: str, password: str) -> tuple[bool, str]:
-        """
-        Authenticate user and create session
-        Supports both Active Directory and local authentication
-        Returns (success, message)
-        """
-        if not username or not password:
-            return False, "שם משתמש וסיסמה נדרשים"
-        
-        # Check if AD is enabled and try AD authentication first
-        if self.ad_service and self.ad_service.is_enabled():
-            ad_success, ad_user_info, ad_message = self.ad_service.authenticate(username, password)
-            
-            if ad_success and ad_user_info:
-                # AD authentication successful
-                # Check if user exists in local DB
-                user = self.db.get_user_by_username_any_source(username)
-                
-                if user:
-                    # User exists - check if active
-                    if not user['is_active']:
-                        return False, "חשבון המשתמש מושבת"
-                    
-                    # Sync user info from AD if configured
-                    if self.db.get_system_setting('ad_sync_on_login') == '1':
-                        self.ad_service.sync_user_to_local(
-                            ad_user_info,
-                            user['role'],
-                            user['hativa_id']
-                        )
-                    
-                    user_id = user['user_id']
-                    role = user['role']
-                    hativa_id = user['hativa_id']
-                else:
-                    # New AD user - auto-create if configured
-                    if self.db.get_system_setting('ad_auto_create_users') == '1':
-                        # Determine role from AD groups
-                        role = self.ad_service.get_default_role_from_groups(ad_user_info.get('groups', []))
-                        
-                        # Get default hativa
-                        default_hativa_str = self.db.get_system_setting('ad_default_hativa_id')
-                        default_hativa_id = int(default_hativa_str) if default_hativa_str else None
-                        
-                        # Create user
-                        user_id = self.ad_service.sync_user_to_local(
-                            ad_user_info,
-                            role,
-                            default_hativa_id
-                        )
-                        
-                        if not user_id:
-                            return False, "שגיאה ביצירת חשבון משתמש"
-                        
-                        hativa_id = default_hativa_id
-                    else:
-                        return False, "משתמש לא מורשה להתחבר למערכת"
-                
-                # Create session for AD user
-                session['user_id'] = user_id
-                session['username'] = username
-                session['role'] = role
-                session['hativa_id'] = hativa_id
-                session['full_name'] = ad_user_info['full_name']
-                session['auth_source'] = 'ad'
-                
-                # Update last login
-                self.db.update_last_login(user_id)
-                
-                return True, f"ברוך הבא, {ad_user_info['full_name']}"
-        
-        # Try local authentication (fallback or when AD is disabled)
-        user = self.db.get_user_by_username(username)
-        
-        if not user:
-            return False, "שם משתמש או סיסמה שגויים"
-        
-        # Only allow local auth for local users
-        if user.get('auth_source') == 'ad':
-            return False, "משתמש AD חייב להתחבר דרך Active Directory"
-        
-        if not user['is_active']:
-            return False, "חשבון המשתמש מושבת"
-        
-        if not user.get('password_hash'):
-            return False, "חשבון המשתמש לא הוגדר עם סיסמה"
-        
-        if not self.verify_password(password, user['password_hash']):
-            return False, "שם משתמש או סיסמה שגויים"
-        
-        # Create session for local user
-        session['user_id'] = user['user_id']
-        session['username'] = user['username']
-        session['role'] = user['role']
-        session['hativa_id'] = user['hativa_id']
-        session['full_name'] = user['full_name']
-        session['auth_source'] = 'local'
-        
-        # Update last login
-        self.db.update_last_login(user['user_id'])
-        
-        return True, f"ברוך הבא, {user['full_name']}"
+    # Local authentication disabled - SSO only
+    # login_user method removed - all authentication through Azure AD SSO
     
     def logout_user(self):
         """Clear user session"""

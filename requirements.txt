@@ -11,6 +11,12 @@ gunicorn>=23.0.0
 bcrypt>=4.0.0
 ldap3>=2.9.1
 
+# Azure AD / Microsoft Identity Platform
+msal>=1.25.0
+requests>=2.31.0
+PyJWT>=2.8.0
+cryptography>=41.0.0
+
 # Python 3.7+ built-in modules used:
 # - sqlite3 (built-in)
 # - datetime (built-in)

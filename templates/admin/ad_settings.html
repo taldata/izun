@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}הגדרות Active Directory{% endblock %}
+{% block title %}הגדרות Azure AD{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -86,17 +86,17 @@
     <!-- Page Header -->
     <div class="mb-4">
         <h1 class="display-4">
-            <i class="fas fa-server me-3"></i>
-            הגדרות Active Directory
+            <i class="bi bi-microsoft me-3"></i>
+            הגדרות Azure AD
         </h1>
-        <p class="lead">ניהול אינטגרציה עם Active Directory לאימות משתמשים</p>
+        <p class="lead">ניהול אינטגרציה עם Azure Active Directory לאימות משתמשים</p>
     </div>
 
     <!-- Status and Statistics -->
     <div class="row mb-4">
         <div class="col-md-4">
             <div class="stats-box">
-                <div class="stats-label">סטטוס AD</div>
+                <div class="stats-label">סטטוס Azure AD</div>
                 <div class="stats-number">
                     {% if ad_config.enabled %}
                         <i class="fas fa-check-circle"></i> פעיל
@@ -109,7 +109,7 @@
         <div class="col-md-4">
             <div class="stats-box">
                 <div class="stats-number">{{ ad_users_count }}</div>
-                <div class="stats-label">משתמשי AD במערכת</div>
+                <div class="stats-label">משתמשי Azure AD במערכת</div>
             </div>
         </div>
         <div class="col-md-4">
@@ -134,121 +134,111 @@
                             <input class="form-check-input" type="checkbox" id="enabled" name="enabled" 
                                    {% if ad_config.enabled %}checked{% endif %}>
                             <label class="form-check-label" for="enabled">
-                                <strong>הפעל אימות Active Directory</strong>
+                                <strong>הפעל אימות Azure AD</strong>
                             </label>
                         </div>
-                        <small class="text-muted">כאשר מופעל, המערכת תנסה לאמת משתמשים דרך AD תחילה</small>
+                        <small class="text-muted">כאשר מופעל, המערכת תאפשר התחברות דרך Microsoft Azure Active Directory</small>
                     </div>
                 </div>
-
-                <div class="row">
-                    <div class="col-md-8 mb-3">
-                        <label for="server_url" class="form-label">כתובת שרת AD *</label>
-                        <input type="text" class="form-control" id="server_url" name="server_url" 
-                               value="{{ ad_config.server_url }}" 
-                               placeholder="ad.domain.com או 192.168.1.10" required>
-                        <small class="text-muted">ללא פרוטוקול (ldap:// או ldaps://)</small>
-                    </div>
-                    <div class="col-md-2 mb-3">
-                        <label for="port" class="form-label">פורט</label>
-                        <input type="number" class="form-control" id="port" name="port" 
-                               value="{{ ad_config.port }}" placeholder="636">
-                        <small class="text-muted">636 לLDAPS, 389 לLDAP</small>
-                    </div>
-                    <div class="col-md-2 mb-3">
-                        <label class="form-label d-block">&nbsp;</label>
-                        <button type="button" class="btn btn-test w-100" onclick="testConnection()">
-                            <i class="fas fa-plug"></i> בדוק חיבור
-                        </button>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="use_ssl" name="use_ssl" 
-                                   {% if ad_config.use_ssl %}checked{% endif %}>
-                            <label class="form-check-label" for="use_ssl">
-                                השתמש ב-SSL/LDAPS (מומלץ)
-                            </label>
-                        </div>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="use_tls" name="use_tls" 
-                                   {% if ad_config.use_tls %}checked{% endif %}>
-                            <label class="form-check-label" for="use_tls">
-                                השתמש ב-STARTTLS
-                            </label>
-                        </div>
-                    </div>
-                </div>
+                
+                <!-- Auth method is always OAuth - no need for selection -->
+                <input type="hidden" name="auth_method" value="oauth">
+                
+                <!-- Hidden LDAP fields for backward compatibility -->
+                <input type="hidden" name="server_url" value="">
+                <input type="hidden" name="port" value="636">
+                <input type="hidden" name="use_ssl" value="0">
+                <input type="hidden" name="use_tls" value="0">
+                <input type="hidden" name="base_dn" value="">
+                <input type="hidden" name="bind_dn" value="">
+                <input type="hidden" name="bind_password" value="">
+                <input type="hidden" name="user_search_base" value="">
+                <input type="hidden" name="user_search_filter" value="">
+                <input type="hidden" name="group_search_base" value="">
             </div>
         </div>
 
-        <!-- Directory Settings -->
-        <div class="card settings-card">
+        <!-- Azure AD OAuth Settings -->
+        <div class="card settings-card" id="azure_oauth_section">
             <div class="card-header">
-                <i class="fas fa-folder-tree me-2"></i>
-                הגדרות ספרייה
+                <i class="bi bi-microsoft me-2"></i>
+                הגדרות אימות Azure AD
             </div>
             <div class="card-body form-section">
-                <div class="info-box">
-                    <i class="fas fa-info-circle me-2"></i>
-                    <strong>DN (Distinguished Name)</strong> הוא הנתיב המלא לאובייקט ב-Active Directory.
-                    <br>לדוגמה: <code>CN=Users,DC=domain,DC=com</code>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-12 mb-3">
-                        <label for="base_dn" class="form-label">Base DN *</label>
-                        <input type="text" class="form-control" id="base_dn" name="base_dn" 
-                               value="{{ ad_config.base_dn }}" 
-                               placeholder="DC=domain,DC=com" required>
-                        <small class="text-muted">נקודת המוצא לכל החיפושים</small>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="bind_dn" class="form-label">חשבון שירות (Bind DN) *</label>
-                        <input type="text" class="form-control" id="bind_dn" name="bind_dn" 
-                               value="{{ ad_config.bind_dn }}" 
-                               placeholder="CN=ServiceAccount,CN=Users,DC=domain,DC=com" required>
-                        <small class="text-muted">חשבון לביצוע חיפושים ב-AD</small>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label for="bind_password" class="form-label">סיסמת חשבון שירות *</label>
-                        <input type="password" class="form-control password-field" id="bind_password" 
-                               name="bind_password" value="{{ ad_config.bind_password }}" required>
-                        <small class="text-muted">סיסמת חשבון השירות</small>
-                    </div>
+                <div class="alert alert-info" role="alert">
+                    <i class="bi bi-file-earmark-lock me-2"></i>
+                    <strong>הפרטים הבאים מוגדרים בקובץ .env לאבטחה מקסימלית</strong>
+                    <br>
+                    <small>
+                        כדי לשנות את הפרטים, ערוך את הקובץ <code>.env</code> והפעל מחדש את השרת.
+                        <br>צריך ליצור App Registration ב-
+                        <a href="https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" 
+                           target="_blank" class="text-decoration-none">
+                            Azure Portal <i class="bi bi-box-arrow-up-right"></i>
+                        </a>
+                    </small>
                 </div>
 
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label for="user_search_base" class="form-label">בסיס חיפוש משתמשים</label>
-                        <input type="text" class="form-control" id="user_search_base" name="user_search_base" 
-                               value="{{ ad_config.user_search_base }}" 
-                               placeholder="CN=Users,DC=domain,DC=com">
-                        <small class="text-muted">אם ריק, ישתמש ב-Base DN</small>
+                        <label for="azure_tenant_id" class="form-label">Tenant ID (Directory ID)</label>
+                        <input type="text" class="form-control font-monospace bg-light" id="azure_tenant_id" 
+                               value="{{ ad_config.azure_tenant_id }}" readonly>
+                        <small class="text-muted"><i class="bi bi-lock-fill"></i> מ-קובץ .env</small>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label for="user_search_filter" class="form-label">פילטר חיפוש משתמשים</label>
-                        <input type="text" class="form-control" id="user_search_filter" name="user_search_filter" 
-                               value="{{ ad_config.user_search_filter }}" 
-                               placeholder="(sAMAccountName={username})">
-                        <small class="text-muted">{username} יוחלף בשם המשתמש</small>
+                        <label for="azure_client_id" class="form-label">Application (Client) ID</label>
+                        <input type="text" class="form-control font-monospace bg-light" id="azure_client_id" 
+                               value="{{ ad_config.azure_client_id }}" readonly>
+                        <small class="text-muted"><i class="bi bi-lock-fill"></i> מ-קובץ .env</small>
                     </div>
                 </div>
 
                 <div class="row">
                     <div class="col-md-12 mb-3">
-                        <label for="group_search_base" class="form-label">בסיס חיפוש קבוצות</label>
-                        <input type="text" class="form-control" id="group_search_base" name="group_search_base" 
-                               value="{{ ad_config.group_search_base }}" 
-                               placeholder="CN=Groups,DC=domain,DC=com">
-                        <small class="text-muted">אם ריק, ישתמש ב-Base DN</small>
+                        <label for="azure_client_secret" class="form-label">Client Secret</label>
+                        <input type="password" class="form-control font-monospace bg-light" 
+                               id="azure_client_secret" 
+                               value="{{ ad_config.azure_client_secret }}" readonly>
+                        <small class="text-muted"><i class="bi bi-lock-fill"></i> מ-קובץ .env (מוצפן)</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label for="azure_redirect_uri" class="form-label">Redirect URI</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control font-monospace bg-light" id="azure_redirect_uri" 
+                                   name="azure_redirect_uri" 
+                                   value="{{ ad_config.azure_redirect_uri }}" 
+                                   placeholder="https://yourdomain.com/login/azure/callback" readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="copyRedirectUri()">
+                                <i class="bi bi-clipboard"></i> העתק
+                            </button>
+                        </div>
+                        <small class="text-muted">
+                            <strong>חשוב:</strong> יש להוסיף כתובת זו ב-Azure Portal → App Registration → Authentication → Redirect URIs
+                        </small>
+                    </div>
+                </div>
+
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>שלבי הגדרה ב-Azure Portal:</strong>
+                    <ol class="mb-0 mt-2">
+                        <li>צור App Registration חדש או השתמש בקיים</li>
+                        <li>העתק את Tenant ID ו-Application (Client) ID מהעמוד הראשי</li>
+                        <li>ב-Certificates & secrets, צור Client Secret חדש והעתק את ה-Value</li>
+                        <li>ב-Authentication, הוסף את ה-Redirect URI המוצג למעלה</li>
+                        <li>ב-API permissions, ודא שיש הרשאה ל-User.Read (Microsoft Graph)</li>
+                    </ol>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12">
+                        <button type="button" class="btn btn-test" onclick="testAzureConnection()">
+                            <i class="bi bi-shield-check"></i> בדוק הגדרות Azure AD
+                        </button>
                     </div>
                 </div>
             </div>
@@ -353,25 +343,26 @@
     <div class="card settings-card">
         <div class="card-header">
             <i class="fas fa-question-circle me-2"></i>
-            עזרה ופתרון בעיות
+            עזרה והנחיות
         </div>
         <div class="card-body">
-            <h5>הגדרות נפוצות</h5>
-            <ul>
-                <li><strong>Base DN:</strong> <code>DC=domain,DC=com</code> (החלף עם הדומיין שלך)</li>
-                <li><strong>Bind DN:</strong> <code>CN=ServiceAccount,CN=Users,DC=domain,DC=com</code></li>
-                <li><strong>User Search Base:</strong> <code>CN=Users,DC=domain,DC=com</code></li>
-                <li><strong>User Search Filter:</strong> <code>(sAMAccountName={username})</code></li>
-            </ul>
+            <h5>שלבי הגדרה ב-Azure Portal</h5>
+            <ol>
+                <li>צור <strong>App Registration</strong> ב-Azure Portal</li>
+                <li>העתק את <strong>Tenant ID</strong> ו-<strong>Client ID</strong></li>
+                <li>צור <strong>Client Secret</strong> ב-Certificates & secrets</li>
+                <li>הוסף <strong>Redirect URI</strong> ב-Authentication</li>
+                <li>הגדר הרשאה ל-<strong>User.Read</strong> ב-API permissions</li>
+            </ol>
 
-            <h5 class="mt-4">בדיקת חיבור</h5>
-            <p>לחץ על כפתור "בדוק חיבור" כדי לוודא שהמערכת יכולה להתחבר לשרת AD שלך.</p>
+            <h5 class="mt-4">בדיקת הגדרות</h5>
+            <p>לחץ על כפתור "בדוק הגדרות Azure AD" כדי לוודא שהפרטים שהזנת תקינים.</p>
 
-            <h5 class="mt-4">דרישות</h5>
+            <h5 class="mt-4">מידע נוסף</h5>
             <ul>
-                <li>חשבון שירות ב-AD עם הרשאות קריאה</li>
-                <li>גישה לפורט 636 (LDAPS) או 389 (LDAP) מהשרת</li>
-                <li>אישור SSL תקף (לLDAPS)</li>
+                <li>📖 <a href="https://portal.azure.com" target="_blank">Azure Portal</a></li>
+                <li>📚 <a href="/static/AZURE_AD_SETUP_GUIDE.md" target="_blank">מדריך הגדרה מלא</a></li>
+                <li>🔐 Client Secret צריך להתחדש כל 6-24 חודשים</li>
             </ul>
         </div>
     </div>
@@ -380,13 +371,14 @@
 
 {% block extra_js %}
 <script>
-function testConnection() {
+// Test Azure AD connection
+function testAzureConnection() {
     const btn = event.target.closest('button');
     const originalHtml = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>בודק...';
+    btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>בודק...';
     
-    fetch('{{ url_for("test_ad_connection") }}', {
+    fetch('{{ url_for("test_azure_connection") }}', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -401,7 +393,7 @@ function testConnection() {
         }
     })
     .catch(error => {
-        alert('❌ שגיאה בבדיקת החיבור: ' + error);
+        alert('❌ שגיאה בבדיקת ההגדרות: ' + error);
     })
     .finally(() => {
         btn.disabled = false;
@@ -409,27 +401,35 @@ function testConnection() {
     });
 }
 
-// Show/hide optional fields based on checkboxes
-document.getElementById('use_ssl').addEventListener('change', function() {
-    const portField = document.getElementById('port');
-    if (this.checked) {
-        portField.value = '636';
-    } else {
-        portField.value = '389';
-    }
-});
-
-document.getElementById('enabled').addEventListener('change', function() {
-    const formSections = document.querySelectorAll('.form-section input, .form-section select');
-    formSections.forEach(field => {
-        if (field.id !== 'enabled') {
-            field.disabled = !this.checked;
-        }
+// Copy redirect URI to clipboard
+function copyRedirectUri() {
+    const redirectUri = document.getElementById('azure_redirect_uri');
+    redirectUri.select();
+    redirectUri.setSelectionRange(0, 99999); // For mobile
+    
+    navigator.clipboard.writeText(redirectUri.value).then(() => {
+        const btn = event.target.closest('button');
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check-lg"></i> הועתק!';
+        setTimeout(() => {
+            btn.innerHTML = originalHtml;
+        }, 2000);
+    }).catch(err => {
+        alert('שגיאה בהעתקה: ' + err);
     });
-});
+}
 
 // Initialize state on load
 document.addEventListener('DOMContentLoaded', function() {
+    // Set redirect URI automatically based on current URL
+    const redirectUriField = document.getElementById('azure_redirect_uri');
+    if (redirectUriField && (!redirectUriField.value || redirectUriField.value.includes('yourdomain'))) {
+        const protocol = window.location.protocol;
+        const host = window.location.host;
+        redirectUriField.value = `${protocol}//${host}/login/azure/callback`;
+    }
+    
+    // Disable fields if AD is not enabled
     const enabledCheckbox = document.getElementById('enabled');
     if (!enabledCheckbox.checked) {
         const formSections = document.querySelectorAll('.form-section input, .form-section select');
