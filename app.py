@@ -57,8 +57,44 @@ def check_mobile_access():
 # Authentication routes
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """User login - Auto redirect to Azure AD SSO"""
-    # Automatic redirect to Azure AD SSO
+    """User login - Check if Azure AD is configured before redirecting"""
+    # Check if Azure AD credentials are configured
+    if not ad_service.azure_tenant_id or not ad_service.azure_client_id or not ad_service.azure_client_secret:
+        # Azure AD not configured - provide options
+        if request.method == 'POST':
+            # Check if user wants to bypass Azure AD temporarily
+            bypass = request.form.get('bypass_azure', 'false')
+            if bypass == 'true':
+                flash('התחברות באמצעות Azure AD מבוטלת זמנית. אנא הגדר את פרטי ההתחברות.', 'warning')
+                return render_template('base.html', content="""
+                <div class="row justify-content-center">
+                    <div class="col-md-8">
+                        <div class="alert alert-warning text-center">
+                            <h4><i class="bi bi-exclamation-triangle"></i> אימות Azure AD לא מוגדר</h4>
+                            <p>המערכת דורשת הגדרת פרטי התחברות Azure AD כדי לפעול.</p>
+                            <p>אנא פנה למנהל המערכת או הגדר את הפרטים בקובץ .env</p>
+                        </div>
+                    </div>
+                </div>
+                """)
+
+        flash('אימות Azure AD לא מוגדר - נדרשת הגדרת פרטי התחברות ב-.env', 'error')
+        return render_template('base.html', content="""
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="alert alert-danger text-center">
+                    <h4><i class="bi bi-exclamation-triangle"></i> אימות Azure AD לא מוגדר</h4>
+                    <p>המערכת דורשת הגדרת פרטי התחברות Azure AD כדי לפעול.</p>
+                    <p>אנא פנה למנהל המערכת או הגדר את הפרטים בקובץ .env</p>
+                    <div class="mt-3">
+                        <small class="text-muted">קובץ .env.example נוצר בתיקיית הפרויקט</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """)
+
+    # Azure AD is configured - redirect to OAuth
     return redirect(url_for('auth_azure'))
 
 @app.route('/logout')
@@ -120,32 +156,67 @@ def auth_azure():
     """Redirect to Azure AD for authentication"""
     import secrets
     from flask import session as flask_session
-    
+
     # Check if Azure AD credentials are configured in .env
-    if not ad_service.azure_tenant_id or not ad_service.azure_client_id:
-        flash('אימות Azure AD לא מוגדר - חסרים פרטי התחברות בקובץ .env', 'error')
-        return redirect(url_for('login'))
-    
+    if not ad_service.azure_tenant_id or not ad_service.azure_client_id or not ad_service.azure_client_secret:
+        flash('אימות Azure AD לא מוגדר - נדרשת הגדרת פרטי התחברות בקובץ .env', 'error')
+        return render_template('base.html', content="""
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="alert alert-danger text-center">
+                    <h4><i class="bi bi-exclamation-triangle"></i> אימות Azure AD לא מוגדר</h4>
+                    <p>המערכת דורשת הגדרת פרטי התחברות Azure AD כדי לפעול.</p>
+                    <p>אנא פנה למנהל המערכת או הגדר את הפרטים בקובץ .env</p>
+                    <div class="mt-3">
+                        <small class="text-muted">קובץ .env.example נוצר בתיקיית הפרויקט</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """)
+
     # Generate state for CSRF protection
     state = secrets.token_urlsafe(32)
     flask_session.permanent = True  # Make session persistent
     flask_session['oauth_state'] = state
     flask_session.modified = True  # Force session save
-    
+
     app.logger.info(f"Generated state and saved to session: {state[:20]}...")
-    
+
     # Get authorization URL
     auth_url = ad_service.get_azure_auth_url(state=state)
-    
+
     if not auth_url:
         flash('שגיאה ביצירת קישור אימות Azure AD - בדוק הגדרות ב-.env', 'error')
-        return redirect(url_for('login'))
-    
+        return render_template('base.html', content="""
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="alert alert-danger text-center">
+                    <h4><i class="bi bi-exclamation-triangle"></i> שגיאה בהגדרות Azure AD</h4>
+                    <p>לא ניתן ליצור קישור אימות. בדוק שהגדרות Azure AD תקינות.</p>
+                </div>
+            </div>
+        </div>
+        """)
+
     return redirect(auth_url)
+
+@app.route('/bypass_auth')
+def bypass_auth():
+    """Temporary bypass for Azure AD authentication (development only)"""
+    # Create a temporary admin user for testing
+    session['user_id'] = 1
+    session['username'] = 'admin'
+    session['role'] = 'admin'
+    session['hativa_id'] = None
+    session['full_name'] = 'מנהל מערכת (בדיקה)'
+    session['auth_source'] = 'bypass'
+
+    flash('התחברת באמצעות bypass - זה למטרות בדיקה בלבד', 'warning')
+    return redirect(url_for('index'))
 
 @app.route('/auth/callback')
 def auth_callback():
-    """Handle Azure AD OAuth callback"""
     # Verify state parameter
     state = request.args.get('state')
     session_state = session.get('oauth_state')
