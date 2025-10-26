@@ -142,15 +142,20 @@ class AuthManager:
         session.clear()
     
     def get_current_user(self) -> dict:
-        """Get current logged in user info"""
+        """Get current logged in user info with hativot access"""
         if 'user_id' not in session:
             return None
+        
+        # Get user's hativot from database
+        user_hativot = self.db.get_user_hativot(session['user_id'])
+        hativa_ids = [h['hativa_id'] for h in user_hativot]
         
         return {
             'user_id': session['user_id'],
             'username': session['username'],
             'role': session['role'],
-            'hativa_id': session['hativa_id'],
+            'hativa_ids': hativa_ids,
+            'hativot': user_hativot,
             'full_name': session['full_name']
         }
     
@@ -165,9 +170,9 @@ class AuthManager:
         
         user = self.get_current_user()
         return self.db.can_user_edit(
+            user['user_id'],
             user['role'], 
-            target_hativa_id, 
-            user['hativa_id']
+            target_hativa_id
         )
 
 # Decorators for route protection
@@ -202,8 +207,28 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def editor_required(f):
+    """Decorator to require editor or admin role"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            if request.is_json:
+                return jsonify({'error': 'נדרשת התחברות'}), 401
+            flash('נדרשת התחברות למערכת', 'error')
+            return redirect(url_for('login'))
+        
+        role = session.get('role')
+        if role not in ['editor', 'admin']:
+            if request.is_json:
+                return jsonify({'error': 'נדרשות הרשאות עורך'}), 403
+            flash('נדרשות הרשאות עורך או מנהל', 'error')
+            return redirect(url_for('index'))
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
 def editing_permission_required(f):
-    """Decorator to check editing permissions"""
+    """Decorator to check editing permissions with hativa access control"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:

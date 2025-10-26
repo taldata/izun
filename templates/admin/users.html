@@ -52,14 +52,20 @@
         color: white;
     }
     
-    .role-manager {
+    .role-editor {
         background: linear-gradient(45deg, #4834d4, #686de0);
         color: white;
     }
     
-    .role-user {
+    .role-viewer {
         background: linear-gradient(45deg, #00d2d3, #54a0ff);
         color: white;
+    }
+    
+    .hativot-badge {
+        font-size: 0.75rem;
+        margin: 2px;
+        display: inline-block;
     }
     
     .status-active {
@@ -159,16 +165,16 @@
         <div class="col-md-2">
             <div class="card stats-card">
                 <div class="card-body text-center">
-                    <div class="stats-number">{{ stats.manager_count }}</div>
-                    <div class="stats-label">מנהלי חטיבות</div>
+                    <div class="stats-number">{{ stats.editor_count }}</div>
+                    <div class="stats-label">עורכים</div>
                 </div>
             </div>
         </div>
         <div class="col-md-2">
             <div class="card stats-card">
                 <div class="card-body text-center">
-                    <div class="stats-number">{{ stats.user_count }}</div>
-                    <div class="stats-label">משתמשים רגילים</div>
+                    <div class="stats-number">{{ stats.viewer_count }}</div>
+                    <div class="stats-label">צופים</div>
                 </div>
             </div>
         </div>
@@ -191,8 +197,8 @@
             <select id="roleFilter" class="form-select">
                 <option value="">כל התפקידים</option>
                 <option value="admin">מנהל מערכת</option>
-                <option value="manager">מנהל חטיבה</option>
-                <option value="user">משתמש רגיל</option>
+                <option value="editor">עורך</option>
+                <option value="viewer">צופה</option>
             </select>
         </div>
         <div class="col-md-3">
@@ -222,10 +228,10 @@
                             <span class="badge role-{{ user.role }} role-badge">
                                 {% if user.role == 'admin' %}
                                     👑 מנהל מערכת
-                                {% elif user.role == 'manager' %}
-                                    👨‍💼 מנהל חטיבה
+                                {% elif user.role == 'editor' %}
+                                    ✏️ עורך
                                 {% else %}
-                                    👤 משתמש רגיל
+                                    👁️ צופה
                                 {% endif %}
                             </span>
                             <br>
@@ -242,10 +248,18 @@
                     </div>
                     
                     <div class="row mb-3">
-                        <div class="col-6">
-                            <small class="text-muted">חטיבה:</small><br>
-                            <span class="fw-bold">{{ user.hativa_name or 'לא משויך' }}</span>
+                        <div class="col-12">
+                            <small class="text-muted">חטיבות:</small><br>
+                            {% if user.hativot %}
+                                {% for hativa in user.hativot %}
+                                    <span class="badge bg-primary hativot-badge">{{ hativa.name }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="text-muted">ללא הגבלה (גישה לכל החטיבות)</span>
+                            {% endif %}
                         </div>
+                    </div>
+                    <div class="row mb-3">
                         <div class="col-6">
                             <small class="text-muted">סטטוס:</small><br>
                             <span class="fw-bold {% if user.is_active %}status-active{% else %}status-inactive{% endif %}">
@@ -279,7 +293,7 @@
                                     data-email="{{ user.email }}"
                                     data-fullname="{{ user.full_name }}"
                                     data-role="{{ user.role }}"
-                                    data-hativa-id="{{ user.hativa_id or '' }}">
+                                    data-hativa-ids="{% if user.hativot %}{{ user.hativot|map(attribute='hativa_id')|list|tojson }}{% else %}[]{% endif %}">
                                 <i class="fas fa-edit"></i> ערוך
                             </button>
                             {% if user.auth_source != 'ad' %}
@@ -353,24 +367,35 @@
                         <label class="form-label">סיסמה *</label>
                         <input type="password" name="password" class="form-control" required>
                     </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">תפקיד</label>
-                            <select name="role" class="form-select">
-                                <option value="user">משתמש רגיל</option>
-                                <option value="manager">מנהל חטיבה</option>
-                                <option value="admin">מנהל מערכת</option>
-                            </select>
+                    <div class="mb-3">
+                        <label class="form-label">תפקיד *</label>
+                        <select name="role" class="form-select" id="addUserRole">
+                            <option value="viewer">צופה - הרשאות קריאה בלבד</option>
+                            <option value="editor">עורך - קריאה ועריכה</option>
+                            <option value="admin">מנהל מערכת - גישה מלאה לכל</option>
+                        </select>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i>
+                            <span id="addRoleHelp">צופה: גישה לדף הבית, טבלת אירועים ומדריך</span>
+                        </small>
+                    </div>
+                    <div class="mb-3" id="addHativotSection">
+                        <label class="form-label">חטיבות נגישות</label>
+                        <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
+                            {% for hativa in hativot %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="hativa_ids[]" 
+                                       value="{{ hativa.hativa_id }}" id="addHativa{{ hativa.hativa_id }}">
+                                <label class="form-check-label" for="addHativa{{ hativa.hativa_id }}">
+                                    {{ hativa.name }}
+                                </label>
+                            </div>
+                            {% endfor %}
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">חטיבה</label>
-                            <select name="hativa_id" class="form-select">
-                                <option value="">ללא חטיבה</option>
-                                {% for hativa in hativot %}
-                                <option value="{{ hativa.hativa_id }}">{{ hativa.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i>
+                            אם לא תבחר חטיבה, המשתמש יוכל לגשת לכל החטיבות
+                        </small>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -411,24 +436,35 @@
                         <label class="form-label">שם מלא *</label>
                         <input type="text" name="full_name" id="editFullName" class="form-control" required>
                     </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">תפקיד</label>
-                            <select name="role" id="editRole" class="form-select">
-                                <option value="user">משתמש רגיל</option>
-                                <option value="manager">מנהל חטיבה</option>
-                                <option value="admin">מנהל מערכת</option>
-                            </select>
+                    <div class="mb-3">
+                        <label class="form-label">תפקיד *</label>
+                        <select name="role" id="editRole" class="form-select">
+                            <option value="viewer">צופה - הרשאות קריאה בלבד</option>
+                            <option value="editor">עורך - קריאה ועריכה</option>
+                            <option value="admin">מנהל מערכת - גישה מלאה לכל</option>
+                        </select>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i>
+                            <span id="editRoleHelp">בחר את רמת ההרשאות</span>
+                        </small>
+                    </div>
+                    <div class="mb-3" id="editHativotSection">
+                        <label class="form-label">חטיבות נגישות</label>
+                        <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
+                            {% for hativa in hativot %}
+                            <div class="form-check">
+                                <input class="form-check-input edit-hativa-checkbox" type="checkbox" name="hativa_ids[]" 
+                                       value="{{ hativa.hativa_id }}" id="editHativa{{ hativa.hativa_id }}">
+                                <label class="form-check-label" for="editHativa{{ hativa.hativa_id }}">
+                                    {{ hativa.name }}
+                                </label>
+                            </div>
+                            {% endfor %}
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">חטיבה</label>
-                            <select name="hativa_id" id="editHativaId" class="form-select">
-                                <option value="">ללא חטיבה</option>
-                                {% for hativa in hativot %}
-                                <option value="{{ hativa.hativa_id }}">{{ hativa.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i>
+                            אם לא תבחר חטיבה, המשתמש יוכל לגשת לכל החטיבות
+                        </small>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -531,14 +567,25 @@ document.addEventListener('DOMContentLoaded', function() {
             const email = this.getAttribute('data-email');
             const fullName = this.getAttribute('data-fullname');
             const role = this.getAttribute('data-role');
-            const hativaId = this.getAttribute('data-hativa-id');
+            const hativaIdsStr = this.getAttribute('data-hativa-ids');
+            const hativaIds = JSON.parse(hativaIdsStr || '[]');
             
             document.getElementById('editUserId').value = userId;
             document.getElementById('editUsername').value = username;
             document.getElementById('editEmail').value = email;
             document.getElementById('editFullName').value = fullName;
             document.getElementById('editRole').value = role;
-            document.getElementById('editHativaId').value = hativaId || '';
+            
+            // Clear all checkboxes first
+            document.querySelectorAll('.edit-hativa-checkbox').forEach(cb => cb.checked = false);
+            
+            // Check the appropriate hativot
+            hativaIds.forEach(hativaId => {
+                const checkbox = document.getElementById('editHativa' + hativaId);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
             
             const editModal = new bootstrap.Modal(document.getElementById('editUserModal'));
             editModal.show();

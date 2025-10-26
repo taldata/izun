@@ -12,7 +12,7 @@ from services.committee_types_service import CommitteeTypesService, CommitteeTyp
 from services.committee_recommendation_service import CommitteeRecommendationService
 from services.audit_logger import AuditLogger
 from services.ad_service import ADService
-from auth import AuthManager, login_required, admin_required, editing_permission_required
+from auth import AuthManager, login_required, admin_required, editor_required, editing_permission_required
 
 app = Flask(__name__)
 app.secret_key = 'committee_management_secret_key_2025'
@@ -1065,7 +1065,18 @@ def add_committee_meeting():
         if meeting_date is None:
             raise ValueError(f'פורמט תאריך לא תקין: {vaada_date}. נא להזין תאריך בפורמט YYYY-MM-DD')
         
-        vaadot_id = db.add_vaada(int(committee_type_id), int(hativa_id), meeting_date, status, notes=notes)
+        # Check if user is admin for constraint override
+        current_user = auth_manager.get_current_user()
+        is_admin = current_user and current_user.get('role') == 'admin'
+        
+        # Try to add meeting (admins get warnings instead of errors)
+        vaadot_id, warning_message = db.add_vaada(
+            int(committee_type_id), 
+            int(hativa_id), 
+            meeting_date, 
+            notes=notes, 
+            override_constraints=is_admin
+        )
         
         # Get committee name for logging
         committee_types = db.get_committee_types()
@@ -1073,7 +1084,12 @@ def add_committee_meeting():
         committee_name = committee_type['name'] if committee_type else 'Unknown'
         
         audit_logger.log_vaada_created(vaadot_id, committee_name, meeting_date.strftime('%Y-%m-%d'))
-        flash('ישיבת ועדה נוספה בהצלחה', 'success')
+        
+        # Show success message with any warnings
+        if warning_message:
+            flash(f'ישיבת ועדה נוספה בהצלחה. {warning_message}', 'warning')
+        else:
+            flash('ישיבת ועדה נוספה בהצלחה', 'success')
     except ValueError as e:
         # Check if it's a date format error or our constraint error
         if "כבר קיימת ועדה בתאריך" in str(e):
@@ -1486,6 +1502,7 @@ def api_validate_date(committee_name, date_str):
         })
 
 @app.route('/auto_schedule')
+@editor_required
 def auto_schedule():
     """Automatic meeting scheduling interface"""
     hativot = db.get_hativot()
@@ -1506,6 +1523,7 @@ def auto_schedule():
                          current_user=current_user)
 
 @app.route('/auto_schedule/generate', methods=['POST'])
+@editor_required
 def generate_auto_schedule():
     try:
         # Get form data
@@ -1602,6 +1620,7 @@ def generate_auto_schedule():
         return redirect(url_for('auto_schedule'))
 
 @app.route('/auto_schedule/review')
+@editor_required
 def review_auto_schedule():
     """Review generated schedule before approval"""
     from flask import session
@@ -1649,6 +1668,7 @@ def review_auto_schedule():
                          current_user=current_user)
 
 @app.route('/auto_schedule/approve', methods=['POST'])
+@editor_required
 def approve_auto_schedule():
     """Approve and create selected meetings from the generated schedule"""
     from flask import session
@@ -1723,6 +1743,7 @@ def validate_monthly_schedule(year: int, month: int):
         })
 
 @app.route('/committee_types')
+@editor_required
 def committee_types():
     """Manage committee types"""
     # Get hativa_id from query parameters
@@ -1750,6 +1771,7 @@ def committee_types():
                          selected_hativa_id=hativa_id)
 
 @app.route('/committee_types/add', methods=['POST'])
+@editor_required
 def add_committee_type():
     """Add new committee type"""
     # Create request object from form data
@@ -1789,6 +1811,7 @@ def add_committee_type():
     return redirect(url_for('committee_types'))
 
 @app.route('/committee_types/update', methods=['POST'])
+@editor_required
 def update_committee_type():
     """Update existing committee type"""
     committee_type_id = request.form.get('committee_type_id', type=int)
@@ -1824,6 +1847,7 @@ def update_committee_type():
     return redirect(url_for('committee_types'))
 
 @app.route('/committee_types/delete', methods=['POST'])
+@editor_required
 def delete_committee_type():
     """Delete committee type"""
     committee_type_id = request.form.get('committee_type_id', type=int)
@@ -1866,16 +1890,16 @@ def manage_users():
     total_users = len(users)
     active_users = len([u for u in users if u['is_active']])
     admin_count = len([u for u in users if u['role'] == 'admin'])
-    manager_count = len([u for u in users if u['role'] == 'manager'])
-    user_count = len([u for u in users if u['role'] == 'user'])
+    editor_count = len([u for u in users if u['role'] == 'editor'])
+    viewer_count = len([u for u in users if u['role'] == 'viewer'])
     
     stats = {
         'total_users': total_users,
         'active_users': active_users,
         'inactive_users': total_users - active_users,
         'admin_count': admin_count,
-        'manager_count': manager_count,
-        'user_count': user_count
+        'editor_count': editor_count,
+        'viewer_count': viewer_count
     }
     
     return render_template('admin/users.html', 
@@ -1948,18 +1972,23 @@ def user_guide_tips():
 @app.route('/admin/users/add', methods=['POST'])
 @admin_required
 def add_user():
-    """Add new user"""
+    """Add new user with multiple hativot access"""
     try:
         username = request.form.get('username', '').strip()
         email = request.form.get('email', '').strip()
         full_name = request.form.get('full_name', '').strip()
-        role = request.form.get('role', 'user')
-        hativa_id = request.form.get('hativa_id')
+        role = request.form.get('role', 'viewer')
+        hativa_ids = request.form.getlist('hativa_ids[]')  # Multiple hativot
         password = request.form.get('password', '').strip()
         
         # Validation
         if not all([username, email, full_name, password]):
             flash('כל השדות הנדרשים חייבים להיות מלאים', 'error')
+            return redirect(url_for('manage_users'))
+        
+        # Validate role
+        if role not in ['admin', 'editor', 'viewer']:
+            flash('תפקיד לא חוקי', 'error')
             return redirect(url_for('manage_users'))
         
         # Check if username exists
@@ -1972,18 +2001,19 @@ def add_user():
             flash('כתובת האימייל כבר קיימת במערכת', 'error')
             return redirect(url_for('manage_users'))
         
-        # Convert hativa_id
-        hativa_id = int(hativa_id) if hativa_id and hativa_id != '' else None
+        # Convert hativa_ids to integers
+        hativa_ids_int = [int(hid) for hid in hativa_ids if hid] if hativa_ids else []
         
         # Hash password
         password_hash = auth_manager.hash_password(password)
         
         # Create user
-        user_id = db.create_user(username, email, password_hash, full_name, role, hativa_id)
+        user_id = db.create_user(username, email, password_hash, full_name, role, hativa_ids_int)
         
         if user_id:
             audit_logger.log_user_created(user_id, username, role)
-            flash(f'המשתמש {full_name} נוצר בהצלחה', 'success')
+            hativot_text = f' עם גישה ל-{len(hativa_ids_int)} חטיבות' if hativa_ids_int else ''
+            flash(f'המשתמש {full_name} נוצר בהצלחה{hativot_text}', 'success')
         else:
             flash('שגיאה ביצירת המשתמש', 'error')
             
@@ -1995,18 +2025,23 @@ def add_user():
 @app.route('/admin/users/update', methods=['POST'])
 @admin_required
 def update_user():
-    """Update user information"""
+    """Update user information with multiple hativot access"""
     try:
         user_id = int(request.form.get('user_id'))
         username = request.form.get('username', '').strip()
         email = request.form.get('email', '').strip()
         full_name = request.form.get('full_name', '').strip()
-        role = request.form.get('role', 'user')
-        hativa_id = request.form.get('hativa_id')
+        role = request.form.get('role', 'viewer')
+        hativa_ids = request.form.getlist('hativa_ids[]')  # Multiple hativot
         
         # Validation
         if not all([username, email, full_name]):
             flash('כל השדות הנדרשים חייבים להיות מלאים', 'error')
+            return redirect(url_for('manage_users'))
+        
+        # Validate role
+        if role not in ['admin', 'editor', 'viewer']:
+            flash('תפקיד לא חוקי', 'error')
             return redirect(url_for('manage_users'))
         
         # Check if username exists (excluding current user)
@@ -2019,15 +2054,16 @@ def update_user():
             flash('כתובת האימייל כבר קיימת במערכת', 'error')
             return redirect(url_for('manage_users'))
         
-        # Convert hativa_id
-        hativa_id = int(hativa_id) if hativa_id and hativa_id != '' else None
+        # Convert hativa_ids to integers
+        hativa_ids_int = [int(hid) for hid in hativa_ids if hid] if hativa_ids else []
         
         # Update user
-        success = db.update_user(user_id, username, email, full_name, role, hativa_id)
+        success = db.update_user(user_id, username, email, full_name, role, hativa_ids_int)
         
         if success:
             audit_logger.log_user_updated(user_id, username)
-            flash(f'פרטי המשתמש {full_name} עודכנו בהצלחה', 'success')
+            hativot_text = f' עם גישה ל-{len(hativa_ids_int)} חטיבות' if hativa_ids_int else ''
+            flash(f'פרטי המשתמש {full_name} עודכנו בהצלחה{hativot_text}', 'success')
         else:
             flash('שגיאה בעדכון פרטי המשתמש', 'error')
             
@@ -2735,7 +2771,7 @@ def get_events_by_committee():
 
 # Recycle Bin Routes
 @app.route('/recycle_bin')
-@login_required
+@editor_required
 def recycle_bin():
     """Recycle bin view for deleted items"""
     try:
@@ -2758,7 +2794,7 @@ def recycle_bin():
         return redirect(url_for('index'))
 
 @app.route('/api/recycle_bin/restore_vaada/<int:vaadot_id>', methods=['POST'])
-@login_required
+@editor_required
 def restore_vaada_route(vaadot_id):
     """Restore a deleted committee meeting"""
     try:
@@ -2795,7 +2831,7 @@ def restore_vaada_route(vaadot_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/recycle_bin/restore_event/<int:event_id>', methods=['POST'])
-@login_required
+@editor_required
 def restore_event_route(event_id):
     """Restore a deleted event"""
     try:
@@ -2832,7 +2868,7 @@ def restore_event_route(event_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/recycle_bin/permanent_delete_vaada/<int:vaadot_id>', methods=['POST'])
-@login_required
+@editor_required
 def permanent_delete_vaada_route(vaadot_id):
     """Permanently delete a committee meeting"""
     try:
@@ -2865,7 +2901,7 @@ def permanent_delete_vaada_route(vaadot_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/recycle_bin/permanent_delete_event/<int:event_id>', methods=['POST'])
-@login_required
+@editor_required
 def permanent_delete_event_route(event_id):
     """Permanently delete an event"""
     try:
@@ -2898,7 +2934,7 @@ def permanent_delete_event_route(event_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/recycle_bin/empty', methods=['POST'])
-@login_required
+@editor_required
 def empty_recycle_bin_route():
     """Empty the recycle bin (permanently delete all items)"""
     try:

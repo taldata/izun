@@ -124,14 +124,25 @@ class DatabaseManager:
                 email TEXT NOT NULL UNIQUE,
                 password_hash TEXT,
                 full_name TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'manager', 'user')),
-                hativa_id INTEGER,
+                role TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'editor', 'viewer')),
                 is_active INTEGER DEFAULT 1,
                 auth_source TEXT DEFAULT 'local' CHECK (auth_source IN ('local', 'ad')),
                 ad_dn TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_login TIMESTAMP,
-                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id)
+                last_login TIMESTAMP
+            )
+        ''')
+        
+        # Create user_hativot table for many-to-many relationship
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_hativot (
+                user_hativa_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                hativa_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
+                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id) ON DELETE CASCADE,
+                UNIQUE(user_id, hativa_id)
             )
         ''')
         
@@ -291,6 +302,41 @@ class DatabaseManager:
             
             if 'ad_dn' not in users_columns:
                 cursor.execute('ALTER TABLE users ADD COLUMN ad_dn TEXT')
+            
+            # Migrate user roles from old system (admin/manager/user) to new system (admin/editor/viewer)
+            try:
+                cursor.execute("SELECT user_id, role, hativa_id FROM users WHERE role IN ('manager', 'user')")
+                old_role_users = cursor.fetchall()
+                
+                for user_id, old_role, hativa_id in old_role_users:
+                    # Map old roles to new roles
+                    if old_role == 'manager':
+                        new_role = 'editor'
+                    elif old_role == 'user':
+                        new_role = 'viewer'
+                    else:
+                        continue  # admin stays admin
+                    
+                    cursor.execute("UPDATE users SET role = ? WHERE user_id = ?", (new_role, user_id))
+                    
+                    # If user had a hativa_id, migrate it to user_hativot table
+                    if hativa_id:
+                        cursor.execute("""
+                            INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
+                            VALUES (?, ?)
+                        """, (user_id, hativa_id))
+                
+                # Also migrate admin users with hativa_id
+                cursor.execute("SELECT user_id, hativa_id FROM users WHERE role = 'admin' AND hativa_id IS NOT NULL")
+                admin_users = cursor.fetchall()
+                for user_id, hativa_id in admin_users:
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
+                        VALUES (?, ?)
+                    """, (user_id, hativa_id))
+                    
+            except Exception as e:
+                print(f"Role migration note: {e}")
             
             tables_columns = {
                 'hativot': [('is_active', 'INTEGER DEFAULT 1')],
@@ -696,46 +742,62 @@ class DatabaseManager:
     
     # Vaadot operations (specific meeting instances)
     def add_vaada(self, committee_type_id: int, hativa_id: int, vaada_date: date, 
-                  status: str = 'planned', exception_date_id: Optional[int] = None, 
-                  notes: str = "") -> int:
-        """Add a specific committee meeting instance"""
+                  notes: str = "", created_by: int = None, override_constraints: bool = False) -> tuple[int, str]:
+        """
+        Add a new committee meeting with constraint checking
+        Returns: (vaadot_id, warning_message)
+        If override_constraints=True (for admins), constraints become warnings
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        warning_message = ""
+        
+        # Check if date is available for scheduling (one meeting per day constraint)
+        if not self.is_date_available_for_meeting(vaada_date):
+            if override_constraints:
+                warning_message = f'⚠️ אזהרה: כבר קיימת ועדה בתאריך {vaada_date}. מנהל מערכת יכול לעקוף אילוץ זה.'
+            else:
+                conn.close()
+                raise ValueError(f'כבר קיימת ועדה בתאריך {vaada_date}. המערכת מאפשרת רק ועדה אחת ביום.')
+        
         # Ensure meeting date is an allowed business day
         if not self.is_work_day(vaada_date):
-            raise ValueError(f"התאריך {vaada_date} אינו יום עסקים חוקי לועדות")
-
-        conn = self.get_connection()
+            if override_constraints:
+                warning_message += f'\n⚠️ אזהרה: התאריך {vaada_date} אינו יום עסקים חוקי לועדות.'
+            else:
+                conn.close()
+                raise ValueError(f'התאריך {vaada_date} אינו יום עסקים חוקי לועדות')
+        
         try:
-            cursor = conn.cursor()
             constraint_settings = self.get_constraint_settings()
 
-            max_per_day = constraint_settings['max_meetings_per_day']
-            cursor.execute('''
-                SELECT COUNT(*) FROM vaadot WHERE vaada_date = ?
-            ''', (vaada_date,))
-            existing_count = cursor.fetchone()[0]
-            if existing_count >= max_per_day:
-                if max_per_day == 1:
-                    raise ValueError(f"כבר קיימת ועדה בתאריך {vaada_date}. לא ניתן לקבוע יותר מועדה אחת ביום.")
-                raise ValueError(f"כבר קיימות {existing_count} ועדות בתאריך {vaada_date}. המגבלה הנוכחית מאפשרת עד {max_per_day} ועדות ביום.")
-
+            # Check weekly limit
             week_start, week_end = self._get_week_bounds(vaada_date)
             weekly_count = self._count_meetings_in_week(cursor, week_start, week_end)
             weekly_limit = self._get_weekly_limit(vaada_date, constraint_settings)
             if weekly_count >= weekly_limit:
-                raise ValueError(f"השבוע של {vaada_date} כבר מכיל {weekly_count} ועדות (המגבלה היא {weekly_limit})")
+                if override_constraints:
+                    warning_message += f'\n⚠️ אזהרה: השבוע של {vaada_date} כבר מכיל {weekly_count} ועדות (המגבלה היא {weekly_limit}).'
+                else:
+                    conn.close()
+                    raise ValueError(f"השבוע של {vaada_date} כבר מכיל {weekly_count} ועדות (המגבלה היא {weekly_limit})")
 
             cursor.execute('''
-                INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, status, exception_date_id, notes)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (committee_type_id, hativa_id, vaada_date, status, exception_date_id, notes))
+                INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, notes)
+                VALUES (?, ?, ?, ?)
+            ''', (committee_type_id, hativa_id, vaada_date, notes))
             vaadot_id = cursor.lastrowid
             conn.commit()
-            return vaadot_id
+            conn.close()
+            return (vaadot_id, warning_message)
         except ValueError:
             conn.rollback()
+            conn.close()
             raise
         except Exception as e:
             conn.rollback()
+            conn.close()
             print(f"Error adding vaada: {e}")
             raise
         finally:
@@ -1372,39 +1434,75 @@ class DatabaseManager:
     
     # User Management and Permissions
     def create_user(self, username: str, email: str, password_hash: str, full_name: str, 
-                   role: str = 'user', hativa_id: Optional[int] = None) -> int:
-        """Create a new user"""
+                   role: str = 'viewer', hativa_ids: List[int] = None) -> int:
+        """Create a new user with access to specified hativot"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO users (username, email, password_hash, full_name, role, hativa_id)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (username, email, password_hash, full_name, role, hativa_id))
+            INSERT INTO users (username, email, password_hash, full_name, role)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (username, email, password_hash, full_name, role))
         user_id = cursor.lastrowid
+        
+        # Add hativot access
+        if hativa_ids:
+            for hativa_id in hativa_ids:
+                cursor.execute('''
+                    INSERT INTO user_hativot (user_id, hativa_id) 
+                    VALUES (?, ?)
+                ''', (user_id, hativa_id))
+        
         conn.commit()
         conn.close()
         return user_id
     
     def get_user_by_username(self, username: str) -> Optional[Dict]:
-        """Get user by username"""
+        """Get user by username with all their hativot"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT u.*, h.name as hativa_name
-            FROM users u
-            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
-            WHERE u.username = ? AND u.is_active = 1
+            SELECT user_id, username, email, password_hash, full_name, role, 
+                   is_active, auth_source, ad_dn, created_at, last_login
+            FROM users
+            WHERE username = ? AND is_active = 1
         ''', (username,))
         row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            return None
+        
+        user_id = row[0]
+        
+        # Get all hativot for this user
+        cursor.execute('''
+            SELECT h.hativa_id, h.name
+            FROM user_hativot uh
+            JOIN hativot h ON uh.hativa_id = h.hativa_id
+            WHERE uh.user_id = ?
+            ORDER BY h.name
+        ''', (user_id,))
+        hativot_rows = cursor.fetchall()
         conn.close()
         
-        if row:
-            return {
-                'user_id': row[0], 'username': row[1], 'email': row[2], 'password_hash': row[3],
-                'full_name': row[4], 'role': row[5], 'hativa_id': row[6], 'is_active': row[7],
-                'created_at': row[8], 'last_login': row[9], 'hativa_name': row[10]
-            }
-        return None
+        hativot = [{'hativa_id': h[0], 'name': h[1]} for h in hativot_rows]
+        hativa_ids = [h['hativa_id'] for h in hativot]
+        
+        return {
+            'user_id': user_id,
+            'username': row[1],
+            'email': row[2],
+            'password_hash': row[3],
+            'full_name': row[4],
+            'role': row[5],
+            'is_active': row[6],
+            'auth_source': row[7],
+            'ad_dn': row[8],
+            'created_at': row[9],
+            'last_login': row[10],
+            'hativot': hativot,
+            'hativa_ids': hativa_ids
+        }
     
     def update_last_login(self, user_id: int):
         """Update user's last login timestamp"""
@@ -1422,63 +1520,116 @@ class DatabaseManager:
         cursor = conn.cursor()
         cursor.execute('''
             SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
-                   u.hativa_id, h.name as hativa_name, u.is_active, 
-                   u.created_at, u.last_login
+                   u.is_active, u.created_at, u.last_login
             FROM users u
-            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
             ORDER BY u.created_at DESC
         ''')
         rows = cursor.fetchall()
-        conn.close()
         
         users = []
         for row in rows:
+            user_id = row[0]
+            # Get all hativot for this user
+            cursor.execute('''
+                SELECT h.hativa_id, h.name
+                FROM user_hativot uh
+                JOIN hativot h ON uh.hativa_id = h.hativa_id
+                WHERE uh.user_id = ?
+                ORDER BY h.name
+            ''', (user_id,))
+            hativot_rows = cursor.fetchall()
+            
+            hativot = [{'hativa_id': h[0], 'name': h[1]} for h in hativot_rows]
+            hativa_names = ', '.join([h['name'] for h in hativot]) if hativot else ''
+            
             users.append({
-                'user_id': row[0],
+                'user_id': user_id,
                 'username': row[1],
                 'email': row[2],
                 'full_name': row[3],
                 'role': row[4],
-                'hativa_id': row[5],
-                'hativa_name': row[6],
-                'is_active': row[7],
-                'created_at': row[8],
-                'last_login': row[9]
+                'is_active': row[5],
+                'created_at': row[6],
+                'last_login': row[7],
+                'hativot': hativot,
+                'hativa_names': hativa_names
             })
+        
+        conn.close()
         return users
     
     def get_user_by_id(self, user_id: int) -> Optional[Dict]:
-        """Get user by ID"""
+        """Get user by ID with all their hativot"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT u.*, h.name as hativa_name
-            FROM users u
-            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
-            WHERE u.user_id = ?
+            SELECT user_id, username, email, password_hash, full_name, role, 
+                   is_active, auth_source, ad_dn, created_at, last_login
+            FROM users
+            WHERE user_id = ?
         ''', (user_id,))
         row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            return None
+        
+        # Get all hativot for this user
+        cursor.execute('''
+            SELECT h.hativa_id, h.name
+            FROM user_hativot uh
+            JOIN hativot h ON uh.hativa_id = h.hativa_id
+            WHERE uh.user_id = ?
+            ORDER BY h.name
+        ''', (user_id,))
+        hativot_rows = cursor.fetchall()
         conn.close()
         
-        if row:
-            return {
-                'user_id': row[0], 'username': row[1], 'email': row[2], 'password_hash': row[3],
-                'full_name': row[4], 'role': row[5], 'hativa_id': row[6], 'is_active': row[7],
-                'created_at': row[8], 'last_login': row[9], 'hativa_name': row[10]
-            }
-        return None
+        hativot = [{'hativa_id': h[0], 'name': h[1]} for h in hativot_rows]
+        hativa_names = ', '.join([h['name'] for h in hativot]) if hativot else ''
+        
+        return {
+            'user_id': row[0],
+            'username': row[1],
+            'email': row[2],
+            'password_hash': row[3],
+            'full_name': row[4],
+            'role': row[5],
+            'is_active': row[6],
+            'auth_source': row[7],
+            'ad_dn': row[8],
+            'created_at': row[9],
+            'last_login': row[10],
+            'hativot': hativot,
+            'hativa_names': hativa_names
+        }
     
     def update_user(self, user_id: int, username: str, email: str, full_name: str, 
-                   role: str, hativa_id: Optional[int] = None) -> bool:
-        """Update user information"""
+                   role: str, hativa_ids: List[int] = None) -> bool:
+        """Update user information and their hativot access"""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
+            
+            # Update basic user info
             cursor.execute('''
                 UPDATE users 
-                SET username = ?, email = ?, full_name = ?, role = ?, hativa_id = ?
+                SET username = ?, email = ?, full_name = ?, role = ?
                 WHERE user_id = ?
-            ''', (username, email, full_name, role, hativa_id, user_id))
+            ''', (username, email, full_name, role, user_id))
+            
+            # Update user_hativot relationships
+            if hativa_ids is not None:
+                # Remove existing hativot
+                cursor.execute('DELETE FROM user_hativot WHERE user_id = ?', (user_id,))
+                
+                # Add new hativot
+                for hativa_id in hativa_ids:
+                    cursor.execute('''
+                        INSERT INTO user_hativot (user_id, hativa_id) 
+                        VALUES (?, ?)
+                    ''', (user_id, hativa_id))
+            
             conn.commit()
             conn.close()
             return True
@@ -1565,6 +1716,77 @@ class DatabaseManager:
             print(f"Error changing password: {e}")
             return False
     
+    def get_user_hativot(self, user_id: int) -> List[Dict]:
+        """Get all hativot that a user has access to"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT h.hativa_id, h.name, h.description, h.color
+            FROM user_hativot uh
+            JOIN hativot h ON uh.hativa_id = h.hativa_id
+            WHERE uh.user_id = ?
+            ORDER BY h.name
+        ''', (user_id,))
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [{'hativa_id': row[0], 'name': row[1], 'description': row[2], 'color': row[3]} 
+                for row in rows]
+    
+    def user_has_access_to_hativa(self, user_id: int, hativa_id: int) -> bool:
+        """Check if user has access to a specific hativa"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Admin has access to everything
+        cursor.execute('SELECT role FROM users WHERE user_id = ?', (user_id,))
+        user = cursor.fetchone()
+        if user and user[0] == 'admin':
+            conn.close()
+            return True
+        
+        # Check if user has specific access to this hativa
+        cursor.execute('''
+            SELECT COUNT(*) FROM user_hativot 
+            WHERE user_id = ? AND hativa_id = ?
+        ''', (user_id, hativa_id))
+        count = cursor.fetchone()[0]
+        conn.close()
+        
+        return count > 0
+    
+    def add_user_hativa(self, user_id: int, hativa_id: int) -> bool:
+        """Add hativa access to user"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
+                VALUES (?, ?)
+            ''', (user_id, hativa_id))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error adding user hativa: {e}")
+            return False
+    
+    def remove_user_hativa(self, user_id: int, hativa_id: int) -> bool:
+        """Remove hativa access from user"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                DELETE FROM user_hativot 
+                WHERE user_id = ? AND hativa_id = ?
+            ''', (user_id, hativa_id))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error removing user hativa: {e}")
+            return False
+    
     def get_system_setting(self, setting_key: str) -> Optional[str]:
         """Get system setting value"""
         conn = self.get_connection()
@@ -1611,35 +1833,44 @@ class DatabaseManager:
         if user_role == 'admin':
             return True
         
-        # Check if general editing period is active
+        # Editors can edit when editing period is active
+        if user_role == 'editor':
+            editing_active = self.get_system_setting('editing_period_active')
+            return editing_active == '1'
+        
+        # Viewers cannot edit
+        if user_role == 'viewer':
+            return False
+        
+        # Check if general editing period is active (backward compatibility)
         editing_active = self.get_system_setting('editing_period_active')
         return editing_active == '1'
     
-    def can_user_edit(self, user_role: str, target_hativa_id: Optional[int] = None, 
-                     user_hativa_id: Optional[int] = None) -> Tuple[bool, str]:
+    def can_user_edit(self, user_id: int, user_role: str, target_hativa_id: Optional[int] = None) -> Tuple[bool, str]:
         """
-        Check if user can edit based on role and editing period
+        Check if user can edit based on role, editing period, and hativa access
         Returns (can_edit, reason)
         """
-        # Admin can always edit everything
+        # Admin can always edit everything (but will get warnings about constraints)
         if user_role == 'admin':
-            return True, "מנהל מערכת"
+            return True, "מנהל מערכת - אין הגבלות (מקבל התראות על אילוצים)"
         
-        # Check if general editing is allowed
-        if not self.is_editing_allowed(user_role):
-            return False, "תקופת העריכה הכללית הסתיימה. רק מנהלי מערכת יכולים לערוך"
+        # Viewers can never edit
+        if user_role == 'viewer':
+            return False, "צופה - הרשאות קריאה בלבד"
         
-        # Manager can edit within their division
-        if user_role == 'manager':
-            if target_hativa_id and user_hativa_id and target_hativa_id != user_hativa_id:
-                return False, "מנהל יכול לערוך רק בחטיבה שלו"
-            return True, "מנהל חטיבה"
-        
-        # Regular user can edit within their division during editing period
-        if user_role == 'user':
-            if target_hativa_id and user_hativa_id and target_hativa_id != user_hativa_id:
-                return False, "משתמש יכול לערוך רק בחטיבה שלו"
-            return True, "תקופת עריכה פעילה"
+        # Editors can edit if editing period is active
+        if user_role == 'editor':
+            editing_active = self.get_system_setting('editing_period_active')
+            if editing_active != '1':
+                return False, "תקופת העריכה הסתיימה. רק מנהלי מערכת יכולים לערוך"
+            
+            # Check if editor has access to target hativa
+            if target_hativa_id:
+                if not self.user_has_access_to_hativa(user_id, target_hativa_id):
+                    return False, "אין לך הרשאה לערוך בחטיבה זו"
+            
+            return True, "עורך - תקופת עריכה פעילה"
         
         return False, "הרשאות לא מספיקות"
     

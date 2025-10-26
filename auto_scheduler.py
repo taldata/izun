@@ -72,9 +72,10 @@ class AutoMeetingScheduler:
         )
         return third_week_start <= check_date <= third_week_end
     
-    def can_schedule_meeting(self, committee_type_id: int, target_date: date, hativa_id: int) -> Tuple[bool, str]:
+    def can_schedule_meeting(self, committee_type_id: int, target_date: date, hativa_id: int, is_admin: bool = False) -> Tuple[bool, str]:
         """
         בדיקה האם ניתן לתזמן ישיבה בתאריך נתון
+        is_admin: אם True, אילוצים הופכים להתראות במקום חסימות
         """
         # בדיקת יום עסקים
         if not self.is_business_day(target_date):
@@ -100,13 +101,16 @@ class AutoMeetingScheduler:
             return False, f"ועדה זו מתקיימת רק בימי {expected_day_name}"
         
         constraint_settings = self.db.get_constraint_settings()
+        warnings = []
 
         # בדיקת ועדה אחת ביום (על פי מגבלת המערכת)
         if not self.db.is_date_available_for_meeting(target_date):
             max_per_day = constraint_settings['max_meetings_per_day']
-            if max_per_day == 1:
-                return False, "קיימת כבר ישיבה אחרת באותו תאריך"
-            return False, f"מכסת הישיבות היומית ({max_per_day}) נוצלה בתאריך זה"
+            constraint_msg = "קיימת כבר ישיבה אחרת באותו תאריך" if max_per_day == 1 else f"מכסת הישיבות היומית ({max_per_day}) נוצלה בתאריך זה"
+            if is_admin:
+                warnings.append(f"⚠️ {constraint_msg}")
+            else:
+                return False, constraint_msg
 
         # בדיקת מגבלות שבועיות
         week_meetings = self.count_meetings_in_week(target_date)
@@ -116,7 +120,11 @@ class AutoMeetingScheduler:
         third_week_limit = constraint_settings['max_third_week_meetings']
         allowed_weekly = third_week_limit if is_third_week else weekly_limit
         if week_meetings >= allowed_weekly:
-            return False, f"מכסת הישיבות השבועית ({allowed_weekly}) נוצלה השבוע"
+            constraint_msg = f"מכסת הישיבות השבועית ({allowed_weekly}) נוצלה השבוע"
+            if is_admin:
+                warnings.append(f"⚠️ {constraint_msg}")
+            else:
+                return False, constraint_msg
         
         # בדיקה מיוחדת לועדות חודשיות - רק בשבוע המתאים
         if frequency == 'monthly':
@@ -142,6 +150,9 @@ class AutoMeetingScheduler:
                 except (ValueError, TypeError):
                     continue
         
+        # Return success with any warnings for admins
+        if warnings:
+            return True, f"ניתן לתזמן ישיבה. {' '.join(warnings)}"
         return True, "ניתן לתזמן ישיבה"
     
     def find_next_available_date(self, committee_type_id: int, hativa_id: int, 
