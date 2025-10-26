@@ -74,6 +74,49 @@ def logout():
     flash('התנתקת מהמערכת בהצלחה', 'success')
     return redirect(url_for('auth_azure'))
 
+@app.route('/refresh_session')
+@login_required
+def refresh_session():
+    """Refresh session data from database - useful after role changes"""
+    if 'user_id' not in session:
+        flash('נדרשת התחברות', 'error')
+        return redirect(url_for('auth_azure'))
+    
+    try:
+        # Get fresh user data from database
+        user = db.get_user_by_id(session['user_id'])
+        
+        if not user:
+            flash('משתמש לא נמצא', 'error')
+            auth_manager.logout_user()
+            return redirect(url_for('auth_azure'))
+        
+        if not user['is_active']:
+            flash('חשבון המשתמש מושבת', 'error')
+            auth_manager.logout_user()
+            return redirect(url_for('auth_azure'))
+        
+        # Update session with fresh data from database
+        old_role = session.get('role')
+        session['role'] = user['role']
+        session['username'] = user['username']
+        session['full_name'] = user['full_name']
+        session['hativa_id'] = user.get('hativa_id')
+        
+        if old_role != user['role']:
+            flash(f'הרשאות עודכנו: {old_role} → {user["role"]}', 'success')
+        else:
+            flash('Session עודכן בהצלחה', 'success')
+        
+        app.logger.info(f"Session refreshed for user {user['username']}: role={user['role']}")
+        
+        return redirect(url_for('index'))
+        
+    except Exception as e:
+        app.logger.error(f"Error refreshing session: {e}", exc_info=True)
+        flash(f'שגיאה בעדכון session: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
 @app.route('/auth/azure')
 def auth_azure():
     """Redirect to Azure AD for authentication"""
