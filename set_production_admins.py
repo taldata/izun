@@ -11,8 +11,14 @@ def set_admins():
     """Set tal.s and shiran.bs as admin users"""
     
     # Connect to production database
+    # Check if running on Render (persistent disk at /var/data/)
+    import os
+    db_path = '/var/data/committee_system.db' if os.path.exists('/var/data') else 'committee_system.db'
+    
+    print(f"📁 Using database: {db_path}")
+    
     try:
-        conn = sqlite3.connect('committee_system.db')
+        conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
         print("🔍 Checking current users...")
