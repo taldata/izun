@@ -327,20 +327,10 @@
                             <button class="btn clear-filters-btn btn-sm" onclick="clearAllFilters()">
                                 <i class="bi bi-x-circle me-1"></i>נקה פילטרים
                             </button>
-                            <!-- Export dropdown -->
-                            <div class="btn-group" role="group">
-                                <button type="button" class="btn export-btn btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="bi bi-download me-1"></i>ייצוא נתונים
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li><a class="dropdown-item" href="#" onclick="exportToCSV(); return false;">
-                                        <i class="bi bi-filetype-csv me-2"></i>ייצא ל-CSV
-                                    </a></li>
-                                    <li><a class="dropdown-item" href="#" onclick="exportToExcel(); return false;">
-                                        <i class="bi bi-file-earmark-excel me-2"></i>ייצא ל-Excel
-                                    </a></li>
-                                </ul>
-                            </div>
+                            <!-- Export button -->
+                            <button class="btn export-btn btn-sm" onclick="exportToExcel()">
+                                <i class="bi bi-file-earmark-excel me-1"></i>ייצא ל-Excel
+                            </button>
                         </div>
                     </div>
                     
