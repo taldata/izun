@@ -156,7 +156,7 @@
             מדריך למשתמש
         </h1>
         <p class="lead">מערכת ניהול ועדות - איזון עומסים</p>
-        <p class="mb-0">גרסה 2.0 | אוקטובר 2025</p>
+        <p class="mb-0">גרסה 2.5 | דצמבר 2025</p>
     </div>
 
     <!-- Quick Stats -->
@@ -164,11 +164,11 @@
         <h2><i class="bi bi-graph-up me-2"></i>סטטיסטיקות המדריך</h2>
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-number">7</div>
+                <div class="stat-number">8</div>
                 <div class="stat-label">פרקים</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">15</div>
+                <div class="stat-number">18</div>
                 <div class="stat-label">שאלות נפוצות</div>
             </div>
             <div class="stat-card">
@@ -176,7 +176,7 @@
                 <div class="stat-label">תפקידים</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">30+</div>
+                <div class="stat-number">40+</div>
                 <div class="stat-label">דוגמאות</div>
             </div>
         </div>
@@ -209,34 +209,34 @@
     <div class="toc-section">
         <h2><i class="bi bi-people me-2"></i>מדריכים לפי תפקיד</h2>
         
-        <!-- User Role -->
-        <div class="toc-card" onclick="window.location.href='{{ url_for('user_guide_user') }}'">
-            <span class="role-badge role-user">👤 משתמש רגיל - User</span>
-            <h3 class="mt-3">מדריך למשתמש רגיל</h3>
+        <!-- Viewer Role -->
+        <div class="toc-card" onclick="window.location.href='{{ url_for('user_guide_full') }}#viewer-role'">
+            <span class="role-badge role-user">👁️ צופה - Viewer</span>
+            <h3 class="mt-3">מדריך לצופה</h3>
             <p>
-                <strong>מה תלמד:</strong> איך להוסיף ולערוך אירועים, להבין את תקופת העריכה, 
-                לעבוד עם מסלולים וועדות, ולהשתמש במערכת ביעילות.
+                <strong>מה תלמד:</strong> איך לצפות בכל הנתונים במערכת, לחפש ולסנן אירועים, 
+                לייצא דוחות, ולהשתמש בטבלת אירועים.
             </p>
             <p>
-                <strong>נושאים:</strong> הוספת אירוע • עריכת אירוע • הבנת SLA • תקופת עריכה • 
-                הרשאות ומגבלות • שגיאות נפוצות
+                <strong>נושאים:</strong> הרשאות קריאה בלבד • צפייה בנתונים • ייצוא CSV • 
+                חיפוש וסינון • מגבלות • בקשת הרשאות עריכה
             </p>
             <button class="btn btn-primary">
                 <i class="bi bi-arrow-left me-2"></i>למדריך מלא
             </button>
         </div>
 
-        <!-- Manager Role -->
-        <div class="toc-card" onclick="window.location.href='{{ url_for('user_guide_manager') }}'">
-            <span class="role-badge role-manager">👨‍💼 מנהל חטיבה - Manager</span>
-            <h3 class="mt-3">מדריך למנהל חטיבה</h3>
+        <!-- Editor Role -->
+        <div class="toc-card" onclick="window.location.href='{{ url_for('user_guide_full') }}#editor-role'">
+            <span class="role-badge role-manager">✏️ עורך - Editor</span>
+            <h3 class="mt-3">מדריך לעורך</h3>
             <p>
-                <strong>מה תלמד:</strong> ניהול מלא של החטיבה - יצירת ועדות, הזזה בלוח שנה, 
-                תזמון אוטומטי, מחיקה מרובה, וניהול מסלולים.
+                <strong>מה תלמד:</strong> איך ליצור ולערוך אירועים בחטיבות שלך, להבין את תקופת העריכה,
+                לעבוד עם מסלולים ותאריכים נגזרים, ולהשתמש במערכת ביעילות.
             </p>
             <p>
-                <strong>נושאים:</strong> יצירת ועדות • Drag & Drop • תזמון אוטומטי • 
-                מחיקה מרובה • ניהול מסלולים • איזון עומסים • טיפים מתקדמים
+                <strong>נושאים:</strong> יצירת אירועים • עריכת אירועים • תקופת עריכה • 
+                תאריכים נגזרים • SLA • הרשאות חטיבות • מגבלות
             </p>
             <button class="btn btn-primary">
                 <i class="bi bi-arrow-left me-2"></i>למדריך מלא
@@ -244,16 +244,16 @@
         </div>
 
         <!-- Admin Role -->
-        <div class="toc-card" onclick="window.location.href='{{ url_for('user_guide_admin') }}'">
+        <div class="toc-card" onclick="window.location.href='{{ url_for('user_guide_full') }}#admin-role'">
             <span class="role-badge role-admin">👑 מנהל מערכת - Admin</span>
             <h3 class="mt-3">מדריך למנהל מערכת</h3>
             <p>
-                <strong>מה תלמד:</strong> שליטה מלאה על המערכת - ניהול משתמשים, חיבור AD, 
-                תקופת עריכה, אילוצים, יומן ביקורת, והגדרות מתקדמות.
+                <strong>מה תלמד:</strong> שליטה מלאה על המערכת - ניהול משתמשים והרשאות, 
+                יצירת ועדות, תזמון אוטומטי, תקופת עריכה, ניהול חטיבות ומסלולים.
             </p>
             <p>
-                <strong>נושאים:</strong> ניהול משתמשים • Active Directory • תקופת עריכה • 
-                אילוצים • יומן ביקורת • הרשאות • גיבויים • תחזוקה
+                <strong>נושאים:</strong> ניהול משתמשים (Viewer/Editor/Admin) • תקופת עריכה • 
+                ניהול חטיבות • ניהול מסלולים • תזמון אוטומטי • יומן ביקורת
             </p>
             <button class="btn btn-primary">
                 <i class="bi bi-arrow-left me-2"></i>למדריך מלא
