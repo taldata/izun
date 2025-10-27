@@ -12,9 +12,20 @@
                     <button class="btn btn-outline-secondary" onclick="toggleFilters()">
                         <i class="fas fa-filter"></i> סינון
                     </button>
-                    <button class="btn btn-outline-primary" onclick="exportLogs()">
-                        <i class="fas fa-download"></i> ייצוא
-                    </button>
+                    <!-- Export dropdown -->
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-download"></i> ייצוא
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#" onclick="exportLogs('csv'); return false;">
+                                <i class="bi bi-filetype-csv me-2"></i>ייצא ל-CSV
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="exportLogs('excel'); return false;">
+                                <i class="bi bi-file-earmark-excel me-2"></i>ייצא ל-Excel
+                            </a></li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
@@ -263,9 +274,10 @@ function toggleFilters() {
     }
 }
 
-function exportLogs() {
+function exportLogs(format = 'csv') {
     // Build query string from current filters
     const params = new URLSearchParams(window.location.search);
+    params.set('format', format);
     window.location.href = '/admin/audit_logs/export?' + params.toString();
 }
 </script>

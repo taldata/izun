@@ -3,6 +3,8 @@
 {% block title %}טבלת אירועים - איזון עומסים{% endblock %}
 
 {% block extra_head %}
+<!-- SheetJS library for Excel export -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
     .events-table-container {
         background: white;
@@ -325,9 +327,20 @@
                             <button class="btn clear-filters-btn btn-sm" onclick="clearAllFilters()">
                                 <i class="bi bi-x-circle me-1"></i>נקה פילטרים
                             </button>
-                            <button class="btn export-btn btn-sm" onclick="exportToCSV()">
-                                <i class="bi bi-download me-1"></i>ייצא ל-CSV
-                            </button>
+                            <!-- Export dropdown -->
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn export-btn btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-download me-1"></i>ייצוא נתונים
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" href="#" onclick="exportToCSV(); return false;">
+                                        <i class="bi bi-filetype-csv me-2"></i>ייצא ל-CSV
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="exportToExcel(); return false;">
+                                        <i class="bi bi-file-earmark-excel me-2"></i>ייצא ל-Excel
+                                    </a></li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                     
@@ -1035,6 +1048,155 @@ function downloadCSV(csvContent, filename) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+}
+
+// Excel export functions
+function exportToExcel() {
+    const eventsViewRadio = document.getElementById('eventsView');
+    const committeesViewRadio = document.getElementById('committeesView');
+
+    if (committeesViewRadio.checked) {
+        exportCommitteeViewToExcel();
+    } else {
+        exportEventsViewToExcel();
+    }
+}
+
+function exportEventsViewToExcel() {
+    const table = document.getElementById('eventsTable');
+    const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.style.display !== 'none');
+
+    // Create worksheet data
+    const wsData = [];
+    
+    // Add headers
+    wsData.push([
+        'שם האירוע',
+        'סוג',
+        'חטיבה',
+        'מסלול',
+        'ועדה',
+        'תאריך ועדה',
+        'סיום קול קורא',
+        'סיום קליטה',
+        'סיום בדיקה',
+        'תשובת ועדה',
+        'בקשות צפויות',
+        'נוצר'
+    ]);
+
+    // Add data rows
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const rowData = Array.from(cells).map(cell => {
+            let text = cell.textContent.trim();
+            text = text.replace(/\s+/g, ' ');
+            return text;
+        });
+        wsData.push(rowData);
+    });
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // Set column widths
+    ws['!cols'] = [
+        { wch: 25 }, // שם האירוע
+        { wch: 10 }, // סוג
+        { wch: 15 }, // חטיבה
+        { wch: 20 }, // מסלול
+        { wch: 20 }, // ועדה
+        { wch: 12 }, // תאריך ועדה
+        { wch: 15 }, // סיום קול קורא
+        { wch: 15 }, // סיום קליטה
+        { wch: 15 }, // סיום בדיקה
+        { wch: 15 }, // תשובת ועדה
+        { wch: 12 }, // בקשות צפויות
+        { wch: 15 }  // נוצר
+    ];
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'אירועים');
+
+    // Generate and download Excel file
+    const filename = `events_table_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, filename);
+}
+
+async function exportCommitteeViewToExcel() {
+    try {
+        const response = await fetch('/api/events_by_committee');
+        const data = await response.json();
+
+        if (!data.success) {
+            alert('שגיאה בטעינת נתוני הועדות לייצוא');
+            return;
+        }
+
+        // Create worksheet data
+        const wsData = [];
+        
+        // Add headers
+        wsData.push([
+            'שם ועדה',
+            'חטיבה',
+            'סוג ועדה',
+            'תאריך ועדה',
+            'מספר אירועים',
+            'בקשות צפויות',
+            'הגשות בפועל',
+            'סוגי אירועים',
+            'פרטי אירועים'
+        ]);
+
+        // Add data rows
+        data.events_by_committee.forEach(committee => {
+            const eventTypes = committee.summary.event_types.join('; ');
+            const eventsDetails = committee.events.map(event =>
+                `${event.name} (${event.maslul_name}, ${event.expected_requests} בקשות${event.event_type ? ', ' + (event.event_type === 'kokok' ? 'קו"ק' : 'שוטף') : ''})`
+            ).join('; ');
+
+            wsData.push([
+                committee.committee_info.committee_name,
+                committee.committee_info.hativa_name,
+                committee.committee_info.committee_type,
+                committee.committee_info.vaada_date || '',
+                committee.summary.total_events,
+                committee.summary.total_expected_requests,
+                committee.summary.total_actual_submissions,
+                eventTypes,
+                eventsDetails
+            ]);
+        });
+
+        // Create workbook and worksheet
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+        // Set column widths
+        ws['!cols'] = [
+            { wch: 20 }, // שם ועדה
+            { wch: 15 }, // חטיבה
+            { wch: 20 }, // סוג ועדה
+            { wch: 12 }, // תאריך ועדה
+            { wch: 12 }, // מספר אירועים
+            { wch: 12 }, // בקשות צפויות
+            { wch: 12 }, // הגשות בפועל
+            { wch: 20 }, // סוגי אירועים
+            { wch: 50 }  // פרטי אירועים
+        ];
+
+        // Add worksheet to workbook
+        XLSX.utils.book_append_sheet(wb, ws, 'ועדות');
+
+        // Generate and download Excel file
+        const filename = `committees_detailed_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, filename);
+    } catch (error) {
+        console.error('Error exporting to Excel:', error);
+        alert('שגיאה בייצוא נתוני הועדות ל-Excel');
+    }
 }
 
 // Bulk selection / actions

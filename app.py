@@ -2420,10 +2420,13 @@ def admin_audit_logs():
 @app.route('/admin/audit_logs/export')
 @admin_required
 def export_audit_logs():
-    """Export audit logs as CSV"""
+    """Export audit logs as CSV or Excel"""
     try:
         import csv
         import io
+        
+        # Get export format (default CSV for backward compatibility)
+        export_format = request.args.get('format', 'csv').lower()
         
         # Get filter parameters (same as main route)
         username = request.args.get('username', '').strip() or None
@@ -2450,7 +2453,82 @@ def export_audit_logs():
             end_date=end_date_obj
         )
         
-        # Create CSV
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        if export_format == 'excel':
+            # Export as Excel
+            try:
+                from openpyxl import Workbook
+                from openpyxl.styles import Font, PatternFill, Alignment
+                
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "Audit Logs"
+                
+                # Write header with styling
+                headers = ['Timestamp', 'Username', 'Action', 'Entity Type', 'Entity Name', 'Details', 'IP Address', 'Status', 'Error Message']
+                ws.append(headers)
+                
+                # Style header row
+                header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+                header_font = Font(bold=True, color="FFFFFF")
+                for cell in ws[1]:
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                
+                # Write data
+                for log in logs:
+                    ws.append([
+                        log['timestamp'],
+                        log['username'],
+                        log['action'],
+                        log['entity_type'],
+                        log['entity_name'],
+                        log['details'],
+                        log['ip_address'],
+                        log['status'],
+                        log['error_message']
+                    ])
+                
+                # Auto-adjust column widths
+                for column in ws.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if cell.value:
+                                max_length = max(max_length, len(str(cell.value)))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 50)
+                    ws.column_dimensions[column_letter].width = adjusted_width
+                
+                # Save to BytesIO
+                output = io.BytesIO()
+                wb.save(output)
+                output.seek(0)
+                
+                # Create response
+                from flask import make_response
+                response = make_response(output.getvalue())
+                response.headers['Content-Disposition'] = f'attachment; filename=audit_logs_{timestamp_str}.xlsx'
+                response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                
+                # Log the export
+                audit_logger.log_success(
+                    audit_logger.ACTION_EXPORT,
+                    'audit_logs',
+                    details=f'ייצוא Excel של {len(logs)} רשומות'
+                )
+                
+                return response
+                
+            except ImportError:
+                flash('ספריית openpyxl לא מותקנת. מייצא CSV במקום.', 'warning')
+                export_format = 'csv'  # Fall back to CSV
+        
+        # Export as CSV (default or fallback)
         output = io.StringIO()
         writer = csv.writer(output)
         
@@ -2475,14 +2553,14 @@ def export_audit_logs():
         from flask import make_response
         output.seek(0)
         response = make_response(output.getvalue())
-        response.headers['Content-Disposition'] = f'attachment; filename=audit_logs_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        response.headers['Content-Disposition'] = f'attachment; filename=audit_logs_{timestamp_str}.csv'
         response.headers['Content-Type'] = 'text/csv'
         
         # Log the export
         audit_logger.log_success(
             audit_logger.ACTION_EXPORT,
             'audit_logs',
-            details=f'ייצוא {len(logs)} רשומות'
+            details=f'ייצוא CSV של {len(logs)} רשומות'
         )
         
         return response
