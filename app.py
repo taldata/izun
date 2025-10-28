@@ -1610,6 +1610,10 @@ def add_event():
     actual_submissions = request.form.get('actual_submissions', '0')
     call_publication_date = request.form.get('call_publication_date')
     
+    # Get manual call deadline parameters
+    is_call_deadline_manual = request.form.get('is_call_deadline_manual') == '1'
+    manual_call_deadline_date = request.form.get('manual_call_deadline_date')
+    
     if not all([vaadot_id, maslul_id, name, event_type]):
         flash('כל השדות הם שדות חובה', 'error')
         return redirect(url_for('index'))
@@ -1659,7 +1663,8 @@ def add_event():
             'call_publication_date': call_publication_date
         }
         
-        event_id = db.add_event(int(vaadot_id), int(maslul_id), name, event_type, expected_requests, actual_submissions, call_publication_date)
+        event_id = db.add_event(int(vaadot_id), int(maslul_id), name, event_type, expected_requests, actual_submissions, call_publication_date,
+                                 is_call_deadline_manual, manual_call_deadline_date)
         
         # Get committee name for logging
         vaada = db.get_vaada_by_id(int(vaadot_id))
@@ -1684,6 +1689,10 @@ def edit_event(event_id):
     expected_requests = request.form.get('expected_requests', '0')
     actual_submissions = request.form.get('actual_submissions', '0')
     call_publication_date = request.form.get('call_publication_date')
+    
+    # Get manual call deadline parameters
+    is_call_deadline_manual = request.form.get('is_call_deadline_manual') == '1'
+    manual_call_deadline_date = request.form.get('manual_call_deadline_date')
 
     if not all([vaadot_id, maslul_id, name, event_type]):
         flash('כל השדות הם שדות חובה', 'error')
@@ -1719,7 +1728,8 @@ def edit_event(event_id):
             flash(f'שגיאה: המסלול "{maslul["name"]}" מחטיבת "{maslul["hativa_name"]}" אינו יכול להיות משויך לועדה מחטיבת "{vaada["hativa_name"]}"', 'error')
             return redirect(url_for('index'))
         
-        success = db.update_event(event_id, int(vaadot_id), int(maslul_id), name, event_type, expected_requests, actual_submissions, call_publication_date)
+        success = db.update_event(event_id, int(vaadot_id), int(maslul_id), name, event_type, expected_requests, actual_submissions, call_publication_date,
+                                   is_call_deadline_manual, manual_call_deadline_date)
         if success:
             audit_logger.log_event_updated(event_id, name)
             flash(f'אירוע "{name}" עודכן בהצלחה', 'success')

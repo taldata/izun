@@ -376,6 +376,7 @@ class DatabaseManager:
                     ('intake_deadline_date', 'DATE'),
                     ('review_deadline_date', 'DATE'),
                     ('response_deadline_date', 'DATE'),
+                    ('is_call_deadline_manual', 'INTEGER DEFAULT 0'),
                     ('actual_submissions', 'INTEGER DEFAULT 0'),
                     ('scheduled_date', 'DATE'),
                     ('status', 'TEXT DEFAULT "planned"'),
@@ -1192,7 +1193,8 @@ class DatabaseManager:
     
     # Events operations
     def add_event(self, vaadot_id: int, maslul_id: int, name: str, event_type: str,
-                  expected_requests: int = 0, actual_submissions: int = 0, call_publication_date: Optional[date] = None) -> int:
+                  expected_requests: int = 0, actual_submissions: int = 0, call_publication_date: Optional[date] = None,
+                  is_call_deadline_manual: bool = False, manual_call_deadline_date: Optional[date] = None) -> int:
         """Add a new event"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -1203,6 +1205,14 @@ class DatabaseManager:
             call_publication_date = datetime.strptime(call_publication_date, '%Y-%m-%d').date()
         elif isinstance(call_publication_date, datetime):
             call_publication_date = call_publication_date.date()
+        
+        # Process manual call deadline date if provided
+        if manual_call_deadline_date in ("", None):
+            manual_call_deadline_date = None
+        elif isinstance(manual_call_deadline_date, str):
+            manual_call_deadline_date = datetime.strptime(manual_call_deadline_date, '%Y-%m-%d').date()
+        elif isinstance(manual_call_deadline_date, datetime):
+            manual_call_deadline_date = manual_call_deadline_date.date()
         
         # Validate that the route belongs to the same division as the committee and get stage data
         cursor.execute('''
@@ -1248,6 +1258,13 @@ class DatabaseManager:
         # Calculate derived dates based on stage durations
         stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
         
+        # Use manual call deadline date if provided, otherwise use calculated
+        if is_call_deadline_manual and manual_call_deadline_date:
+            final_call_deadline = manual_call_deadline_date
+        else:
+            final_call_deadline = stage_dates['call_deadline_date']
+            is_call_deadline_manual = False  # Ensure flag is False if no manual date
+        
         # Check max requests per day constraint on derived dates
         derived_constraint_error = self.check_derived_dates_constraints(stage_dates, expected_requests, exclude_event_id=None)
         if derived_constraint_error:
@@ -1256,11 +1273,13 @@ class DatabaseManager:
         
         cursor.execute('''
             INSERT INTO events (vaadot_id, maslul_id, name, event_type, expected_requests, actual_submissions,
-                              call_publication_date, call_deadline_date, intake_deadline_date, review_deadline_date, response_deadline_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              call_publication_date, call_deadline_date, intake_deadline_date, review_deadline_date, 
+                              response_deadline_date, is_call_deadline_manual)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (vaadot_id, maslul_id, name, event_type, expected_requests, actual_submissions,
-              call_publication_date, stage_dates['call_deadline_date'], stage_dates['intake_deadline_date'],
-              stage_dates['review_deadline_date'], stage_dates['response_deadline_date']))
+              call_publication_date, final_call_deadline, stage_dates['intake_deadline_date'],
+              stage_dates['review_deadline_date'], stage_dates['response_deadline_date'], 
+              1 if is_call_deadline_manual else 0))
         event_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -1288,6 +1307,7 @@ class DatabaseManager:
                 e.intake_deadline_date,
                 e.review_deadline_date,
                 e.response_deadline_date,
+                e.is_call_deadline_manual,
                 ct.name as committee_name,
                 v.vaada_date,
                 vh.name as vaada_hativa_name,
@@ -1322,16 +1342,25 @@ class DatabaseManager:
                 'event_type': row[4], 'expected_requests': row[5], 'actual_submissions': row[6], 'call_publication_date': row[7],
                 'scheduled_date': row[8], 'status': row[9], 'created_at': row[10], 
                 'call_deadline_date': row[11], 'intake_deadline_date': row[12], 'review_deadline_date': row[13],
-                'response_deadline_date': row[14], 'committee_name': row[15], 'vaada_date': row[16], 
-                'vaada_hativa_name': row[17], 'maslul_name': row[18], 'hativa_name': row[19],
-                'hativa_id': row[20] if len(row) > 20 else None,
-                'committee_type_id': row[21] if len(row) > 21 else None} for row in rows]
+                'response_deadline_date': row[14], 'is_call_deadline_manual': row[15], 'committee_name': row[16], 
+                'vaada_date': row[17], 'vaada_hativa_name': row[18], 'maslul_name': row[19], 'hativa_name': row[20],
+                'hativa_id': row[21] if len(row) > 21 else None,
+                'committee_type_id': row[22] if len(row) > 22 else None} for row in rows]
     
     def update_event(self, event_id: int, vaadot_id: int, maslul_id: int, name: str, event_type: str,
-                     expected_requests: int = 0, actual_submissions: int = 0, call_publication_date: Optional[date] = None) -> bool:
+                     expected_requests: int = 0, actual_submissions: int = 0, call_publication_date: Optional[date] = None,
+                     is_call_deadline_manual: bool = False, manual_call_deadline_date: Optional[date] = None) -> bool:
         """Update an existing event"""
         conn = self.get_connection()
         cursor = conn.cursor()
+        
+        # Process manual call deadline date if provided
+        if manual_call_deadline_date in ("", None):
+            manual_call_deadline_date = None
+        elif isinstance(manual_call_deadline_date, str):
+            manual_call_deadline_date = datetime.strptime(manual_call_deadline_date, '%Y-%m-%d').date()
+        elif isinstance(manual_call_deadline_date, datetime):
+            manual_call_deadline_date = manual_call_deadline_date.date()
         
         # Validate that the route belongs to the same division as the committee and get stage data
         cursor.execute('''
@@ -1377,6 +1406,13 @@ class DatabaseManager:
         # Calculate derived dates based on stage durations
         stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
         
+        # Use manual call deadline date if provided, otherwise use calculated
+        if is_call_deadline_manual and manual_call_deadline_date:
+            final_call_deadline = manual_call_deadline_date
+        else:
+            final_call_deadline = stage_dates['call_deadline_date']
+            is_call_deadline_manual = False  # Ensure flag is False if no manual date
+        
         # Check max requests per day constraint on derived dates (excluding current event)
         derived_constraint_error = self.check_derived_dates_constraints(stage_dates, expected_requests, exclude_event_id=event_id)
         if derived_constraint_error:
@@ -1387,11 +1423,12 @@ class DatabaseManager:
             UPDATE events 
             SET vaadot_id = ?, maslul_id = ?, name = ?, event_type = ?, expected_requests = ?, actual_submissions = ?,
                 call_publication_date = ?, call_deadline_date = ?, intake_deadline_date = ?,
-                review_deadline_date = ?, response_deadline_date = ?
+                review_deadline_date = ?, response_deadline_date = ?, is_call_deadline_manual = ?
             WHERE event_id = ?
         ''', (vaadot_id, maslul_id, name, event_type, expected_requests, actual_submissions,
-              call_publication_date, stage_dates['call_deadline_date'], stage_dates['intake_deadline_date'],
-              stage_dates['review_deadline_date'], stage_dates['response_deadline_date'], event_id))
+              call_publication_date, final_call_deadline, stage_dates['intake_deadline_date'],
+              stage_dates['review_deadline_date'], stage_dates['response_deadline_date'], 
+              1 if is_call_deadline_manual else 0, event_id))
         
         success = cursor.rowcount > 0
         conn.commit()
@@ -2319,7 +2356,7 @@ class DatabaseManager:
             SELECT e.event_id, e.vaadot_id, e.maslul_id, e.name, e.event_type,
                    e.expected_requests, e.actual_submissions, e.call_publication_date,
                    e.call_deadline_date, e.intake_deadline_date, e.review_deadline_date,
-                   e.response_deadline_date, e.created_at,
+                   e.response_deadline_date, e.is_call_deadline_manual, e.created_at,
                    m.name as maslul_name, m.hativa_id as maslul_hativa_id, m.sla_days,
                    v.vaada_date, v.status as vaada_status,
                    ct.name as committee_name, ct.committee_type_id,
@@ -2351,17 +2388,18 @@ class DatabaseManager:
             'intake_deadline_date': row[9],
             'review_deadline_date': row[10],
             'response_deadline_date': row[11],
-            'created_at': row[12],
-            'maslul_name': row[13],
-            'maslul_hativa_id': row[14],
-            'sla_days': row[15],
-            'vaada_date': row[16],
-            'vaada_status': row[17],
-            'committee_name': row[18],
-            'committee_type_id': row[19],
-            'hativa_name': row[20],
-            'hativa_color': row[21],
-            'committee_type_name': row[22]
+            'is_call_deadline_manual': row[12],
+            'created_at': row[13],
+            'maslul_name': row[14],
+            'maslul_hativa_id': row[15],
+            'sla_days': row[16],
+            'vaada_date': row[17],
+            'vaada_status': row[18],
+            'committee_name': row[19],
+            'committee_type_id': row[20],
+            'hativa_name': row[21],
+            'hativa_color': row[22],
+            'committee_type_name': row[23]
         } for row in rows]
 
     def get_event_by_id(self, event_id: int) -> Optional[Dict]:

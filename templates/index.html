@@ -384,8 +384,11 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">
+                <h5 class="modal-title" id="editEventModalTitle">
                     <i class="bi bi-pencil me-2"></i>עריכת אירוע
+                    <span class="badge bg-warning text-dark ms-2" id="editEventManualBadge" style="display: none;">
+                        <i class="bi bi-pencil-fill me-1"></i>תאריך ידני
+                    </span>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
@@ -453,12 +456,48 @@ document.addEventListener('DOMContentLoaded', function() {
                         <h6 class="text-primary">
                             <i class="bi bi-calendar-range me-2"></i>תאריכי דדליין נגזרים
                         </h6>
+                        
+                        <!-- סיום קול קורא עם אפשרות עריכה ידנית -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="edit_is_call_deadline_manual" name="is_call_deadline_manual" value="1">
+                                    <label class="form-check-label" for="edit_is_call_deadline_manual">
+                                        <i class="bi bi-pencil-square me-1"></i>ערוך תאריך סיום קול קורא ידנית (לא מסונכרן)
+                                    </label>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="resetToAutoBtn" style="display: none;" onclick="resetToAutoSync()">
+                                    <i class="bi bi-arrow-clockwise me-1"></i>החזר לסנכרון אוטומטי
+                                </button>
+                            </div>
+                            <div id="manualCallDeadlineSection" style="display: none;">
+                                <label for="edit_manual_call_deadline_date" class="form-label">תאריך סיום קול קורא (ידני)</label>
+                                <input type="date" class="form-control" name="manual_call_deadline_date" id="edit_manual_call_deadline_date">
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle me-1"></i>תאריך זה לא יתעדכן אוטומטית אם תשנה את תאריך הועדה
+                                </small>
+                            </div>
+                            <!-- אינדיקטור מצב ידני -->
+                            <div class="alert alert-warning py-2 px-3 mb-0 mt-2" id="manualModeIndicator" style="display: none;">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                <strong>מצב ידני פעיל:</strong> תאריך סיום הקול קורא לא מסונכרן עם תאריך הועדה
+                            </div>
+                        </div>
+                        
                         <div class="row g-2">
-                            <div class="col-12 col-md-6">
-                                <div class="card border-warning">
-                                    <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center flex-nowrap gap-2">
-                                        <small class="text-muted mb-0 text-nowrap">סיום קול קורא</small>
-                                        <strong class="text-warning ms-2 text-nowrap" id="callDeadlineDate">-</strong>
+                            <div class="col-12">
+                                <div class="card" id="callDeadlineCard">
+                                    <div class="card-body py-2 px-3">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <small class="text-muted mb-0 text-nowrap">סיום קול קורא</small>
+                                                <span class="badge bg-secondary" id="callDeadlineModeIndicator" style="display: none;">ידני</span>
+                                            </div>
+                                            <strong class="text-warning ms-2 text-nowrap" id="callDeadlineDate">-</strong>
+                                        </div>
+                                        <small class="text-muted d-block mt-1" id="calculatedDateHint" style="display: none;">
+                                            <i class="bi bi-info-circle me-1"></i>תאריך מחושב: <span id="calculatedCallDeadline">-</span>
+                                        </small>
                                     </div>
                                 </div>
                             </div>
@@ -886,9 +925,14 @@ function createMonthCalendar(year, month, isCompact = false) {
                             eventDiv.setAttribute('data-vaada-id', event.vaadot_id);
                             eventDiv.setAttribute('data-type', 'event');
                             
+                            // Check if event has manual deadline
+                            const isManualDeadline = event.is_call_deadline_manual == 1 || event.is_call_deadline_manual === true;
+                            const manualIndicator = isManualDeadline ? '<i class="bi bi-pencil-fill me-1" style="font-size: 0.5rem; color: #ff9800; font-weight: bold;" title="תאריך סיום קול קורא ידני"></i>' : '';
+                            
                             if (isCompact) {
                                 eventDiv.innerHTML = `
                                     <i class="bi bi-dot me-1" style="font-size: 0.4rem;"></i>
+                                    ${manualIndicator}
                                     ${event.name}
                                 `;
                             } else {
@@ -896,12 +940,19 @@ function createMonthCalendar(year, month, isCompact = false) {
                                     <div class="d-flex align-items-center">
                                         <i class="bi bi-arrows-move me-1" style="font-size: 0.4rem; opacity: 0.7;"></i>
                                         <i class="bi bi-dot me-1" style="font-size: 0.5rem;"></i>
+                                        ${manualIndicator}
                                         <span class="text-truncate flex-grow-1">${event.name}</span>
                                         <small class="ms-1 opacity-75" style="font-size: 0.45rem;">
                                             ${event.maslul_name}
                                         </small>
                                     </div>
                                 `;
+                            }
+                            
+                            // Add border color for manual events
+                            if (isManualDeadline) {
+                                eventDiv.style.borderLeft = '3px solid #ff9800';
+                                eventDiv.title = `${event.name} - ${event.maslul_name}\n⚠️ תאריך סיום קול קורא ידני`;
                             }
                             
                             // Add hover effects
@@ -985,11 +1036,24 @@ function createMonthCalendar(year, month, isCompact = false) {
                             const expected = deadline.event.expected_requests || 0;
                             const actual = deadline.event.actual_submissions || 0;
                             
+                            // בדוק אם זה דדליין של סיום קול קורא ומצב ידני
+                            const isManualCallDeadline = deadline.type === 'call_deadline_date' && 
+                                (deadline.event.is_call_deadline_manual == 1 || deadline.event.is_call_deadline_manual === true);
+                            const manualIndicator = isManualCallDeadline ? 
+                                '<i class="bi bi-pencil-fill me-1" style="font-size: 0.5rem; color: #ff9800; font-weight: bold;" title="תאריך ידני"></i>' : '';
+                            
+                            // הוסף מסגרת כתומה נוספת אם דדליין ידני
+                            if (isManualCallDeadline) {
+                                deadlineDiv.style.borderLeft = '3px solid #ff9800';
+                            }
+                            
                             deadlineDiv.innerHTML = `
                                 <i class="${deadline.config.icon} me-1" style="font-size: ${isCompact ? '0.5rem' : '0.6rem'};"></i>
                                 <div class="d-flex flex-column flex-grow-1">
                                     <div class="d-flex justify-content-between align-items-center gap-1">
-                                        <span class="text-truncate fw-bold" style="font-size: ${isCompact ? '0.5rem' : '0.6rem'};">${deadline.config.label}</span>
+                                        <span class="text-truncate fw-bold" style="font-size: ${isCompact ? '0.5rem' : '0.6rem'};">
+                                            ${manualIndicator}${deadline.config.label}
+                                        </span>
                                         <span class="badge" style="background-color: ${deadline.config.color}; font-size: ${isCompact ? '0.45rem' : '0.55rem'}; white-space: nowrap; font-weight: 700;">
                                             ${expected} צפוי | ${actual} בפועל
                                         </span>
@@ -1437,6 +1501,26 @@ function editCommittee(committee) {
     modal.show();
 }
 
+// פונקציה פשוטה לחישוב תאריך סיום קול קורא מתאריך ועדה
+function calculateDeadlineFromVaadaDate(vaadaDate, slaDays) {
+    if (!vaadaDate || !slaDays) return null;
+    
+    try {
+        const vaada = new Date(vaadaDate);
+        // נחסיר את כל ימי ה-SLA (זה קירוב - בפועל צריך לחשב ימי עסקים)
+        vaada.setDate(vaada.getDate() - slaDays);
+        
+        // החזר בפורמט YYYY-MM-DD
+        const year = vaada.getFullYear();
+        const month = String(vaada.getMonth() + 1).padStart(2, '0');
+        const day = String(vaada.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    } catch (e) {
+        console.error('Error calculating deadline:', e);
+        return null;
+    }
+}
+
 function editEvent(event) {
     document.getElementById('edit_event_id').value = event.event_id;
     document.getElementById('edit_event_vaadot_id').value = event.vaadot_id;
@@ -1449,10 +1533,23 @@ function editEvent(event) {
     // הצג תאריכים נגזרים אם קיימים
     if (event.call_deadline_date || event.intake_deadline_date || event.review_deadline_date || event.response_deadline_date) {
         document.getElementById('derivedDatesSection').style.display = 'block';
-        document.getElementById('callDeadlineDate').textContent = event.call_deadline_date || '-';
         document.getElementById('intakeDeadlineDate').textContent = event.intake_deadline_date || '-';
         document.getElementById('reviewDeadlineDate').textContent = event.review_deadline_date || '-';
         document.getElementById('responseDeadlineDate').textContent = event.response_deadline_date || '-';
+        
+        // טען מצב עריכה ידנית אם קיים
+        const isManual = event.is_call_deadline_manual == 1 || event.is_call_deadline_manual === true;
+        document.getElementById('edit_is_call_deadline_manual').checked = isManual;
+        document.getElementById('edit_manual_call_deadline_date').value = event.call_deadline_date || '';
+        
+        // חשב תאריך מחושב (מה שהיה יוצא אם לא היה ידני)
+        let calculatedDate = null;
+        if (isManual && event.vaada_date && event.sla_days) {
+            calculatedDate = calculateDeadlineFromVaadaDate(event.vaada_date, event.sla_days);
+        }
+        
+        // עדכן תצוגה לפי מצב (ידני/אוטומטי)
+        updateCallDeadlineDisplay(isManual, event.call_deadline_date, calculatedDate);
     } else {
         document.getElementById('derivedDatesSection').style.display = 'none';
     }
@@ -1462,6 +1559,89 @@ function editEvent(event) {
     
     const modal = new bootstrap.Modal(document.getElementById('editEventModal'));
     modal.show();
+}
+
+// פונקציה לעדכון תצוגת תאריך סיום קול קורא
+function updateCallDeadlineDisplay(isManual, callDeadlineDate, calculatedDate) {
+    // בדיקת קיום האלמנטים
+    const callDeadlineElement = document.getElementById('callDeadlineDate');
+    const modeIndicator = document.getElementById('callDeadlineModeIndicator');
+    const manualSection = document.getElementById('manualCallDeadlineSection');
+    const manualModeAlert = document.getElementById('manualModeIndicator');
+    const resetBtn = document.getElementById('resetToAutoBtn');
+    const calculatedHint = document.getElementById('calculatedDateHint');
+    const calculatedCallDeadlineSpan = document.getElementById('calculatedCallDeadline');
+    const callDeadlineCard = document.getElementById('callDeadlineCard');
+    const modalTitleBadge = document.getElementById('editEventManualBadge');
+    
+    // בדיקת קיום אלמנטים חיוניים
+    if (!callDeadlineElement) {
+        return;
+    }
+    
+    // עדכן את התאריך
+    callDeadlineElement.textContent = callDeadlineDate || '-';
+    
+    if (isManual) {
+        // מצב ידני - הצג את כל האינדיקציות
+        if (modeIndicator) modeIndicator.style.display = 'inline-block';
+        if (manualSection) manualSection.style.display = 'block';
+        if (manualModeAlert) manualModeAlert.style.display = 'block';
+        if (resetBtn) resetBtn.style.display = 'inline-block';
+        if (modalTitleBadge) modalTitleBadge.style.display = 'inline-block';
+        
+        if (callDeadlineCard) {
+            callDeadlineCard.classList.add('border-warning');
+            callDeadlineCard.classList.remove('border-secondary');
+            callDeadlineCard.style.boxShadow = '0 0 0 3px rgba(255, 152, 0, 0.2)';
+        }
+        
+        // הצג את התאריך המחושב (אם קיים)
+        if (calculatedHint && calculatedCallDeadlineSpan) {
+            if (calculatedDate) {
+                calculatedCallDeadlineSpan.textContent = calculatedDate;
+                calculatedHint.style.display = 'block';
+            } else {
+                calculatedHint.style.display = 'none';
+            }
+        }
+    } else {
+        // מצב אוטומטי - הסתר את כל האינדיקציות
+        if (modeIndicator) modeIndicator.style.display = 'none';
+        if (manualSection) manualSection.style.display = 'none';
+        if (manualModeAlert) manualModeAlert.style.display = 'none';
+        if (resetBtn) resetBtn.style.display = 'none';
+        if (modalTitleBadge) modalTitleBadge.style.display = 'none';
+        if (calculatedHint) calculatedHint.style.display = 'none';
+        
+        if (callDeadlineCard) {
+            callDeadlineCard.classList.remove('border-warning');
+            callDeadlineCard.classList.add('border-secondary');
+            callDeadlineCard.style.boxShadow = '';
+        }
+    }
+}
+
+// פונקציה להחזרה לסנכרון אוטומטי
+function resetToAutoSync() {
+    const checkbox = document.getElementById('edit_is_call_deadline_manual');
+    checkbox.checked = false;
+    
+    // הפעל את ה-event של השינוי
+    checkbox.dispatchEvent(new Event('change'));
+    
+    // הצג הודעה למשתמש
+    const manualModeAlert = document.getElementById('manualModeIndicator');
+    manualModeAlert.classList.remove('alert-warning');
+    manualModeAlert.classList.add('alert-success');
+    manualModeAlert.innerHTML = '<i class="bi bi-check-circle me-2"></i><strong>הוחזר לסנכרון אוטומטי:</strong> תאריך סיום הקול קורא יחושב אוטומטית';
+    
+    setTimeout(() => {
+        manualModeAlert.style.display = 'none';
+        manualModeAlert.classList.remove('alert-success');
+        manualModeAlert.classList.add('alert-warning');
+        manualModeAlert.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i><strong>מצב ידני פעיל:</strong> תאריך סיום הקול קורא לא מסונכרן עם תאריך הועדה';
+    }, 3000);
 }
 
 function deleteCommittee() {
@@ -2627,6 +2807,51 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentRouteHativaId = routeSelect.selectedOptions[0]?.getAttribute('data-hativa-id');
             if (currentRouteHativaId && currentRouteHativaId != selectedCommittee.hativa_id) {
                 routeSelect.value = '';
+            }
+        });
+    }
+    
+    // Add event listener for manual call deadline checkbox
+    const manualDeadlineCheckbox = document.getElementById('edit_is_call_deadline_manual');
+    if (manualDeadlineCheckbox) {
+        manualDeadlineCheckbox.addEventListener('change', function() {
+            const isManual = this.checked;
+            const manualDateInput = document.getElementById('edit_manual_call_deadline_date');
+            const currentCallDeadline = document.getElementById('callDeadlineDate').textContent;
+            
+            if (isManual) {
+                // Pre-fill with current calculated date if empty
+                if (!manualDateInput.value) {
+                    if (currentCallDeadline && currentCallDeadline !== '-') {
+                        manualDateInput.value = currentCallDeadline;
+                    }
+                }
+            }
+            
+            // עדכן את התצוגה
+            // אם מצב ידני, נחשב גם את התאריך המחושב להשוואה
+            let calculatedDate = null;
+            if (isManual && currentCallDeadline && currentCallDeadline !== '-') {
+                calculatedDate = currentCallDeadline; // התאריך הנוכחי הוא המחושב
+            }
+            updateCallDeadlineDisplay(isManual, manualDateInput.value || currentCallDeadline, calculatedDate);
+        });
+    }
+    
+    // Reset indicators when modal is closed
+    const editEventModal = document.getElementById('editEventModal');
+    if (editEventModal) {
+        editEventModal.addEventListener('hidden.bs.modal', function() {
+            // Reset all indicators
+            document.getElementById('editEventManualBadge').style.display = 'none';
+            document.getElementById('callDeadlineModeIndicator').style.display = 'none';
+            document.getElementById('manualCallDeadlineSection').style.display = 'none';
+            document.getElementById('manualModeIndicator').style.display = 'none';
+            document.getElementById('resetToAutoBtn').style.display = 'none';
+            const card = document.getElementById('callDeadlineCard');
+            if (card) {
+                card.classList.remove('border-warning');
+                card.style.boxShadow = '';
             }
         });
     }
