@@ -992,19 +992,19 @@ def dashboard():
     upcoming_events = []
     future_date = today + timedelta(days=30)
     for event in events:
-        if event.get('committee_date'):
+        if event.get('vaada_date'):
             try:
-                if isinstance(event['committee_date'], str):
-                    event_date = datetime.strptime(event['committee_date'], '%Y-%m-%d').date()
+                if isinstance(event['vaada_date'], str):
+                    event_date = datetime.strptime(event['vaada_date'], '%Y-%m-%d').date()
                 else:
-                    event_date = event['committee_date']
+                    event_date = event['vaada_date']
                 
                 if today <= event_date <= future_date:
                     upcoming_events.append(event)
             except:
                 pass
     
-    upcoming_events.sort(key=lambda x: x.get('committee_date', ''))
+    upcoming_events.sort(key=lambda x: x.get('vaada_date', ''))
     
     # === Overall Statistics ===
     total_expected = sum([e.get('expected_requests', 0) or 0 for e in events])

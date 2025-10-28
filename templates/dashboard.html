@@ -225,10 +225,14 @@
                             <div class="mb-2 p-2" style="background: #f8f9fa; border-radius: 8px; border-right: 4px solid #667eea;">
                                 <h6 class="mb-1">{{ event.name }}</h6>
                                 <small class="text-muted">
-                                    <i class="bi bi-calendar3"></i> {{ event.committee_date }}
-                                    <span class="badge {% if event.event_type == 'kokok' %}bg-danger{% else %}bg-success{% endif %} ms-2">
-                                        {{ 'קו"ק' if event.event_type == 'kokok' else 'שוטף' }}
+                                    <i class="bi bi-calendar3"></i> {{ event.vaada_date }}
+                                    <span class="badge {% if event.event_type == 'קול קורא' %}bg-danger{% else %}bg-success{% endif %} ms-2">
+                                        {{ event.event_type }}
                                     </span>
+                                </small>
+                                <br>
+                                <small class="text-muted">
+                                    <i class="bi bi-building"></i> {{ event.committee_name }} - {{ event.hativa_name }}
                                 </small>
                             </div>
                             {% endfor %}
