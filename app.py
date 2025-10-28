@@ -17,11 +17,16 @@ from auth import AuthManager, login_required, admin_required, editor_required, e
 
 app = Flask(__name__)
 app.secret_key = 'committee_management_secret_key_2025_azure_oauth_enabled'
-app.config['SESSION_COOKIE_SECURE'] = False  # For development (HTTP)
+
+# Session configuration (can be overridden via environment variables)
+session_cookie_secure = os.getenv('SESSION_COOKIE_SECURE', 'true').lower() == 'true'
+session_lifetime_hours = int(os.getenv('SESSION_LIFETIME_HOURS', '8'))
+
+app.config['SESSION_COOKIE_SECURE'] = session_cookie_secure
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = None  # Allow cross-site for OAuth redirects
-app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hour
-app.config['SESSION_REFRESH_EACH_REQUEST'] = False  # Don't refresh on every request
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=session_lifetime_hours)
+app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 
 # Initialize system components
 db = DatabaseManager()
