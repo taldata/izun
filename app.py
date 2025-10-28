@@ -1457,6 +1457,11 @@ def add_event():
         expected_requests = int(expected_requests) if expected_requests else 0
         actual_submissions = int(actual_submissions) if actual_submissions else 0
         
+        # Validate expected_requests is required and greater than 0
+        if expected_requests <= 0:
+            flash('מספר הבקשות הצפויות חייב להיות גדול מ-0', 'error')
+            return redirect(url_for('index'))
+        
         # Validate that committee and route are from the same division
         vaada = db.get_vaadot()[0] if db.get_vaadot() else None
         for v in db.get_vaadot():
@@ -1526,6 +1531,11 @@ def edit_event(event_id):
     try:
         expected_requests = int(expected_requests) if expected_requests else 0
         actual_submissions = int(actual_submissions) if actual_submissions else 0
+        
+        # Validate expected_requests is required and greater than 0
+        if expected_requests <= 0:
+            flash('מספר הבקשות הצפויות חייב להיות גדול מ-0', 'error')
+            return redirect(url_for('index'))
         
         # Validate that committee and route are from the same division
         vaada = None
