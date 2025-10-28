@@ -43,7 +43,6 @@ class ScheduleResult:
 class ApprovalRequest:
     """בקשה לאישור ישיבות"""
     suggestions: List[Dict]
-    auto_approve: bool = False
 
 @dataclass
 class ApprovalResult:
@@ -171,10 +170,9 @@ class AutoScheduleService:
             # אימות הבקשה
             self.validate_approval_request(request)
             
-            # יצירת הישיבות
+            # יצירת הישיבות - כל הישיבות נוצרות בסטטוס 'scheduled'
             result = self.scheduler.create_meetings_from_suggestions(
-                request.suggestions,
-                request.auto_approve
+                request.suggestions
             )
             
             return ApprovalResult(

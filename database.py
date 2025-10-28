@@ -747,11 +747,12 @@ class DatabaseManager:
     
     # Vaadot operations (specific meeting instances)
     def add_vaada(self, committee_type_id: int, hativa_id: int, vaada_date: date, 
-                  notes: str = "", created_by: int = None, override_constraints: bool = False) -> tuple[int, str]:
+                  notes: str = "", status: str = "scheduled", created_by: int = None, override_constraints: bool = False) -> tuple[int, str]:
         """
         Add a new committee meeting with constraint checking
         Returns: (vaadot_id, warning_message)
         If override_constraints=True (for admins), constraints become warnings
+        status: 'scheduled' or 'planned' (default: 'scheduled')
         """
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -789,9 +790,9 @@ class DatabaseManager:
                     raise ValueError(f"השבוע של {vaada_date} כבר מכיל {weekly_count} ועדות (המגבלה היא {weekly_limit})")
 
             cursor.execute('''
-                INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, notes)
-                VALUES (?, ?, ?, ?)
-            ''', (committee_type_id, hativa_id, vaada_date, notes))
+                INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, status, notes)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (committee_type_id, hativa_id, vaada_date, status, notes))
             vaadot_id = cursor.lastrowid
             conn.commit()
             conn.close()

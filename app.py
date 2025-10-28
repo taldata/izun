@@ -2135,8 +2135,7 @@ def approve_auto_schedule():
         # Create approval request
         from services.auto_schedule_service import ApprovalRequest
         approval_request = ApprovalRequest(
-            suggestions=selected_meeting_suggestions,
-            auto_approve=True
+            suggestions=selected_meeting_suggestions
         )
         
         # Approve meetings using service

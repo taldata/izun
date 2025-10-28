@@ -324,10 +324,9 @@ class AutoMeetingScheduler:
             'total_suggestions': len(suggested_meetings)
         }
     
-    def create_meetings_from_suggestions(self, suggestions: List[Dict], 
-                                       auto_approve: bool = False) -> Dict:
+    def create_meetings_from_suggestions(self, suggestions: List[Dict]) -> Dict:
         """
-        יצירת ישיבות מרשימת הצעות
+        יצירת ישיבות מרשימת הצעות - כל הישיבות נוצרות בסטטוס 'scheduled'
         """
         created_meetings = []
         failed_meetings = []
@@ -347,12 +346,12 @@ class AutoMeetingScheduler:
                 )
                 
                 if can_create:
-                    status = 'scheduled' if auto_approve else 'planned'
+                    # כל הישיבות נוצרות בסטטוס "מתוזמן"
                     meeting_id = self.db.add_vaada(
                         committee_type_id=suggestion['committee_type_id'],
                         hativa_id=suggestion['hativa_id'],
                         vaada_date=suggested_date,
-                        status=status,
+                        status='scheduled',
                         notes=f"נוצר אוטומטית - {suggestion['frequency']}"
                     )
                     
@@ -360,7 +359,7 @@ class AutoMeetingScheduler:
                         'meeting_id': meeting_id,
                         'committee_type': suggestion['committee_type'],
                         'date': suggested_date,
-                        'status': status
+                        'status': 'scheduled'
                     })
                 else:
                     failed_meetings.append({
