@@ -1,0 +1,443 @@
+{% extends "base.html" %}
+
+{% block title %}דשבורד ניתוח נתונים - איזון עומסים{% endblock %}
+
+{% block extra_head %}
+<!-- Highcharts Latest Version -->
+<script src="https://code.highcharts.com/highcharts.js"></script>
+<script src="https://code.highcharts.com/modules/exporting.js"></script>
+<script src="https://code.highcharts.com/modules/export-data.js"></script>
+<script src="https://code.highcharts.com/modules/accessibility.js"></script>
+
+<style>
+.dashboard-page {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+    padding: 1.5rem 0;
+}
+
+.dashboard-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    height: 100%;
+    transition: transform 0.3s;
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+}
+
+.stat-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    line-height: 1;
+}
+
+.stat-label {
+    color: #6c757d;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.chart-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    margin-bottom: 1.5rem;
+}
+
+.chart-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: #2d3748;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.chart-title i {
+    color: #667eea;
+}
+
+.table-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    margin-bottom: 1.5rem;
+}
+
+.highcharts-container {
+    font-family: 'Heebo', sans-serif !important;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-page">
+    <div class="container-fluid px-4">
+        <!-- Header -->
+        <div class="dashboard-header">
+            <h4 class="mb-1">
+                <i class="bi bi-graph-up-arrow me-2"></i>
+                דשבורד ניתוח נתונים
+            </h4>
+            <p class="mb-0 opacity-75 small">מערכת ניתוח מתקדמת עם Highcharts</p>
+        </div>
+
+        <!-- Main Statistics -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                        <i class="bi bi-calendar-event"></i>
+                    </div>
+                    <div class="stat-value text-primary">{{ stats.total_events }}</div>
+                    <div class="stat-label">סה"כ אירועים</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+                        <i class="bi bi-people"></i>
+                    </div>
+                    <div class="stat-value" style="color: #f5576c;">{{ stats.total_committees }}</div>
+                    <div class="stat-label">ישיבות ועדות</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
+                        <i class="bi bi-inbox"></i>
+                    </div>
+                    <div class="stat-value" style="color: #00f2fe;">{{ stats.total_expected_requests }}</div>
+                    <div class="stat-label">בקשות צפויות</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white;">
+                        <i class="bi bi-check-circle"></i>
+                    </div>
+                    <div class="stat-value" style="color: #43e97b;">{{ stats.total_actual_submissions }}</div>
+                    <div class="stat-label">הגשות בפועל</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row g-3 mb-3">
+            <div class="col-lg-7">
+                <div class="chart-card">
+                    <div class="chart-title">
+                        <i class="bi bi-bar-chart-fill"></i>
+                        <strong>סטטיסטיקות לפי חטיבות</strong>
+                    </div>
+                    <div id="hativotChart"></div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="chart-card">
+                    <div class="chart-title">
+                        <i class="bi bi-pie-chart-fill"></i>
+                        <strong>התפלגות לפי סוג אירוע</strong>
+                    </div>
+                    <div id="eventTypesChart"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Row -->
+        <div class="row g-3">
+            <div class="col-lg-8">
+                <div class="table-card">
+                    <div class="chart-title mb-3">
+                        <i class="bi bi-trophy-fill"></i>
+                        <strong>מסלולים מובילים לפי מספר אירועים</strong>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 5%;">#</th>
+                                    <th style="width: 40%;">שם המסלול</th>
+                                    <th style="width: 20%;">חטיבה</th>
+                                    <th style="width: 15%;" class="text-center">אירועים</th>
+                                    <th style="width: 20%;" class="text-center">אחוז מילוי</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for maslul in top_maslulim[:8] %}
+                                <tr>
+                                    <td><strong>{{ loop.index }}</strong></td>
+                                    <td>{{ maslul.name }}</td>
+                                    <td><span class="badge bg-light text-dark">{{ maslul.hativa_name }}</span></td>
+                                    <td class="text-center"><strong>{{ maslul.events_count }}</strong></td>
+                                    <td class="text-center">
+                                        <span class="badge {% if maslul.fulfillment_rate >= 80 %}bg-success{% elif maslul.fulfillment_rate >= 50 %}bg-warning{% else %}bg-danger{% endif %}">
+                                            {{ maslul.fulfillment_rate }}%
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="table-card">
+                    <div class="chart-title mb-3">
+                        <i class="bi bi-calendar-check-fill"></i>
+                        <strong>אירועים קרובים (30 ימים)</strong>
+                    </div>
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        {% if upcoming_events %}
+                            {% for event in upcoming_events[:6] %}
+                            <div class="mb-2 p-2" style="background: #f8f9fa; border-radius: 8px; border-right: 4px solid #667eea;">
+                                <h6 class="mb-1">{{ event.name }}</h6>
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar3"></i> {{ event.committee_date }}
+                                    <span class="badge {% if event.event_type == 'kokok' %}bg-danger{% else %}bg-success{% endif %} ms-2">
+                                        {{ 'קו"ק' if event.event_type == 'kokok' else 'שוטף' }}
+                                    </span>
+                                </small>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-center text-muted py-5">
+                                <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                                <p class="mt-2">אין אירועים קרובים</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Highcharts Global Configuration
+Highcharts.setOptions({
+    lang: {
+        downloadPNG: 'הורד PNG',
+        downloadJPEG: 'הורד JPEG',
+        downloadPDF: 'הורד PDF',
+        downloadSVG: 'הורד SVG',
+        printChart: 'הדפס תרשים',
+        viewFullscreen: 'מסך מלא'
+    },
+    chart: {
+        style: {
+            fontFamily: 'Heebo, sans-serif'
+        }
+    }
+});
+
+// Prepare data
+const hativotData = {{ stats_by_hativa | tojson }};
+const hativotArray = Object.values(hativotData);
+const eventTypesData = {{ events_by_type | tojson }};
+
+// 1. Hativot Bar Chart - Advanced
+Highcharts.chart('hativotChart', {
+    chart: {
+        type: 'column',
+        height: 300,
+        backgroundColor: 'transparent'
+    },
+    title: {
+        text: null
+    },
+    xAxis: {
+        categories: hativotArray.map(h => h.name),
+        crosshair: true,
+        labels: {
+            style: {
+                fontSize: '12px',
+                fontWeight: 'bold'
+            }
+        }
+    },
+    yAxis: {
+        min: 0,
+        title: {
+            text: 'מספר פריטים'
+        },
+        gridLineColor: 'rgba(0, 0, 0, 0.05)'
+    },
+    tooltip: {
+        headerFormat: '<span style="font-size:14px"><b>{point.key}</b></span><br/>',
+        pointFormat: '<span style="color:{series.color}">\u25CF</span> {series.name}: <b>{point.y}</b><br/>',
+        shared: true,
+        useHTML: true,
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        borderColor: 'rgba(255, 255, 255, 0.2)',
+        style: {
+            color: '#ffffff'
+        }
+    },
+    plotOptions: {
+        column: {
+            pointPadding: 0.1,
+            borderWidth: 0,
+            borderRadius: 6,
+            dataLabels: {
+                enabled: false
+            }
+        }
+    },
+    series: [{
+        name: 'אירועים',
+        data: hativotArray.map((h, i) => ({
+            y: h.events_count,
+            color: {
+                linearGradient: { x1: 0, x2: 0, y1: 0, y2: 1 },
+                stops: [
+                    [0, h.color],
+                    [1, h.color + '66']
+                ]
+            }
+        }))
+    }, {
+        name: 'ועדות',
+        data: hativotArray.map((h, i) => ({
+            y: h.committees_count,
+            color: {
+                linearGradient: { x1: 0, x2: 0, y1: 0, y2: 1 },
+                stops: [
+                    [0, h.color + 'aa'],
+                    [1, h.color + '33']
+                ]
+            }
+        }))
+    }],
+    credits: {
+        enabled: false
+    },
+    exporting: {
+        enabled: true,
+        buttons: {
+            contextButton: {
+                menuItems: ['downloadPNG', 'downloadJPEG', 'downloadPDF', 'downloadSVG']
+            }
+        }
+    }
+});
+
+// 2. Event Types Pie Chart - 3D
+Highcharts.chart('eventTypesChart', {
+    chart: {
+        type: 'pie',
+        height: 300,
+        backgroundColor: 'transparent',
+        options3d: {
+            enabled: true,
+            alpha: 45,
+            beta: 0
+        }
+    },
+    title: {
+        text: null
+    },
+    tooltip: {
+        pointFormat: '{series.name}: <b>{point.y}</b> ({point.percentage:.1f}%)',
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        borderColor: 'rgba(255, 255, 255, 0.2)',
+        style: {
+            color: '#ffffff'
+        }
+    },
+    accessibility: {
+        point: {
+            valueSuffix: '%'
+        }
+    },
+    plotOptions: {
+        pie: {
+            innerSize: 100,
+            depth: 45,
+            allowPointSelect: true,
+            cursor: 'pointer',
+            dataLabels: {
+                enabled: true,
+                format: '<b>{point.name}</b><br>{point.percentage:.1f} %',
+                distance: 20,
+                style: {
+                    fontSize: '13px',
+                    fontWeight: 'bold'
+                }
+            },
+            showInLegend: true
+        }
+    },
+    series: [{
+        name: 'אירועים',
+        colorByPoint: true,
+        data: [{
+            name: 'קו"ק',
+            y: eventTypesData.kokok || 0,
+            color: {
+                radialGradient: { cx: 0.5, cy: 0.3, r: 0.7 },
+                stops: [
+                    [0, '#ff7a8a'],
+                    [1, '#f5576c']
+                ]
+            },
+            sliced: true,
+            selected: true
+        }, {
+            name: 'שוטף',
+            y: eventTypesData.shotef || 0,
+            color: {
+                radialGradient: { cx: 0.5, cy: 0.3, r: 0.7 },
+                stops: [
+                    [0, '#5bffa0'],
+                    [1, '#43e97b']
+                ]
+            }
+        }]
+    }],
+    credits: {
+        enabled: false
+    },
+    exporting: {
+        enabled: true,
+        buttons: {
+            contextButton: {
+                menuItems: ['downloadPNG', 'downloadJPEG', 'downloadPDF', 'downloadSVG']
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

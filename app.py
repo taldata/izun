@@ -874,6 +874,167 @@ def index():
                          current_user=current_user,
                          show_deadline_dates=show_deadline_dates)
 
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    """Analytics Dashboard"""
+    from datetime import datetime, timedelta
+    from collections import defaultdict
+    
+    # Get all data
+    hativot = db.get_hativot()
+    maslulim = db.get_maslulim()
+    committee_types = db.get_committee_types()
+    committees = db.get_vaadot()
+    events = db.get_all_events()
+    
+    # Current date
+    today = date.today()
+    current_month = today.month
+    current_year = today.year
+    
+    # === Statistics by Division ===
+    stats_by_hativa = {}
+    for hativa in hativot:
+        hativa_id = hativa['hativa_id']
+        hativa_events = [e for e in events if e.get('hativa_id') == hativa_id]
+        hativa_committees = [c for c in committees if c.get('hativa_id') == hativa_id]
+        
+        total_expected = sum([e.get('expected_requests', 0) or 0 for e in hativa_events])
+        total_actual = sum([e.get('actual_submissions', 0) or 0 for e in hativa_events])
+        
+        stats_by_hativa[hativa_id] = {
+            'name': hativa['name'],
+            'color': hativa.get('color', '#007bff'),
+            'events_count': len(hativa_events),
+            'committees_count': len(hativa_committees),
+            'expected_requests': total_expected,
+            'actual_submissions': total_actual,
+            'fulfillment_rate': round((total_actual / total_expected * 100) if total_expected > 0 else 0, 1)
+        }
+    
+    # === Events by Type ===
+    events_by_type = defaultdict(int)
+    for event in events:
+        event_type = event.get('event_type', 'אחר')
+        events_by_type[event_type] += 1
+    
+    # === Monthly Trend (last 6 months) ===
+    monthly_data = {}
+    for i in range(6):
+        month_date = today - timedelta(days=30 * i)
+        month_key = f"{month_date.year}-{month_date.month:02d}"
+        monthly_data[month_key] = {
+            'committees': 0,
+            'events': 0,
+            'expected_requests': 0,
+            'actual_submissions': 0
+        }
+    
+    for committee in committees:
+        if committee.get('vaada_date'):
+            try:
+                if isinstance(committee['vaada_date'], str):
+                    vaada_date = datetime.strptime(committee['vaada_date'], '%Y-%m-%d').date()
+                else:
+                    vaada_date = committee['vaada_date']
+                
+                month_key = f"{vaada_date.year}-{vaada_date.month:02d}"
+                if month_key in monthly_data:
+                    monthly_data[month_key]['committees'] += 1
+            except:
+                pass
+    
+    for event in events:
+        if event.get('committee_date'):
+            try:
+                if isinstance(event['committee_date'], str):
+                    event_date = datetime.strptime(event['committee_date'], '%Y-%m-%d').date()
+                else:
+                    event_date = event['committee_date']
+                
+                month_key = f"{event_date.year}-{event_date.month:02d}"
+                if month_key in monthly_data:
+                    monthly_data[month_key]['events'] += 1
+                    monthly_data[month_key]['expected_requests'] += event.get('expected_requests', 0) or 0
+                    monthly_data[month_key]['actual_submissions'] += event.get('actual_submissions', 0) or 0
+            except:
+                pass
+    
+    # === Top Routes by Events ===
+    maslul_stats = defaultdict(lambda: {'count': 0, 'expected': 0, 'actual': 0})
+    for event in events:
+        maslul_id = event.get('maslul_id')
+        if maslul_id:
+            maslul_stats[maslul_id]['count'] += 1
+            maslul_stats[maslul_id]['expected'] += event.get('expected_requests', 0) or 0
+            maslul_stats[maslul_id]['actual'] += event.get('actual_submissions', 0) or 0
+    
+    # Add maslul names
+    maslul_rankings = []
+    for maslul in maslulim:
+        maslul_id = maslul['maslul_id']
+        if maslul_id in maslul_stats:
+            stats = maslul_stats[maslul_id]
+            maslul_rankings.append({
+                'name': maslul['name'],
+                'hativa_name': maslul.get('hativa_name', ''),
+                'events_count': stats['count'],
+                'expected_requests': stats['expected'],
+                'actual_submissions': stats['actual'],
+                'fulfillment_rate': round((stats['actual'] / stats['expected'] * 100) if stats['expected'] > 0 else 0, 1)
+            })
+    
+    maslul_rankings.sort(key=lambda x: x['events_count'], reverse=True)
+    top_maslulim = maslul_rankings[:10]
+    
+    # === Upcoming Events (next 30 days) ===
+    upcoming_events = []
+    future_date = today + timedelta(days=30)
+    for event in events:
+        if event.get('committee_date'):
+            try:
+                if isinstance(event['committee_date'], str):
+                    event_date = datetime.strptime(event['committee_date'], '%Y-%m-%d').date()
+                else:
+                    event_date = event['committee_date']
+                
+                if today <= event_date <= future_date:
+                    upcoming_events.append(event)
+            except:
+                pass
+    
+    upcoming_events.sort(key=lambda x: x.get('committee_date', ''))
+    
+    # === Overall Statistics ===
+    total_expected = sum([e.get('expected_requests', 0) or 0 for e in events])
+    total_actual = sum([e.get('actual_submissions', 0) or 0 for e in events])
+    overall_fulfillment = round((total_actual / total_expected * 100) if total_expected > 0 else 0, 1)
+    
+    stats = {
+        'total_hativot': len(hativot),
+        'total_maslulim': len(maslulim),
+        'total_committee_types': len(committee_types),
+        'total_committees': len(committees),
+        'total_events': len(events),
+        'total_expected_requests': total_expected,
+        'total_actual_submissions': total_actual,
+        'overall_fulfillment_rate': overall_fulfillment,
+        'kokok_count': events_by_type.get('kokok', 0),
+        'shotef_count': events_by_type.get('shotef', 0)
+    }
+    
+    current_user = auth_manager.get_current_user()
+    
+    return render_template('dashboard.html',
+                         stats=stats,
+                         stats_by_hativa=stats_by_hativa,
+                         events_by_type=dict(events_by_type),
+                         monthly_data=monthly_data,
+                         top_maslulim=top_maslulim,
+                         upcoming_events=upcoming_events[:10],
+                         current_user=current_user)
+
 @app.route('/hativot')
 @login_required
 def hativot():
