@@ -2354,58 +2354,58 @@ def user_guide():
     current_user = auth_manager.get_current_user()
     return render_template('user_guide.html', current_user=current_user)
 
-@app.route('/admin/users/add', methods=['POST'])
-@admin_required
-def add_user():
-    """Add new user with multiple hativot access"""
-    try:
-        username = request.form.get('username', '').strip()
-        email = request.form.get('email', '').strip()
-        full_name = request.form.get('full_name', '').strip()
-        role = request.form.get('role', 'viewer')
-        hativa_ids = request.form.getlist('hativa_ids[]')  # Multiple hativot
-        password = request.form.get('password', '').strip()
-        
-        # Validation
-        if not all([username, email, full_name, password]):
-            flash('כל השדות הנדרשים חייבים להיות מלאים', 'error')
-            return redirect(url_for('manage_users'))
-        
-        # Validate role
-        if role not in ['admin', 'editor', 'viewer']:
-            flash('תפקיד לא חוקי', 'error')
-            return redirect(url_for('manage_users'))
-        
-        # Check if username exists
-        if db.check_username_exists(username):
-            flash('שם המשתמש כבר קיים במערכת', 'error')
-            return redirect(url_for('manage_users'))
-        
-        # Check if email exists
-        if db.check_email_exists(email):
-            flash('כתובת האימייל כבר קיימת במערכת', 'error')
-            return redirect(url_for('manage_users'))
-        
-        # Convert hativa_ids to integers
-        hativa_ids_int = [int(hid) for hid in hativa_ids if hid] if hativa_ids else []
-        
-        # Hash password
-        password_hash = auth_manager.hash_password(password)
-        
-        # Create user
-        user_id = db.create_user(username, email, password_hash, full_name, role, hativa_ids_int)
-        
-        if user_id:
-            audit_logger.log_user_created(user_id, username, role)
-            hativot_text = f' עם גישה ל-{len(hativa_ids_int)} חטיבות' if hativa_ids_int else ''
-            flash(f'המשתמש {full_name} נוצר בהצלחה{hativot_text}', 'success')
-        else:
-            flash('שגיאה ביצירת המשתמש', 'error')
-            
-    except Exception as e:
-        flash(f'שגיאה ביצירת המשתמש: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_users'))
+# @app.route('/admin/users/add', methods=['POST'])
+# @admin_required
+# def add_user():
+#     """Add new user with multiple hativot access - DISABLED (Managed via Azure AD)"""
+#     try:
+#         username = request.form.get('username', '').strip()
+#         email = request.form.get('email', '').strip()
+#         full_name = request.form.get('full_name', '').strip()
+#         role = request.form.get('role', 'viewer')
+#         hativa_ids = request.form.getlist('hativa_ids[]')  # Multiple hativot
+#         password = request.form.get('password', '').strip()
+#         
+#         # Validation
+#         if not all([username, email, full_name, password]):
+#             flash('כל השדות הנדרשים חייבים להיות מלאים', 'error')
+#             return redirect(url_for('manage_users'))
+#         
+#         # Validate role
+#         if role not in ['admin', 'editor', 'viewer']:
+#             flash('תפקיד לא חוקי', 'error')
+#             return redirect(url_for('manage_users'))
+#         
+#         # Check if username exists
+#         if db.check_username_exists(username):
+#             flash('שם המשתמש כבר קיים במערכת', 'error')
+#             return redirect(url_for('manage_users'))
+#         
+#         # Check if email exists
+#         if db.check_email_exists(email):
+#             flash('כתובת האימייל כבר קיימת במערכת', 'error')
+#             return redirect(url_for('manage_users'))
+#         
+#         # Convert hativa_ids to integers
+#         hativa_ids_int = [int(hid) for hid in hativa_ids if hid] if hativa_ids else []
+#         
+#         # Hash password
+#         password_hash = auth_manager.hash_password(password)
+#         
+#         # Create user
+#         user_id = db.create_user(username, email, password_hash, full_name, role, hativa_ids_int)
+#         
+#         if user_id:
+#             audit_logger.log_user_created(user_id, username, role)
+#             hativot_text = f' עם גישה ל-{len(hativa_ids_int)} חטיבות' if hativa_ids_int else ''
+#             flash(f'המשתמש {full_name} נוצר בהצלחה{hativot_text}', 'success')
+#         else:
+#             flash('שגיאה ביצירת המשתמש', 'error')
+#             
+#     except Exception as e:
+#         flash(f'שגיאה ביצירת המשתמש: {str(e)}', 'error')
+#     
+#     return redirect(url_for('manage_users'))
 
 @app.route('/admin/users/update', methods=['POST'])
 @admin_required
@@ -2483,30 +2483,30 @@ def toggle_user_status(user_id):
     
     return redirect(url_for('manage_users'))
 
-@app.route('/admin/users/delete/<int:user_id>', methods=['POST'])
-@admin_required
-def delete_user(user_id):
-    """Delete user (soft delete)"""
-    try:
-        # Check if trying to delete self
-        current_user = auth_manager.get_current_user()
-        if current_user['user_id'] == user_id:
-            flash('לא ניתן למחוק את המשתמש הנוכחי', 'error')
-            return redirect(url_for('manage_users'))
-        
-        user = db.get_user_by_id(user_id)
-        success = db.delete_user(user_id)
-        
-        if success:
-            audit_logger.log_user_deleted(user_id, user['username'])
-            flash(f'המשתמש {user["full_name"]} נמחק בהצלחה', 'success')
-        else:
-            flash('שגיאה במחיקת המשתמש', 'error')
-            
-    except Exception as e:
-        flash(f'שגיאה במחיקת המשתמש: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_users'))
+# @app.route('/admin/users/delete/<int:user_id>', methods=['POST'])
+# @admin_required
+# def delete_user(user_id):
+#     """Delete user (soft delete) - DISABLED"""
+#     try:
+#         # Check if trying to delete self
+#         current_user = auth_manager.get_current_user()
+#         if current_user['user_id'] == user_id:
+#             flash('לא ניתן למחוק את המשתמש הנוכחי', 'error')
+#             return redirect(url_for('manage_users'))
+#         
+#         user = db.get_user_by_id(user_id)
+#         success = db.delete_user(user_id)
+#         
+#         if success:
+#             audit_logger.log_user_deleted(user_id, user['username'])
+#             flash(f'המשתמש {user["full_name"]} נמחק בהצלחה', 'success')
+#         else:
+#             flash('שגיאה במחיקת המשתמש', 'error')
+#             
+#     except Exception as e:
+#         flash(f'שגיאה במחיקת המשתמש: {str(e)}', 'error')
+#     
+#     return redirect(url_for('manage_users'))
 
 @app.route('/admin/audit_logs')
 @admin_required
@@ -2750,39 +2750,39 @@ def export_audit_logs():
         flash(f'שגיאה בייצוא יומן הביקורת: {str(e)}', 'error')
         return redirect(url_for('admin_audit_logs'))
 
-@app.route('/admin/users/change_password', methods=['POST'])
-@admin_required
-def change_user_password():
-    """Change user password"""
-    try:
-        user_id = int(request.form.get('user_id'))
-        new_password = request.form.get('new_password', '').strip()
-        
-        if not new_password:
-            flash('נדרשת סיסמה חדשה', 'error')
-            return redirect(url_for('manage_users'))
-        
-        if len(new_password) < 6:
-            flash('הסיסמה חייבת להכיל לפחות 6 תווים', 'error')
-            return redirect(url_for('manage_users'))
-        
-        # Hash new password
-        new_password_hash = auth_manager.hash_password(new_password)
-        
-        # Update password
-        success = db.change_user_password(user_id, new_password_hash)
-        
-        if success:
-            user = db.get_user_by_id(user_id)
-            audit_logger.log_user_password_changed(user_id, user['username'], by_admin=True)
-            flash(f'הסיסמה של {user["full_name"]} שונתה בהצלחה', 'success')
-        else:
-            flash('שגיאה בשינוי הסיסמה', 'error')
-            
-    except Exception as e:
-        flash(f'שגיאה בשינוי הסיסמה: {str(e)}', 'error')
-    
-    return redirect(url_for('manage_users'))
+# @app.route('/admin/users/change_password', methods=['POST'])
+# @admin_required
+# def change_user_password():
+#     """Change user password - DISABLED"""
+#     try:
+#         user_id = int(request.form.get('user_id'))
+#         new_password = request.form.get('new_password', '').strip()
+#         
+#         if not new_password:
+#             flash('נדרשת סיסמה חדשה', 'error')
+#             return redirect(url_for('manage_users'))
+#         
+#         if len(new_password) < 6:
+#             flash('הסיסמה חייבת להכיל לפחות 6 תווים', 'error')
+#             return redirect(url_for('manage_users'))
+#         
+#         # Hash new password
+#         new_password_hash = auth_manager.hash_password(new_password)
+#         
+#         # Update password
+#         success = db.change_user_password(user_id, new_password_hash)
+#         
+#         if success:
+#             user = db.get_user_by_id(user_id)
+#             audit_logger.log_user_password_changed(user_id, user['username'], by_admin=True)
+#             flash(f'הסיסמה של {user["full_name"]} שונתה בהצלחה', 'success')
+#         else:
+#             flash('שגיאה בשינוי הסיסמה', 'error')
+#             
+#     except Exception as e:
+#         flash(f'שגיאה בשינוי הסיסמה: {str(e)}', 'error')
+#     
+#     return redirect(url_for('manage_users'))
 
 # Active Directory Settings Routes
 @app.route('/admin/ad_settings')

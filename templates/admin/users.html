@@ -202,9 +202,10 @@
             </select>
         </div>
         <div class="col-md-3">
-            <button class="btn btn-primary w-100" data-bs-toggle="modal" data-bs-target="#addUserModal">
-                <i class="fas fa-plus me-2"></i>הוסף משתמש חדש
-            </button>
+            <div class="alert alert-info mb-0">
+                <i class="fas fa-cloud me-2"></i>
+                ניהול משתמשים מתבצע דרך Azure AD
+            </div>
         </div>
     </div>
 
@@ -296,18 +297,6 @@
                                     data-hativa-ids="{% if user.hativot %}{{ user.hativot|map(attribute='hativa_id')|list|tojson }}{% else %}[]{% endif %}">
                                 <i class="fas fa-edit"></i> ערוך
                             </button>
-                            {% if user.auth_source != 'ad' %}
-                            <button class="btn btn-outline-info action-btn change-password-btn" 
-                                    data-user-id="{{ user.user_id }}"
-                                    data-fullname="{{ user.full_name }}">
-                                <i class="fas fa-key"></i> סיסמה
-                            </button>
-                            {% else %}
-                            <button class="btn btn-outline-secondary action-btn" disabled 
-                                    title="משתמשי AD מנוהלים דרך Active Directory">
-                                <i class="fas fa-key"></i> סיסמה AD
-                            </button>
-                            {% endif %}
                         </div>
                         <div>
                             {% if user.user_id != current_user.user_id %}
@@ -321,12 +310,6 @@
                                     {% endif %}
                                 </button>
                             </form>
-                            <form method="POST" action="{{ url_for('delete_user', user_id=user.user_id) }}" class="d-inline">
-                                <button type="submit" class="btn btn-outline-danger action-btn" 
-                                        onclick="return confirm('האם אתה בטוח שברצונך למחוק את המשתמש? פעולה זו אינה הפיכה.')">
-                                    <i class="fas fa-trash"></i> מחק
-                                </button>
-                            </form>
                             {% endif %}
                         </div>
                     </div>
@@ -337,77 +320,6 @@
     </div>
 </div>
 
-<!-- Add User Modal -->
-<div class="modal fade" id="addUserModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-user-plus me-2"></i>הוסף משתמש חדש
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" action="{{ url_for('add_user') }}">
-                <div class="modal-body">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">שם משתמש *</label>
-                            <input type="text" name="username" class="form-control" required>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">אימייל *</label>
-                            <input type="email" name="email" class="form-control" required>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">שם מלא *</label>
-                        <input type="text" name="full_name" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">סיסמה *</label>
-                        <input type="password" name="password" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">תפקיד *</label>
-                        <select name="role" class="form-select" id="addUserRole">
-                            <option value="viewer">צופה - הרשאות קריאה בלבד</option>
-                            <option value="editor">עורך - קריאה ועריכה</option>
-                            <option value="admin">מנהל מערכת - גישה מלאה לכל</option>
-                        </select>
-                        <small class="text-muted">
-                            <i class="fas fa-info-circle"></i>
-                            <span id="addRoleHelp">צופה: גישה לדף הבית, טבלת אירועים ומדריך</span>
-                        </small>
-                    </div>
-                    <div class="mb-3" id="addHativotSection">
-                        <label class="form-label">חטיבות נגישות</label>
-                        <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
-                            {% for hativa in hativot %}
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="hativa_ids[]" 
-                                       value="{{ hativa.hativa_id }}" id="addHativa{{ hativa.hativa_id }}">
-                                <label class="form-check-label" for="addHativa{{ hativa.hativa_id }}">
-                                    {{ hativa.name }}
-                                </label>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        <small class="text-muted">
-                            <i class="fas fa-info-circle"></i>
-                            אם לא תבחר חטיבה, המשתמש יוכל לגשת לכל החטיבות
-                        </small>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save me-2"></i>צור משתמש
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 
 <!-- Edit User Modal -->
 <div class="modal fade" id="editUserModal" tabindex="-1">
@@ -478,44 +390,6 @@
     </div>
 </div>
 
-<!-- Change Password Modal -->
-<div class="modal fade" id="changePasswordModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-key me-2"></i>שינוי סיסמה
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" action="{{ url_for('change_user_password') }}">
-                <input type="hidden" name="user_id" id="changePasswordUserId">
-                <div class="modal-body">
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        שינוי סיסמה עבור: <strong id="changePasswordUserName"></strong>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">סיסמה חדשה *</label>
-                        <input type="password" name="new_password" class="form-control" required minlength="6">
-                        <div class="form-text">הסיסמה חייבת להכיל לפחות 6 תווים</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">אימות סיסמה *</label>
-                        <input type="password" id="confirmPassword" class="form-control" required minlength="6">
-                        <div class="form-text">הקלד את הסיסמה שוב לאימות</div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save me-2"></i>שנה סיסמה
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -592,32 +466,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Change password event listeners
-    const changePasswordButtons = document.querySelectorAll('.change-password-btn');
-    changePasswordButtons.forEach(function(button) {
-        button.addEventListener('click', function() {
-            const userId = this.getAttribute('data-user-id');
-            const fullName = this.getAttribute('data-fullname');
-            
-            document.getElementById('changePasswordUserId').value = userId;
-            document.getElementById('changePasswordUserName').textContent = fullName;
-            
-            const changePasswordModal = new bootstrap.Modal(document.getElementById('changePasswordModal'));
-            changePasswordModal.show();
-        });
-    });
-});
-
-// Password confirmation validation
-document.getElementById('changePasswordModal').addEventListener('submit', function(e) {
-    const newPassword = this.querySelector('input[name="new_password"]').value;
-    const confirmPassword = document.getElementById('confirmPassword').value;
-    
-    if (newPassword !== confirmPassword) {
-        e.preventDefault();
-        alert('הסיסמאות אינן תואמות');
-        return false;
-    }
 });
 
 // Form validation
