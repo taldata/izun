@@ -293,6 +293,9 @@
         border-color: #ffffff;
         box-shadow: none;
     }
+    .sort-controls .btn{
+        line-height: 1;
+    }
 </style>
 {% endblock %}
 
@@ -438,7 +441,13 @@
                                 <th>חטיבה</th>
                                 <th>מסלול</th>
                                 <th>ועדה</th>
-                                <th>תאריך ועדה</th>
+                                <th>
+                                    תאריך ועדה
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" onclick="setSort('committeeDate','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" onclick="setSort('committeeDate','desc')">▼</button>
+                                    </span>
+                                </th>
                                 <th>פרסום קול קורא</th>
                                 <th>סיום קול קורא</th>
                                 <th>סיום קליטה</th>
@@ -622,6 +631,75 @@ function onOrderChange(order) {
     window.location.href = url.toString();
 }
 
+let currentSort = { key: null, dir: 'asc' };
+
+function setSort(key, dir) {
+    currentSort = { key, dir: dir === 'desc' ? 'desc' : 'asc' };
+    sortEventsTable();
+}
+
+function applyCurrentSort() {
+    if (currentSort.key) {
+        sortEventsTable();
+    }
+}
+
+function sortEventsTable() {
+    const tbody = document.querySelector('#eventsTable tbody');
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    if (rows.length === 0) return;
+
+    const key = currentSort.key;
+    const dir = currentSort.dir;
+
+    const toNum = (v) => {
+        const n = parseFloat(v);
+        return Number.isFinite(n) ? n : null;
+    };
+
+    const getValue = (row) => {
+        if (key === 'committeeDate') {
+            const v = row.dataset.committeeDate;
+            if (!v) return null; // missing dates should be last
+            const t = Date.parse(v);
+            return Number.isFinite(t) ? t : null;
+        }
+        if (key === 'expectedRequests') {
+            return toNum(row.dataset.expectedRequests);
+        }
+        if (key === 'eventName') {
+            return (row.dataset.eventName || '').toString();
+        }
+        return null;
+    };
+
+    rows.sort((a, b) => {
+        const va = getValue(a);
+        const vb = getValue(b);
+
+        // Missing values always go last
+        const aMissing = (va === null || va === undefined || va === '');
+        const bMissing = (vb === null || vb === undefined || vb === '');
+        if (aMissing && bMissing) return 0;
+        if (aMissing) return 1;
+        if (bMissing) return -1;
+
+        let cmp = 0;
+        if (typeof va === 'number' && typeof vb === 'number') {
+            cmp = va - vb;
+        } else {
+            cmp = String(va).localeCompare(String(vb), 'he');
+        }
+        return dir === 'desc' ? -cmp : cmp;
+    });
+
+    // Re-append in new order
+    const frag = document.createDocumentFragment();
+    rows.forEach(r => frag.appendChild(r));
+    tbody.appendChild(frag);
+}
+
 function filterTable() {
     const hativaFilter = document.getElementById('filterHativa').value;
     const maslulFilter = document.getElementById('filterMaslul').value;
@@ -704,6 +782,9 @@ function filterTable() {
     
     // Update maslul filter based on hativa selection
     updateMaslulFilter();
+
+    // Re-apply sorting after filtering
+    applyCurrentSort();
 }
 
 function updateMaslulFilter() {
@@ -784,6 +865,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize bulk bar visibility
     onSelectionChanged();
+
+    // If server passed an initial order, reflect it in client sort
+    try {
+        const initial = ("{{ order|default('asc') }}" || 'asc').toLowerCase();
+        if (initial === 'asc' || initial === 'desc') {
+            setSort('committeeDate', initial);
+        }
+    } catch (e) {}
 });
 
 // View Toggle Functions
