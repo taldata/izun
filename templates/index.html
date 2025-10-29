@@ -2416,6 +2416,19 @@ function showDateMenu(dateStr, event, existingCommittee) {
         });
 
         menuItems.push({
+            text: 'שכפל ועדה',
+            subtitle: 'שכפול הועדה וכל האירועים שלה',
+            icon: 'bi-files',
+            color: '#7C3AED',
+            bgColor: '#F5F3FF',
+            action: () => {
+                document.getElementById('edit_vaadot_id').value = existingCommittee.vaadot_id;
+                openDuplicateCommitteeModal();
+                menu.remove();
+            }
+        });
+
+        menuItems.push({
             text: 'מחק ועדה',
             subtitle: 'מחיקת הועדה וכל האירועים שלה',
             icon: 'bi-trash',
