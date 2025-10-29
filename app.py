@@ -2422,17 +2422,22 @@ def update_user():
         email = request.form.get('email', '').strip()
         full_name = request.form.get('full_name', '').strip()
         role = request.form.get('role', 'viewer')
+        auth_source = request.form.get('auth_source', '').strip() or None
         hativa_ids = request.form.getlist('hativa_ids[]')  # Multiple hativot
-        
+
         # Validation
         if not all([username, email, full_name]):
             flash('כל השדות הנדרשים חייבים להיות מלאים', 'error')
             return redirect(url_for('manage_users'))
-        
+
         # Validate role
         if role not in ['admin', 'editor', 'viewer']:
             flash('תפקיד לא חוקי', 'error')
             return redirect(url_for('manage_users'))
+
+        # Validate auth source if provided
+        if auth_source and auth_source not in ['local', 'ad']:
+            auth_source = None
         
         # Check if username exists (excluding current user)
         if db.check_username_exists(username, user_id):
@@ -2448,7 +2453,7 @@ def update_user():
         hativa_ids_int = [int(hid) for hid in hativa_ids if hid] if hativa_ids else []
         
         # Update user
-        success = db.update_user(user_id, username, email, full_name, role, hativa_ids_int)
+        success = db.update_user(user_id, username, email, full_name, role, hativa_ids_int, auth_source)
         
         if success:
             audit_logger.log_user_updated(user_id, username)

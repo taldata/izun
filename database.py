@@ -1592,7 +1592,7 @@ class DatabaseManager:
         cursor = conn.cursor()
         cursor.execute('''
             SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
-                   u.is_active, u.created_at, u.last_login
+                   u.is_active, u.created_at, u.last_login, u.auth_source
             FROM users u
             ORDER BY u.created_at DESC
         ''')
@@ -1623,6 +1623,7 @@ class DatabaseManager:
                 'is_active': row[5],
                 'created_at': row[6],
                 'last_login': row[7],
+                'auth_source': row[8],
                 'hativot': hativot,
                 'hativa_names': hativa_names
             })
@@ -1677,18 +1678,27 @@ class DatabaseManager:
         }
     
     def update_user(self, user_id: int, username: str, email: str, full_name: str, 
-                   role: str, hativa_ids: List[int] = None) -> bool:
+                   role: str, hativa_ids: List[int] = None, auth_source: Optional[str] = None) -> bool:
         """Update user information and their hativot access"""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
             
             # Update basic user info
-            cursor.execute('''
+            update_fields = ['username = ?', 'email = ?', 'full_name = ?', 'role = ?']
+            params: List = [username, email, full_name, role]
+
+            if auth_source in ('local', 'ad'):
+                update_fields.append('auth_source = ?')
+                params.append(auth_source)
+
+            params.append(user_id)
+
+            cursor.execute(f'''
                 UPDATE users 
-                SET username = ?, email = ?, full_name = ?, role = ?
+                SET {', '.join(update_fields)}
                 WHERE user_id = ?
-            ''', (username, email, full_name, role, user_id))
+            ''', params)
             
             # Update user_hativot relationships
             if hativa_ids is not None:
