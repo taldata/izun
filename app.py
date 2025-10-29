@@ -3098,6 +3098,74 @@ def move_committee():
         )
         return jsonify({'success': False, 'message': f'שגיאה: {str(e)}'}), 500
 
+@app.route('/api/duplicate_committee', methods=['POST'])
+@login_required
+def duplicate_committee():
+    """Duplicate a committee (vaada) with all its events to a new date"""
+    try:
+        data = request.get_json(silent=True) or {}
+        source_vaada_id = data.get('source_vaada_id')
+        target_date = data.get('target_date')
+
+        if not source_vaada_id or not target_date:
+            return jsonify({'success': False, 'message': 'נתונים חסרים'}), 400
+
+        # Get current user
+        user = auth_manager.get_current_user()
+        if not user:
+            return jsonify({'success': False, 'message': 'נדרשת התחברות'}), 401
+
+        # Validate target date
+        try:
+            target_date_obj = datetime.strptime(target_date, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'success': False, 'message': 'פורמט תאריך לא תקין'}), 400
+
+        if not db.is_work_day(target_date_obj):
+            return jsonify({'success': False, 'message': 'לא ניתן לשכפל ליום שאינו יום עסקים'}), 400
+
+        # Fetch source committee
+        source_vaada = db.get_vaada_by_id(int(source_vaada_id))
+        if not source_vaada:
+            return jsonify({'success': False, 'message': 'ועדה מקורית לא נמצאה'}), 404
+
+        # Permissions: user cannot duplicate; managers only within their division; admins allowed
+        if user['role'] == 'user':
+            return jsonify({'success': False, 'message': 'רק מנהלים ומנהלי מערכת יכולים לשכפל ועדות'}), 403
+        if user['role'] == 'manager' and source_vaada['hativa_id'] != user.get('hativa_id'):
+            return jsonify({'success': False, 'message': 'מנהל יכול לשכפל רק ועדות בחטיבה שלו'}), 403
+
+        # Ensure no conflicting committee on target date (limit per day)
+        if not db.is_date_available_for_meeting(target_date_obj):
+            return jsonify({'success': False, 'message': 'התאריך תפוס - יש כבר ועדה ביום זה'}), 400
+
+        # Perform duplication via DB helper (admin can override constraints as warnings)
+        result = db.duplicate_vaada_with_events(
+            source_vaadot_id=int(source_vaada_id),
+            target_date=target_date_obj,
+            created_by=user.get('user_id'),
+            override_constraints=(user['role'] == 'admin')
+        )
+
+        # Log creation of the new vaada
+        new_vaada = db.get_vaada_by_id(result['new_vaadot_id'])
+        if new_vaada:
+            audit_logger.log_vaada_created(result['new_vaadot_id'], new_vaada.get('committee_name', 'Unknown'), new_vaada.get('vaada_date', ''))
+
+        message = f"הועדה שוכפלה בהצלחה ל-{target_date}. הועתקו {result['copied_events']} אירועים."
+        if result.get('warning_message'):
+            message += f"\n{result['warning_message']}"
+
+        return jsonify({'success': True, 'message': message, 'new_vaadot_id': result['new_vaadot_id'], 'copied_events': result['copied_events']})
+
+    except ValueError as e:
+        audit_logger.log_error(audit_logger.ACTION_CREATE, audit_logger.ENTITY_VAADA, str(e))
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        app.logger.error(f"Error duplicating committee: {str(e)}")
+        audit_logger.log_error(audit_logger.ACTION_CREATE, audit_logger.ENTITY_VAADA, str(e))
+        return jsonify({'success': False, 'message': f'שגיאה: {str(e)}'}), 500
+
 @app.route('/api/move_event', methods=['POST'])
 @login_required
 @editing_permission_required
@@ -3492,6 +3560,18 @@ def events_table():
                         except ValueError:
                             continue
 
+        # Apply chronological ordering (ascending/descending) by committee date
+        from flask import request
+        from datetime import date
+        order = (request.args.get('order') or 'asc').lower()
+        order = 'desc' if order == 'desc' else 'asc'
+
+        # Place events without a committee date at the end in both orders
+        events_with_date = [e for e in events if e.get('vaada_date')]
+        events_without_date = [e for e in events if not e.get('vaada_date')]
+        events_with_date.sort(key=lambda e: e.get('vaada_date') or date.max, reverse=(order == 'desc'))
+        events = events_with_date + events_without_date
+
         # Get filter options
         hativot = db.get_hativot()
         maslulim = db.get_maslulim()
@@ -3509,7 +3589,8 @@ def events_table():
                              maslulim=maslulim,
                              committee_types=committee_types,
                              event_types=event_types,
-                             current_user=current_user)
+                             current_user=current_user,
+                             order=order)
     except Exception as e:
         flash(f'שגיאה בטעינת נתוני האירועים: {str(e)}', 'error')
         return redirect(url_for('index'))
