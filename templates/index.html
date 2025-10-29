@@ -66,6 +66,32 @@ document.addEventListener('DOMContentLoaded', function() {
                             </select>
                         </div>
                         
+                        <!-- Search Group -->
+                        <div class="control-group search-group">
+                            <div class="control-header">
+                                <i class="bi bi-search me-1"></i>
+                                <span>חיפוש</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="text" id="calendarSearchInput" class="form-control form-control-sm" placeholder="חיפוש לפי שם ועדה, אירוע, חטיבה..." style="min-width: 220px;">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="clearCalendarSearch" title="ניקוי חיפוש">
+                                    נקה
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Large View Toggle -->
+                        <div class="control-group options-group">
+                            <div class="control-header">
+                                <i class="bi bi-aspect-ratio me-1"></i>
+                                <span>תצוגה</span>
+                            </div>
+                            <div class="form-check form-switch mt-1">
+                                <input class="form-check-input" type="checkbox" id="toggleLargeCalendarView">
+                                <label class="form-check-label" for="toggleLargeCalendarView">תצוגה גדולה</label>
+                            </div>
+                        </div>
+
                         <!-- Display Options Group -->
                         <div class="control-group options-group">
                             <div class="control-header">
@@ -366,6 +392,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
                 <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-primary" onclick="openDuplicateCommitteeModal()">
+                        <i class="bi bi-files me-1"></i>שכפל ועדה
+                    </button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
                     <button type="button" class="btn btn-danger" onclick="deleteCommittee()">
                         <i class="bi bi-trash me-1"></i>מחק
@@ -378,6 +407,37 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 </div>
+
+<!-- Duplicate Committee Modal -->
+<div class="modal fade" id="duplicateCommitteeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-files me-2"></i>שכפול ישיבת ועדה
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="duplicate_source_vaadot_id">
+                <div class="mb-3">
+                    <label for="duplicate_target_date" class="form-label">תאריך יעד</label>
+                    <input type="date" class="form-control" id="duplicate_target_date" required>
+                    <div class="form-text">בחר תאריך לוועדה המשוכפלת</div>
+                </div>
+                <div class="alert alert-info py-2 px-3 mb-0">
+                    <i class="bi bi-info-circle me-1"></i>התאריכים של שלבי ה-SLA באירועים יחושבו מחדש לפי התאריך החדש. אם לאירוע היה תאריך ידני לקול קורא, הוא יועתק כפי שהוא.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                <button type="button" class="btn btn-primary" onclick="performDuplicateCommittee()">
+                    <i class="bi bi-check2 me-1"></i>שכפל
+                </button>
+            </div>
+        </div>
+    </div>
+    </div>
 
 <!-- Edit Event Modal -->
 <div class="modal fade" id="editEventModal" tabindex="-1">
@@ -603,6 +663,8 @@ document.addEventListener('DOMContentLoaded', function() {
 // Calendar functionality
 let currentDate = new Date();
 let monthsToShow = 1; // Default to showing 1 month
+let calendarSearchQuery = '';
+let isLargeCalendarView = false;
 const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
                    'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
@@ -652,6 +714,29 @@ console.log('Events with vaadot_id:', eventsData.filter(e => e.vaadot_id));
 const hativotDataElement = document.getElementById('hativot-data');
 const hativotData = hativotDataElement ? JSON.parse(hativotDataElement.textContent) : [];
 window.hativotData = hativotData; // Make it globally available
+
+// Keyword matching for committees/events
+function matchesSearchKeywordCommittee(committee) {
+    if (!calendarSearchQuery) return true;
+    const fields = [
+        committee.committee_name,
+        committee.hativa_name,
+        committee.notes
+    ];
+    return fields.filter(Boolean).some(v => String(v).toLowerCase().includes(calendarSearchQuery));
+}
+
+function matchesSearchKeywordEvent(event) {
+    if (!calendarSearchQuery) return true;
+    const fields = [
+        event.name,
+        event.event_type,
+        event.maslul_name,
+        event.hativa_name,
+        event.description
+    ];
+    return fields.filter(Boolean).some(v => String(v).toLowerCase().includes(calendarSearchQuery));
+}
 
 function renderCalendar() {
     const container = document.getElementById('calendarContainer');
@@ -775,7 +860,7 @@ function createMonthCalendar(year, month, isCompact = false) {
                 cell.style.cursor = 'not-allowed';
             }
             
-            cell.style.height = isCompact ? '55px' : '70px';
+            cell.style.height = isLargeCalendarView ? (isCompact ? '85px' : '120px') : (isCompact ? '55px' : '70px');
             cell.style.verticalAlign = 'top';
             
             if (week === 0 && day < startingDayOfWeek) {
@@ -803,7 +888,18 @@ function createMonthCalendar(year, month, isCompact = false) {
                 const currentDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
                 
                 // Group committees and their events together
-                const dayCommittees = committeesData.filter(committee => committee.vaada_date === currentDateStr);
+                let dayCommittees = committeesData.filter(committee => committee.vaada_date === currentDateStr);
+                
+                // Apply keyword search filter at the committee level if active
+                if (calendarSearchQuery) {
+                    dayCommittees = dayCommittees.filter(committee => {
+                        const committeeMatches = matchesSearchKeywordCommittee(committee);
+                        if (committeeMatches) return true;
+                        // If committee doesn't match, check its events
+                        const hasMatchingEvent = eventsData.some(ev => ev.vaadot_id === committee.vaadot_id && matchesSearchKeywordEvent(ev));
+                        return hasMatchingEvent;
+                    });
+                }
                 
                 dayCommittees.forEach(committee => {
                     console.log('Creating committee group for:', committee.committee_name, 'ID:', committee.vaadot_id); // Debug
@@ -822,7 +918,7 @@ function createMonthCalendar(year, month, isCompact = false) {
                     const hativaColor = getHativaColor(committee.hativa_id);
                     
                     committeeDiv.className = 'badge text-white mb-1 d-block text-truncate position-relative committee-badge';
-                    committeeDiv.style.fontSize = isCompact ? '0.6rem' : '0.7rem';
+                    committeeDiv.style.fontSize = isLargeCalendarView ? (isCompact ? '0.8rem' : '1rem') : (isCompact ? '0.6rem' : '0.7rem');
                     committeeDiv.style.cursor = 'pointer';
                     committeeDiv.style.backgroundColor = hativaColor;
                     committeeDiv.style.borderRadius = '6px';
@@ -843,7 +939,16 @@ function createMonthCalendar(year, month, isCompact = false) {
                     committeeDiv.setAttribute('data-type', 'committee');
                     
                     // Add events for this committee
-                    const committeeEvents = eventsData.filter(event => event.vaadot_id === committee.vaadot_id);
+                    let committeeEvents = eventsData.filter(event => event.vaadot_id === committee.vaadot_id);
+                    
+                    // Apply keyword search filter at the event level if active
+                    if (calendarSearchQuery) {
+                        committeeEvents = committeeEvents.filter(ev => matchesSearchKeywordEvent(ev));
+                        // If no events match and committee itself doesn't match, skip rendering this committee
+                        if (committeeEvents.length === 0 && !matchesSearchKeywordCommittee(committee)) {
+                            return; // skip
+                        }
+                    }
                     const eventCount = committeeEvents.length;
                     
                     if (isCompact) {
@@ -887,7 +992,7 @@ function createMonthCalendar(year, month, isCompact = false) {
                         if (!isCompact) {
                             const eventsHeader = document.createElement('div');
                             eventsHeader.className = 'text-muted';
-                            eventsHeader.style.fontSize = '0.55rem';
+                            eventsHeader.style.fontSize = isLargeCalendarView ? '0.8rem' : '0.55rem';
                             eventsHeader.style.marginBottom = '3px';
                             eventsHeader.style.paddingRight = '4px';
                             eventsHeader.innerHTML = `<i class="bi bi-calendar-event me-1"></i>אירועים בועדה:`;
@@ -907,14 +1012,14 @@ function createMonthCalendar(year, month, isCompact = false) {
                             const hativaColorLight = getHativaColorLight(committee.hativa_id);
                             
                             eventDiv.className = 'event-badge mb-1 d-block text-truncate position-relative';
-                            eventDiv.style.fontSize = isCompact ? '0.5rem' : '0.6rem';
+                            eventDiv.style.fontSize = isLargeCalendarView ? (isCompact ? '0.75rem' : '0.9rem') : (isCompact ? '0.5rem' : '0.6rem');
                             eventDiv.style.cursor = 'pointer';
                             eventDiv.style.backgroundColor = hativaColorLight;
                             eventDiv.style.color = hativaColor;
                             eventDiv.style.border = `1px solid ${hativaColor}60`;
                             eventDiv.style.borderRadius = '6px';
                             eventDiv.style.fontWeight = '500';
-                            eventDiv.style.padding = isCompact ? '2px 4px' : '3px 6px';
+                            eventDiv.style.padding = isLargeCalendarView ? (isCompact ? '4px 6px' : '6px 10px') : (isCompact ? '2px 4px' : '3px 6px');
                             eventDiv.style.boxShadow = `0 1px 3px rgba(0,0,0,0.1)`;
                             eventDiv.style.transition = 'all 0.2s ease';
                             eventDiv.style.marginRight = '4px';
@@ -1281,6 +1386,41 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     setupAvailableDatesFinder();
+
+    // Initialize calendar search and large view toggle
+    const searchInput = document.getElementById('calendarSearchInput');
+    const clearSearchBtn = document.getElementById('clearCalendarSearch');
+    const largeViewToggle = document.getElementById('toggleLargeCalendarView');
+    if (searchInput) {
+        let searchDebounce;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(() => {
+                calendarSearchQuery = (this.value || '').trim().toLowerCase();
+                renderCalendar();
+                setTimeout(initializeDragAndDrop, 50);
+            }, 200);
+        });
+    }
+    if (clearSearchBtn && searchInput) {
+        clearSearchBtn.addEventListener('click', function() {
+            searchInput.value = '';
+            calendarSearchQuery = '';
+            renderCalendar();
+            setTimeout(initializeDragAndDrop, 50);
+        });
+    }
+    if (largeViewToggle) {
+        largeViewToggle.addEventListener('change', function() {
+            isLargeCalendarView = !!this.checked;
+            const container = document.getElementById('calendarContainer');
+            if (container) {
+                container.classList.toggle('calendar-large-view', isLargeCalendarView);
+            }
+            renderCalendar();
+            setTimeout(initializeDragAndDrop, 50);
+        });
+    }
 });
 
 // Toggle deadline dates display
@@ -1499,6 +1639,51 @@ function editCommittee(committee) {
     
     const modal = new bootstrap.Modal(document.getElementById('editCommitteeModal'));
     modal.show();
+}
+
+function openDuplicateCommitteeModal() {
+    const sourceId = document.getElementById('edit_vaadot_id').value;
+    if (!sourceId) {
+        showAlert('ועדה לא תקינה לשכפול', 'error');
+        return;
+    }
+    document.getElementById('duplicate_source_vaadot_id').value = sourceId;
+    document.getElementById('duplicate_target_date').value = '';
+    const modalEl = document.getElementById('duplicateCommitteeModal');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+}
+
+function performDuplicateCommittee() {
+    const sourceId = document.getElementById('duplicate_source_vaadot_id').value;
+    const targetDate = document.getElementById('duplicate_target_date').value;
+    if (!targetDate) {
+        showAlert('אנא בחרו תאריך יעד לשכפול', 'warning');
+        return;
+    }
+
+    fetch('/api/duplicate_committee', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_vaada_id: parseInt(sourceId, 10), target_date: targetDate })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message || 'הועדה שוכפלה בהצלחה', 'success');
+            const modalEl = document.getElementById('duplicateCommitteeModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+            // Simple approach: refresh to reflect new committee and events
+            setTimeout(() => window.location.reload(), 600);
+        } else {
+            showAlert(data.message || 'שגיאה בשכפול הועדה', 'error');
+        }
+    })
+    .catch(err => {
+        console.error('Duplicate error:', err);
+        showAlert('שגיאה בשכפול הועדה', 'error');
+    });
 }
 
 // פונקציה פשוטה לחישוב תאריך סיום קול קורא מתאריך ועדה
