@@ -320,6 +320,14 @@
                                     <i class="bi bi-grid-3x2 me-1"></i>תצוגת ועדות
                                 </label>
                             </div>
+                            <!-- Chronological order selector -->
+                            <div class="ms-2">
+                                <label for="orderSelect" class="form-label mb-0 small d-block text-white">סדר כרונולוגי</label>
+                                <select id="orderSelect" class="form-select form-select-sm" onchange="onOrderChange(this.value)">
+                                    <option value="asc" {% if order == 'asc' %}selected{% endif %}>עולה</option>
+                                    <option value="desc" {% if order == 'desc' %}selected{% endif %}>יורד</option>
+                                </select>
+                            </div>
                             <div id="emptyCommitteesToggle" class="form-check form-switch ms-2" style="opacity: 0; pointer-events: none;">
                                 <input class="form-check-input" type="checkbox" id="includeEmptyCommittees" onchange="onEmptyCommitteesToggle()" disabled>
                                 <label class="form-check-label text-white small" for="includeEmptyCommittees" style="cursor: default;">הצג ועדות ללא אירועים</label>
@@ -608,6 +616,12 @@
 
 {% block extra_scripts %}
 <script>
+function onOrderChange(order) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('order', order === 'desc' ? 'desc' : 'asc');
+    window.location.href = url.toString();
+}
+
 function filterTable() {
     const hativaFilter = document.getElementById('filterHativa').value;
     const maslulFilter = document.getElementById('filterMaslul').value;

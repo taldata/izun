@@ -869,6 +869,55 @@ class DatabaseManager:
                 'notes': row[6], 'created_at': row[7], 'committee_name': row[8], 'hativa_name': row[9],
                 'exception_date': row[10], 'exception_description': row[11], 
                 'exception_type': row[12]} for row in rows]
+
+    def duplicate_vaada_with_events(self, source_vaadot_id: int, target_date: date, created_by: Optional[int] = None,
+                                    override_constraints: bool = False) -> Dict:
+        """
+        Duplicate a committee meeting (vaada) and all its events to a new date.
+        Returns dict with new_vaadot_id and counts.
+        """
+        # Fetch source committee details
+        source = self.get_vaada_by_id(source_vaadot_id)
+        if not source:
+            raise ValueError("ועדה מקורית לא נמצאה")
+
+        # Create the new committee meeting using existing constraint checks
+        new_vaadot_id, warning_message = self.add_vaada(
+            committee_type_id=int(source['committee_type_id']),
+            hativa_id=int(source['hativa_id']),
+            vaada_date=target_date,
+            notes=source.get('notes') or "",
+            status=source.get('status') or 'scheduled',
+            created_by=created_by,
+            override_constraints=override_constraints
+        )
+
+        # Copy events
+        events = self.get_events(vaadot_id=source_vaadot_id)
+        created_events = 0
+        for ev in events:
+            # If the source event used a manual call deadline, carry it over; otherwise let it be auto-calculated
+            is_manual = bool(ev.get('is_call_deadline_manual'))
+            manual_date = ev.get('call_deadline_date') if is_manual else None
+
+            self.add_event(
+                vaadot_id=new_vaadot_id,
+                maslul_id=int(ev['maslul_id']),
+                name=ev['name'],
+                event_type=ev['event_type'],
+                expected_requests=int(ev.get('expected_requests') or 0),
+                actual_submissions=int(ev.get('actual_submissions') or 0),
+                call_publication_date=ev.get('call_publication_date'),
+                is_call_deadline_manual=is_manual,
+                manual_call_deadline_date=manual_date
+            )
+            created_events += 1
+
+        return {
+            'new_vaadot_id': new_vaadot_id,
+            'copied_events': created_events,
+            'warning_message': warning_message
+        }
     
     def update_vaada(self, vaadot_id: int, committee_type_id: int, hativa_id: int,
                      vaada_date: date, status: str = 'planned',
