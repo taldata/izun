@@ -99,6 +99,36 @@ cleanup_processes() {
     fi
 }
 
+# Ensure the configured port is free before starting the app
+free_port_if_in_use() {
+    log_info "Checking if port $PORT is in use..."
+    local pids=$(lsof -nP -iTCP:$PORT -sTCP:LISTEN -t 2>/dev/null || true)
+
+    if [ -n "$pids" ]; then
+        log_warning "Port $PORT is in use by PIDs: $pids"
+        kill -TERM $pids 2>/dev/null || true
+        sleep 1
+
+        # If still listening, force kill
+        local remaining=$(lsof -nP -iTCP:$PORT -sTCP:LISTEN -t 2>/dev/null || true)
+        if [ -n "$remaining" ]; then
+            log_warning "Force killing remaining PIDs on port $PORT: $remaining"
+            kill -9 $remaining 2>/dev/null || true
+        fi
+
+        # Final check
+        local final=$(lsof -nP -iTCP:$PORT -sTCP:LISTEN -t 2>/dev/null || true)
+        if [ -z "$final" ]; then
+            log_success "Port $PORT is now free"
+        else
+            log_error "Failed to free port $PORT (still held by: $final)"
+            exit 1
+        fi
+    else
+        log_info "Port $PORT is free"
+    fi
+}
+
 # Start the application
 start_app() {
     log_info "Starting $APP_NAME on http://localhost:$PORT"
@@ -137,6 +167,7 @@ main() {
     setup_venv
     init_database
     cleanup_processes
+    free_port_if_in_use
     start_app
 }
 
