@@ -290,6 +290,7 @@
                                     data-email="{{ user.email }}"
                                     data-fullname="{{ user.full_name }}"
                                     data-role="{{ user.role }}"
+                                    data-auth-source="{{ user.auth_source or '' }}"
                                     data-hativa-ids="{% if user.hativot %}{{ user.hativot|map(attribute='hativa_id')|list|tojson }}{% else %}[]{% endif %}">
                                 <i class="fas fa-edit"></i> ערוך
                             </button>
@@ -438,6 +439,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const email = this.getAttribute('data-email');
             const fullName = this.getAttribute('data-fullname');
             const role = this.getAttribute('data-role');
+            const authSource = this.getAttribute('data-auth-source') || '';
             const hativaIdsStr = this.getAttribute('data-hativa-ids');
             const hativaIds = JSON.parse(hativaIdsStr || '[]');
             
@@ -446,6 +448,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('editEmail').value = email;
             document.getElementById('editFullName').value = fullName;
             document.getElementById('editRole').value = role;
+            document.getElementById('editAuthSource').value = authSource;
             
             // Clear all checkboxes first
             document.querySelectorAll('.edit-hativa-checkbox').forEach(cb => cb.checked = false);
