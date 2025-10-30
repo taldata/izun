@@ -1649,6 +1649,11 @@ def add_event():
             flash('ועדה או מסלול לא נמצאו במערכת', 'error')
             return redirect(url_for('index'))
         
+        # Block creating events for operational committees
+        if vaada.get('is_operational'):
+            flash('לא ניתן ליצור אירועים לישיבה מסוג ועדה תפעולית', 'error')
+            return redirect(url_for('index'))
+        
         if vaada['hativa_id'] != maslul['hativa_id']:
             flash(f'שגיאה: המסלול "{maslul["name"]}" מחטיבת "{maslul["hativa_name"]}" אינו יכול להיות משויך לועדה מחטיבת "{vaada["hativa_name"]}"', 'error')
             return redirect(url_for('index'))
@@ -1727,6 +1732,11 @@ def edit_event(event_id):
         
         if not vaada or not maslul:
             flash('ועדה או מסלול לא נמצאו במערכת', 'error')
+            return redirect(url_for('index'))
+        
+        # Block updating events for operational committees
+        if vaada.get('is_operational'):
+            flash('לא ניתן לעדכן אירועים המשויכים לישיבה מסוג ועדה תפעולית', 'error')
             return redirect(url_for('index'))
         
         if vaada['hativa_id'] != maslul['hativa_id']:
@@ -2219,7 +2229,8 @@ def add_committee_type():
         scheduled_day=request.form.get('scheduled_day', type=int),
         frequency=request.form.get('frequency', '').strip(),
         week_of_month=request.form.get('week_of_month', type=int) if request.form.get('week_of_month') else None,
-        description=request.form.get('description', '').strip()
+        description=request.form.get('description', '').strip(),
+        is_operational=1 if request.form.get('is_operational') in ('1', 'on', 'true', 'True') else 0
     )
     
     # Use service to create committee type
@@ -2261,7 +2272,8 @@ def update_committee_type():
         scheduled_day=request.form.get('scheduled_day', type=int),
         frequency=request.form.get('frequency', '').strip(),
         week_of_month=request.form.get('week_of_month', type=int) if request.form.get('week_of_month') else None,
-        description=request.form.get('description', '').strip()
+        description=request.form.get('description', '').strip(),
+        is_operational=1 if request.form.get('is_operational') in ('1', 'on', 'true', 'True') else 0
     )
     
     # Use service to update committee type

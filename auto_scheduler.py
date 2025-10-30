@@ -88,6 +88,12 @@ class AutoMeetingScheduler:
         if not committee_type_data:
             return False, f"סוג ועדה לא נמצא: {committee_type_id}"
         
+        # ועדה תפעולית: עוקפים את כל האילוצים למעט יום עסקים
+        if committee_type_data.get('is_operational'):
+            if not self.is_business_day(target_date):
+                return False, "התאריך אינו יום עסקים (שבת/חג/יום שבתון)"
+            return True, "ועדה תפעולית - ללא אילוצי תדירות/שבוע/קיבולת"
+        
         expected_weekday = committee_type_data['scheduled_day']
         committee_name = committee_type_data['name']
         frequency = committee_type_data['frequency']

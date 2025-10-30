@@ -258,7 +258,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             <form method="POST" action="{{ url_for('add_event') }}">
                 <div class="modal-body">
-                    <div class="mb-3">
+                    <div class="mb-3" id="add_event_maslul_group">
                         <label for="event_maslul_id" class="form-label">מסלול</label>
                         <select class="form-select" name="maslul_id" id="event_maslul_id" required>
                             <option value="">בחר מסלול</option>
@@ -296,7 +296,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <select class="form-select" name="vaadot_id" id="event_vaadot_id" required>
                             <option value="">בחר ישיבת ועדה</option>
                             {% for committee in committees %}
-                                <option value="{{ committee.vaadot_id }}" data-hativa-id="{{ committee.hativa_id }}">
+                                <option value="{{ committee.vaadot_id }}" data-hativa-id="{{ committee.hativa_id }}" data-is-operational="{{ 1 if committee.is_operational else 0 }}">
                                     {{ committee.committee_name }} - {{ committee.hativa_name }}
                                     {% if committee.vaada_date %} ({{ committee.vaada_date }}){% endif %}
                                 </option>
@@ -313,9 +313,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                     <div class="row">
                         <div class="col-md-6">
-                            <div class="mb-3">
+                            <div class="mb-3" id="add_event_type_group">
                                 <label for="event_type" class="form-label">סוג האירוע</label>
-                                <select class="form-select" name="event_type" required>
+                                <select class="form-select" name="event_type" id="event_type" required>
                                     <option value="">בחר סוג</option>
                                     <option value="kokok">קו"ק</option>
                                     <option value="shotef">שוטף</option>
@@ -323,19 +323,19 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <div class="mb-3">
+                            <div class="mb-3" id="add_expected_group">
                                 <label for="expected_requests" class="form-label">בקשות צפויות <span class="text-danger">*</span></label>
-                                <input type="number" class="form-control" name="expected_requests" min="1" required>
+                                <input type="number" class="form-control" name="expected_requests" id="expected_requests" min="1" required>
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <div class="mb-3">
+                            <div class="mb-3" id="add_actual_group">
                                 <label for="actual_submissions" class="form-label">הגשות בפועל</label>
-                                <input type="number" class="form-control" name="actual_submissions" min="0" value="0">
+                                <input type="number" class="form-control" name="actual_submissions" id="actual_submissions" min="0" value="0">
                             </div>
                         </div>
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-3" id="add_call_pub_group">
                         <label for="call_publication_date" class="form-label">תאריך פרסום קול קורא</label>
                         <input type="date" class="form-control" name="call_publication_date" id="call_publication_date">
                     </div>
@@ -457,14 +457,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         <select class="form-select" name="vaadot_id" id="edit_event_vaadot_id" required>
                             <option value="">בחר ישיבת ועדה</option>
                             {% for committee in committees %}
-                                <option value="{{ committee.vaadot_id }}">
+                                <option value="{{ committee.vaadot_id }}" data-is-operational="{{ 1 if committee.is_operational else 0 }}">
                                     {{ committee.committee_name }} - {{ committee.hativa_name }}
                                     {% if committee.vaada_date %} ({{ committee.vaada_date }}){% endif %}
                                 </option>
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-3" id="edit_event_maslul_group">
                         <label for="edit_event_maslul_id" class="form-label">מסלול</label>
                         <select class="form-select" name="maslul_id" id="edit_event_maslul_id" required>
                             <option value="">בחר מסלול</option>
@@ -481,7 +481,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                     <div class="row">
                         <div class="col-md-6">
-                            <div class="mb-3">
+                            <div class="mb-3" id="edit_event_type_group">
                                 <label for="edit_event_type" class="form-label">סוג האירוע</label>
                                 <select class="form-select" name="event_type" id="edit_event_type" required>
                                     <option value="">בחר סוג</option>
@@ -491,21 +491,25 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <div class="mb-3">
+                            <div class="mb-3" id="edit_expected_group">
                                 <label for="edit_expected_requests" class="form-label">בקשות צפויות <span class="text-danger">*</span></label>
                                 <input type="number" class="form-control" name="expected_requests" id="edit_expected_requests" min="1" required>
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <div class="mb-3">
+                            <div class="mb-3" id="edit_actual_group">
                                 <label for="edit_actual_submissions" class="form-label">הגשות בפועל</label>
                                 <input type="number" class="form-control" name="actual_submissions" id="edit_actual_submissions" min="0" value="0">
                             </div>
                         </div>
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-3" id="edit_call_pub_group">
                         <label for="edit_call_publication_date" class="form-label">תאריך פרסום קול קורא</label>
                         <input type="date" class="form-control" name="call_publication_date" id="edit_call_publication_date">
+                    </div>
+                    <div class="alert alert-info d-none" id="operationalCommitteeNotice">
+                        <i class="bi bi-info-circle me-1"></i>
+                        ועדה תפעולית: לא ניתן להוסיף אירועי מסלול לישיבה זו. שדות הטופס ננעלו.
                     </div>
                     
                     <!-- תאריכים נגזרים -->
@@ -742,6 +746,16 @@ function renderCalendar() {
     // Update header display
     updateHeaderDisplay();
     
+    // Render legend
+    const legend = document.createElement('div');
+    legend.className = 'd-flex align-items-center gap-3 mb-2';
+    legend.innerHTML = `
+        <span class="badge bg-secondary"><i class="bi bi-people-fill me-1"></i> ועדה רגילה</span>
+        <span class="badge bg-warning text-dark"><i class="bi bi-gear-fill me-1"></i> ועדה תפעולית</span>
+        <span class="text-muted" style="font-size: 0.8rem;">ועדה תפעולית מסומנת עם מסגרת מקווקוות ורקע אפור</span>
+    `;
+    container.appendChild(legend);
+    
     // Create calendar layout based on number of months to show
     if (monthsToShow === 1) {
         // Single month view
@@ -904,10 +918,14 @@ function createMonthCalendar(year, month, isCompact = false) {
                     // Create committee container
                     const committeeContainer = document.createElement('div');
                     committeeContainer.className = 'committee-container mb-2';
-                    committeeContainer.style.border = `2px solid ${getHativaColor(committee.hativa_id)}`;
+                    const baseBorderColor = getHativaColor(committee.hativa_id);
+                    const baseBg = `${getHativaColorLight(committee.hativa_id)}15`;
+                    const opBorder = '#6c757d';
+                    const opBg = '#f8f9fa';
+                    committeeContainer.style.border = `2px ${committee.is_operational ? 'dashed' : 'solid'} ${committee.is_operational ? opBorder : baseBorderColor}`;
                     committeeContainer.style.borderRadius = '10px';
                     committeeContainer.style.padding = '6px';
-                    committeeContainer.style.backgroundColor = `${getHativaColorLight(committee.hativa_id)}15`;
+                    committeeContainer.style.backgroundColor = committee.is_operational ? opBg : baseBg;
                     committeeContainer.style.position = 'relative';
                     
                     // Committee header
@@ -917,7 +935,7 @@ function createMonthCalendar(year, month, isCompact = false) {
                     committeeDiv.className = 'badge text-white mb-1 d-block text-truncate position-relative committee-badge';
                     committeeDiv.style.fontSize = isLargeCalendarView ? (isCompact ? '0.8rem' : '1rem') : (isCompact ? '0.6rem' : '0.7rem');
                     committeeDiv.style.cursor = 'pointer';
-                    committeeDiv.style.backgroundColor = hativaColor;
+                    committeeDiv.style.backgroundColor = committee.is_operational ? '#495057' : hativaColor;
                     committeeDiv.style.borderRadius = '6px';
                     committeeDiv.style.fontWeight = 'bold';
                     
@@ -952,10 +970,13 @@ function createMonthCalendar(year, month, isCompact = false) {
                         committeeDiv.innerHTML = `
                             <div class="d-flex align-items-center justify-content-between">
                                 <div class="d-flex align-items-center">
-                                    <i class="bi bi-people-fill me-1"></i>
+                                    ${committee.is_operational ? '<i class="bi bi-gear-fill me-1"></i>' : '<i class="bi bi-people-fill me-1"></i>'}
                                     ${committee.committee_name}
                                 </div>
-                                ${eventCount > 0 ? `<span class="badge bg-light text-dark" style="font-size: 0.45rem;">${eventCount}</span>` : ''}
+                                <div class="d-flex align-items-center gap-1">
+                                    ${committee.is_operational ? '<span class="badge bg-warning text-dark" style="font-size: 0.45rem;">תפעולית</span>' : ''}
+                                    ${eventCount > 0 ? `<span class="badge bg-light text-dark" style="font-size: 0.45rem;">${eventCount}</span>` : ''}
+                                </div>
                             </div>
                         `;
                     } else {
@@ -963,10 +984,11 @@ function createMonthCalendar(year, month, isCompact = false) {
                             <div class="d-flex align-items-center justify-content-between">
                                 <div class="d-flex align-items-center">
                                     <i class="bi bi-arrows-move me-1" style="font-size: 0.6rem; opacity: 0.7;"></i>
-                                    <i class="bi bi-people-fill me-1"></i>
+                                    ${committee.is_operational ? '<i class="bi bi-gear-fill me-1"></i>' : '<i class="bi bi-people-fill me-1"></i>'}
                                     ${committee.committee_name}
                                 </div>
                                 <div class="d-flex align-items-center gap-1">
+                                    ${committee.is_operational ? '<span class="badge bg-warning text-dark" style="font-size: 0.5rem;">תפעולית</span>' : ''}
                                     ${eventCount > 0 ? `<span class="badge bg-light text-dark" style="font-size: 0.5rem;">${eventCount} אירועים</span>` : ''}
                                     <small style="font-size: 0.6rem; opacity: 0.8;">
                                         <i class="bi bi-clock me-1"></i>ועדה
@@ -3095,6 +3117,41 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    // Operational hide for Add Event modal
+    (function bindAddEventOperationalToggle() {
+        const addVaadotSelect = document.getElementById('event_vaadot_id');
+        const addMaslulGroup = document.getElementById('add_event_maslul_group');
+        const addMaslulSelect = document.getElementById('event_maslul_id');
+        const addTypeGroup = document.getElementById('add_event_type_group');
+        const addExpectedGroup = document.getElementById('add_expected_group');
+        const addActualGroup = document.getElementById('add_actual_group');
+        const addCallPubGroup = document.getElementById('add_call_pub_group');
+        const addTypeSelect = document.getElementById('event_type');
+        const addExpectedInput = document.getElementById('expected_requests');
+        if (!addVaadotSelect || !addMaslulGroup || !addMaslulSelect) return;
+
+        function apply(op) {
+            addMaslulGroup.style.display = op ? 'none' : '';
+            addMaslulSelect.required = !op;
+            if (op) addMaslulSelect.value = '';
+            if (addTypeGroup) addTypeGroup.style.display = op ? 'none' : '';
+            if (addExpectedGroup) addExpectedGroup.style.display = op ? 'none' : '';
+            if (addActualGroup) addActualGroup.style.display = op ? 'none' : '';
+            if (addCallPubGroup) addCallPubGroup.style.display = op ? 'none' : '';
+            if (addTypeSelect) addTypeSelect.required = !op;
+            if (addExpectedInput) addExpectedInput.required = !op;
+        }
+
+        addVaadotSelect.addEventListener('change', function() {
+            const sel = addVaadotSelect.options[addVaadotSelect.selectedIndex];
+            const op = sel && sel.dataset.isOperational === '1';
+            apply(op);
+        });
+
+        const initSel = addVaadotSelect.options[addVaadotSelect.selectedIndex];
+        const initOp = initSel && initSel.dataset.isOperational === '1';
+        apply(initOp);
+    })();
     
     const editEventForm = document.querySelector('#editEventModal form');
     if (editEventForm) {
@@ -3105,6 +3162,46 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
         });
+    }
+
+    // Operational committee guard for event edit modal
+    const vaadotSelect = document.getElementById('edit_event_vaadot_id');
+    const maslulSelect = document.getElementById('edit_event_maslul_id');
+    const nameInput = document.getElementById('edit_event_name');
+    const typeSelect = document.getElementById('edit_event_type');
+    const expectedInput = document.getElementById('edit_expected_requests');
+    const actualInput = document.getElementById('edit_actual_submissions');
+    const callPubInput = document.getElementById('edit_call_publication_date');
+    const notice = document.getElementById('operationalCommitteeNotice');
+
+    function setDisabledForOperational(isOperational) {
+        const editMaslulGroup = document.getElementById('edit_event_maslul_group');
+        const editTypeGroup = document.getElementById('edit_event_type_group');
+        const editExpectedGroup = document.getElementById('edit_expected_group');
+        const editActualGroup = document.getElementById('edit_actual_group');
+        const editCallPubGroup = document.getElementById('edit_call_pub_group');
+        // keep name editable; hide other inputs' groups
+        [typeSelect, expectedInput, actualInput, callPubInput].forEach(el => {
+            if (el) el.disabled = !!isOperational;
+        });
+        if (notice) notice.classList.toggle('d-none', !isOperational);
+        if (editMaslulGroup) editMaslulGroup.style.display = isOperational ? 'none' : '';
+        if (editTypeGroup) editTypeGroup.style.display = isOperational ? 'none' : '';
+        if (editExpectedGroup) editExpectedGroup.style.display = isOperational ? 'none' : '';
+        if (editActualGroup) editActualGroup.style.display = isOperational ? 'none' : '';
+        if (editCallPubGroup) editCallPubGroup.style.display = isOperational ? 'none' : '';
+    }
+
+    if (vaadotSelect) {
+        vaadotSelect.addEventListener('change', function() {
+            const selected = vaadotSelect.options[vaadotSelect.selectedIndex];
+            const isOperational = selected && selected.dataset.isOperational === '1';
+            setDisabledForOperational(isOperational);
+        });
+        // Initialize on load
+        const initSelected = vaadotSelect.options[vaadotSelect.selectedIndex];
+        const initOperational = initSelected && initSelected.dataset.isOperational === '1';
+        setDisabledForOperational(initOperational);
     }
 });
 

@@ -72,6 +72,7 @@ class DatabaseManager:
                 scheduled_day INTEGER NOT NULL,
                 frequency TEXT NOT NULL DEFAULT 'weekly' CHECK (frequency IN ('weekly', 'monthly')),
                 week_of_month INTEGER DEFAULT NULL,
+                is_operational INTEGER DEFAULT 0,
                 is_active INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id) ON DELETE CASCADE,
@@ -363,7 +364,8 @@ class DatabaseManager:
                 ],
                 'committee_types': [
                     ('is_active', 'INTEGER DEFAULT 1'),
-                    ('description', 'TEXT')
+                    ('description', 'TEXT'),
+                    ('is_operational', 'INTEGER DEFAULT 0')
                 ],
                 'vaadot': [
                     ('is_deleted', 'INTEGER DEFAULT 0'),
@@ -665,14 +667,14 @@ class DatabaseManager:
     
     # Committee Types operations
     def add_committee_type(self, hativa_id: int, name: str, scheduled_day: int, frequency: str = 'weekly', 
-                          week_of_month: Optional[int] = None, description: str = "") -> int:
+                          week_of_month: Optional[int] = None, description: str = "", is_operational: int = 0) -> int:
         """Add a new committee type"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO committee_types (hativa_id, name, scheduled_day, frequency, week_of_month, description)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (hativa_id, name, scheduled_day, frequency, week_of_month, description))
+            INSERT INTO committee_types (hativa_id, name, scheduled_day, frequency, week_of_month, description, is_operational)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (hativa_id, name, scheduled_day, frequency, week_of_month, description, is_operational))
         committee_type_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -686,7 +688,7 @@ class DatabaseManager:
         if hativa_id:
             cursor.execute('''
                 SELECT ct.committee_type_id, ct.hativa_id, ct.name, ct.scheduled_day, 
-                       ct.frequency, ct.week_of_month, ct.description, h.name as hativa_name 
+                       ct.frequency, ct.week_of_month, ct.description, ct.is_operational, h.name as hativa_name 
                 FROM committee_types ct
                 JOIN hativot h ON ct.hativa_id = h.hativa_id
                 WHERE ct.hativa_id = ?
@@ -695,7 +697,7 @@ class DatabaseManager:
         else:
             cursor.execute('''
                 SELECT ct.committee_type_id, ct.hativa_id, ct.name, ct.scheduled_day, 
-                       ct.frequency, ct.week_of_month, ct.description, h.name as hativa_name 
+                       ct.frequency, ct.week_of_month, ct.description, ct.is_operational, h.name as hativa_name 
                 FROM committee_types ct
                 JOIN hativot h ON ct.hativa_id = h.hativa_id
                 ORDER BY h.name, ct.scheduled_day
@@ -708,19 +710,19 @@ class DatabaseManager:
         
         return [{'committee_type_id': row[0], 'hativa_id': row[1], 'name': row[2], 'scheduled_day': row[3],
                 'scheduled_day_name': days[row[3]], 'frequency': row[4], 
-                'week_of_month': row[5], 'description': row[6], 'hativa_name': row[7]} for row in rows]
+                'week_of_month': row[5], 'description': row[6], 'is_operational': row[7], 'hativa_name': row[8]} for row in rows]
     
     def update_committee_type(self, committee_type_id: int, hativa_id: int, name: str, scheduled_day: int, 
                              frequency: str = 'weekly', week_of_month: Optional[int] = None, 
-                             description: str = "") -> bool:
+                             description: str = "", is_operational: int = 0) -> bool:
         """Update an existing committee type"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
             UPDATE committee_types 
-            SET hativa_id = ?, name = ?, scheduled_day = ?, frequency = ?, week_of_month = ?, description = ?
+            SET hativa_id = ?, name = ?, scheduled_day = ?, frequency = ?, week_of_month = ?, description = ?, is_operational = ?
             WHERE committee_type_id = ?
-        ''', (hativa_id, name, scheduled_day, frequency, week_of_month, description, committee_type_id))
+        ''', (hativa_id, name, scheduled_day, frequency, week_of_month, description, is_operational, committee_type_id))
         success = cursor.rowcount > 0
         conn.commit()
         conn.close()
@@ -818,7 +820,12 @@ class DatabaseManager:
         
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT COUNT(*) FROM vaadot WHERE vaada_date = ?', (vaada_date,))
+        cursor.execute('''
+            SELECT COUNT(*) 
+            FROM vaadot v
+            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+            WHERE v.vaada_date = ? AND COALESCE(ct.is_operational, 0) = 0
+        ''', (vaada_date,))
         count = cursor.fetchone()[0]
         conn.close()
         max_per_day = self.get_int_setting('max_meetings_per_day', 1)
@@ -833,7 +840,7 @@ class DatabaseManager:
         query = '''
             SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date, 
                    v.status, v.exception_date_id, v.notes, v.created_at,
-                   ct.name as committee_name, h.name as hativa_name,
+                   ct.name as committee_name, ct.is_operational, h.name as hativa_name,
                    ed.exception_date, ed.description as exception_description, ed.type as exception_type
             FROM vaadot v
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
@@ -866,9 +873,9 @@ class DatabaseManager:
         
         return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2],
                 'vaada_date': row[3], 'status': row[4], 'exception_date_id': row[5],
-                'notes': row[6], 'created_at': row[7], 'committee_name': row[8], 'hativa_name': row[9],
-                'exception_date': row[10], 'exception_description': row[11], 
-                'exception_type': row[12]} for row in rows]
+                'notes': row[6], 'created_at': row[7], 'committee_name': row[8], 'is_operational': row[9], 'hativa_name': row[10],
+                'exception_date': row[11], 'exception_description': row[12], 
+                'exception_type': row[13]} for row in rows]
 
     def duplicate_vaada_with_events(self, source_vaadot_id: int, target_date: date, created_by: Optional[int] = None,
                                     override_constraints: bool = False) -> Dict:
@@ -2162,7 +2169,12 @@ class DatabaseManager:
             vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT COUNT(*) FROM vaadot WHERE vaada_date = ?', (vaada_date,))
+        cursor.execute('''
+            SELECT COUNT(*) 
+            FROM vaadot v
+            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+            WHERE v.vaada_date = ? AND COALESCE(ct.is_operational, 0) = 0
+        ''', (vaada_date,))
         count = cursor.fetchone()[0]
         conn.close()
         return count
@@ -2172,8 +2184,11 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT COUNT(*) FROM vaadot 
-            WHERE vaada_date BETWEEN ? AND ?
+            SELECT COUNT(*) 
+            FROM vaadot v
+            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+            WHERE v.vaada_date BETWEEN ? AND ?
+              AND COALESCE(ct.is_operational, 0) = 0
         ''', (start_date, end_date))
         count = cursor.fetchone()[0]
         conn.close()
