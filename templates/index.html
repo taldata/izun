@@ -1733,6 +1733,11 @@ function editEvent(event) {
     document.getElementById('edit_event_type').value = event.event_type;
     document.getElementById('edit_expected_requests').value = event.expected_requests;
     document.getElementById('edit_actual_submissions').value = event.actual_submissions || 0;
+    // פרסום קול קורא
+    const editCallPub = document.getElementById('edit_call_publication_date');
+    if (editCallPub) {
+        editCallPub.value = event.call_publication_date || '';
+    }
     
     // הצג תאריכים נגזרים אם קיימים
     if (event.call_deadline_date || event.intake_deadline_date || event.review_deadline_date || event.response_deadline_date) {
@@ -3181,8 +3186,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const editExpectedGroup = document.getElementById('edit_expected_group');
         const editActualGroup = document.getElementById('edit_actual_group');
         const editCallPubGroup = document.getElementById('edit_call_pub_group');
-        // keep name editable; hide other inputs' groups
-        [typeSelect, expectedInput, actualInput, callPubInput].forEach(el => {
+        // keep name editable; hide other inputs' groups (do NOT disable callPubInput to preserve value on submit)
+        [typeSelect, expectedInput, actualInput].forEach(el => {
             if (el) el.disabled = !!isOperational;
         });
         if (notice) notice.classList.toggle('d-none', !isOperational);
