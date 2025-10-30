@@ -34,6 +34,7 @@ class CommitteeTypeRequest:
     frequency: str
     week_of_month: Optional[int] = None
     description: str = ""
+    is_operational: int = 0
 
 
 @dataclass
@@ -156,7 +157,8 @@ class CommitteeTypesService:
                 scheduled_day=request.scheduled_day,
                 frequency=request.frequency,
                 week_of_month=request.week_of_month,
-                description=request.description.strip()
+                description=request.description.strip(),
+                is_operational=request.is_operational
             )
             
             logger.info(f"Committee type created successfully with ID: {committee_type_id}")
@@ -212,7 +214,8 @@ class CommitteeTypesService:
                 scheduled_day=request.scheduled_day,
                 frequency=request.frequency,
                 week_of_month=request.week_of_month,
-                description=request.description.strip()
+                description=request.description.strip(),
+                is_operational=request.is_operational
             )
             
             if success:

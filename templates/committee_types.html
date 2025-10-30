@@ -181,6 +181,11 @@
                                             שבוע {{ committee_type.week_of_month }}
                                         </span>
                                     {% endif %}
+                                    {% if committee_type.is_operational %}
+                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle badge-sm">
+                                            ⚙️ תפעולית
+                                        </span>
+                                    {% endif %}
                                 </div>
                                 
                                 {% if committee_type.description %}
@@ -241,6 +246,10 @@
                                     <div class="mb-2">
                                         <textarea class="form-control form-control-sm edit-description" 
                                                   rows="2" placeholder="תיאור (אופציונלי)">{{ committee_type.description or '' }}</textarea>
+                                    </div>
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input edit-is-operational" type="checkbox" id="edit_is_operational_{{ committee_type.committee_type_id }}" {% if committee_type.is_operational %}checked{% endif %}>
+                                        <label class="form-check-label" for="edit_is_operational_{{ committee_type.committee_type_id }}">ועדה תפעולית (ללא אירועי מסלול ואילוצים)</label>
                                     </div>
                                     
                                     <div class="d-flex gap-1">
@@ -337,6 +346,10 @@
                         <label for="description" class="form-label">תיאור</label>
                         <textarea class="form-control" id="description" name="description" rows="3"></textarea>
                     </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="is_operational" name="is_operational">
+                        <label class="form-check-label" for="is_operational">ועדה תפעולית (מופיעה ביומן, ללא אירועים/אילוצים)</label>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
@@ -407,6 +420,10 @@
                     <div class="mb-3">
                         <label for="edit_description" class="form-label">תיאור</label>
                         <textarea class="form-control" id="edit_description" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="edit_is_operational" name="is_operational">
+                        <label class="form-check-label" for="edit_is_operational">ועדה תפעולית (מופיעה ביומן, ללא אירועים/אילוצים)</label>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -765,6 +782,7 @@ function submitInlineEdit(form) {
     const scheduledDay = form.querySelector('.edit-scheduled-day').value;
     const weekOfMonth = form.querySelector('.edit-week-of-month').value;
     const description = form.querySelector('.edit-description').value.trim();
+    const isOperationalChecked = form.querySelector('.edit-is-operational')?.checked;
     
     // Validation
     if (!hativaId) {
@@ -790,6 +808,9 @@ function submitInlineEdit(form) {
     formData.append('scheduled_day', scheduledDay);
     formData.append('week_of_month', weekOfMonth);
     formData.append('description', description);
+    if (isOperationalChecked) {
+        formData.append('is_operational', '1');
+    }
     
     // Show loading state
     const submitBtn = form.querySelector('button[type="submit"]');
