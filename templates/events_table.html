@@ -440,7 +440,6 @@
                                 <th>סוג</th>
                                 <th>חטיבה</th>
                                 <th>מסלול</th>
-                                <th>ועדה</th>
                                 <th>
                                     תאריך ועדה
                                     <span class="ms-1 sort-controls">
@@ -452,6 +451,7 @@
                                 <th>סיום קול קורא</th>
                                 <th>סיום קליטה</th>
                                 <th>סיום בדיקה</th>
+                                <th>ועדה</th>
                                 <th>תשובת ועדה</th>
                                 <th>בקשות צפויות</th>
                                 <th>הגשות בפועל</th>
@@ -485,7 +485,6 @@
                                 </td>
                                 <td>{{ event.hativa_name or '-' }}</td>
                                 <td>{{ event.maslul_name or '-' }}</td>
-                                <td>{{ event.committee_name or '-' }}</td>
                                 <td>
                                     {% if event.vaada_date %}
                                         <span class="date-badge date-committee">{{ event.vaada_date }}</span>
@@ -521,6 +520,7 @@
                                         <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
+                                <td>{{ event.committee_name or '-' }}</td>
                                 <td>
                                     {% if event.response_deadline_date %}
                                         <span class="date-badge date-response">{{ event.response_deadline_date }}</span>
@@ -827,7 +827,7 @@ function exportToCSV() {
     const table = document.getElementById('eventsTable');
     const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.style.display !== 'none');
     
-    let csv = 'שם האירוע,סוג,חטיבה,מסלול,ועדה,תאריך ועדה,סיום קול קורא,סיום קליטה,סיום בדיקה,תשובת ועדה,בקשות צפויות,נוצר\n';
+    let csv = 'שם האירוע,סוג,חטיבה,מסלול,תאריך ועדה,פרסום קול קורא,סיום קול קורא,סיום קליטה,סיום בדיקה,ועדה,תשובת ועדה,בקשות צפויות,נוצר\n';
     
     rows.forEach(row => {
         const cells = row.querySelectorAll('td');
@@ -1069,7 +1069,7 @@ function exportToCSV() {
         const table = document.getElementById('eventsTable');
         const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.style.display !== 'none');
 
-        let csv = 'שם האירוע,סוג,חטיבה,מסלול,ועדה,תאריך ועדה,סיום קול קורא,סיום קליטה,סיום בדיקה,תשובת ועדה,בקשות צפויות,נוצר\n';
+        let csv = 'שם האירוע,סוג,חטיבה,מסלול,תאריך ועדה,פרסום קול קורא,סיום קול קורא,סיום קליטה,סיום בדיקה,ועדה,תשובת ועדה,בקשות צפויות,נוצר\n';
 
         rows.forEach(row => {
             const cells = row.querySelectorAll('td');
@@ -1168,11 +1168,12 @@ function exportEventsViewToExcel() {
         'סוג',
         'חטיבה',
         'מסלול',
-        'ועדה',
         'תאריך ועדה',
+        'פרסום קול קורא',
         'סיום קול קורא',
         'סיום קליטה',
         'סיום בדיקה',
+        'ועדה',
         'תשובת ועדה',
         'בקשות צפויות',
         'נוצר'
@@ -1199,11 +1200,12 @@ function exportEventsViewToExcel() {
         { wch: 10 }, // סוג
         { wch: 15 }, // חטיבה
         { wch: 20 }, // מסלול
-        { wch: 20 }, // ועדה
         { wch: 12 }, // תאריך ועדה
+        { wch: 15 }, // פרסום קול קורא
         { wch: 15 }, // סיום קול קורא
         { wch: 15 }, // סיום קליטה
         { wch: 15 }, // סיום בדיקה
+        { wch: 20 }, // ועדה
         { wch: 15 }, // תשובת ועדה
         { wch: 12 }, // בקשות צפויות
         { wch: 15 }  // נוצר
