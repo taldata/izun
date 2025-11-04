@@ -1555,14 +1555,14 @@ class DatabaseManager:
         return user_id
     
     def get_user_by_username(self, username: str) -> Optional[Dict]:
-        """Get user by username with all their hativot"""
+        """Get user by username with all their hativot (case-insensitive)"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
             SELECT user_id, username, email, password_hash, full_name, role, 
                    is_active, auth_source, ad_dn, created_at, last_login
             FROM users
-            WHERE username = ? AND is_active = 1
+            WHERE LOWER(username) = LOWER(?) AND is_active = 1
         ''', (username,))
         row = cursor.fetchone()
         
@@ -1808,16 +1808,16 @@ class DatabaseManager:
             return False
     
     def check_username_exists(self, username: str, exclude_user_id: Optional[int] = None) -> bool:
-        """Check if username already exists"""
+        """Check if username already exists (case-insensitive)"""
         conn = self.get_connection()
         cursor = conn.cursor()
         if exclude_user_id:
             cursor.execute('''
-                SELECT COUNT(*) FROM users WHERE username = ? AND user_id != ?
+                SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?) AND user_id != ?
             ''', (username, exclude_user_id))
         else:
             cursor.execute('''
-                SELECT COUNT(*) FROM users WHERE username = ?
+                SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?)
             ''', (username,))
         count = cursor.fetchone()[0]
         conn.close()
@@ -2952,7 +2952,7 @@ class DatabaseManager:
     
     def get_user_by_username_any_source(self, username: str) -> Optional[Dict]:
         """
-        Get user by username regardless of auth source
+        Get user by username regardless of auth source (case-insensitive)
         
         Args:
             username: Username to search for
@@ -2966,7 +2966,7 @@ class DatabaseManager:
             SELECT u.*, h.name as hativa_name
             FROM users u
             LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
-            WHERE u.username = ?
+            WHERE LOWER(u.username) = LOWER(?)
         ''', (username,))
         row = cursor.fetchone()
         conn.close()
