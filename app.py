@@ -63,6 +63,11 @@ def check_mobile_access():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """User login - Check if Azure AD is configured before redirecting"""
+    # If user is already logged in, redirect to index to prevent loops
+    if 'user_id' in session:
+        app.logger.info(f"User {session.get('username')} already logged in, redirecting to index")
+        return redirect(url_for('index'))
+    
     # Check if Azure AD credentials are configured
     if not ad_service.azure_tenant_id or not ad_service.azure_client_id or not ad_service.azure_client_secret:
         # Azure AD not configured - provide options
@@ -162,6 +167,33 @@ def auth_azure():
     import secrets
     from flask import session as flask_session
 
+    # If user is already logged in, redirect to index to prevent loops
+    if 'user_id' in session:
+        app.logger.info(f"User {session.get('username')} already logged in, redirecting to index")
+        return redirect(url_for('index'))
+    
+    # Check if we're in a redirect loop (too many auth attempts)
+    auth_attempts = session.get('auth_attempts', 0)
+    if auth_attempts >= 3:
+        app.logger.warning(f"Too many auth attempts ({auth_attempts}), preventing redirect loop")
+        session['auth_attempts'] = 0  # Reset counter
+        flash('יותר מדי ניסיונות התחברות. אנא נסה שוב מאוחר יותר.', 'error')
+        return render_template('base.html', content="""
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="alert alert-danger text-center">
+                    <h4><i class="bi bi-exclamation-triangle"></i> יותר מדי ניסיונות התחברות</h4>
+                    <p>נדרשו יותר מדי ניסיונות התחברות. אנא נסה שוב מאוחר יותר.</p>
+                    <p>אם הבעיה נמשכת, פנה למנהל המערכת.</p>
+                </div>
+            </div>
+        </div>
+        """)
+    
+    # Increment auth attempts counter
+    session['auth_attempts'] = auth_attempts + 1
+    session.modified = True
+
     # Check if Azure AD credentials are configured in .env
     if not ad_service.azure_tenant_id or not ad_service.azure_client_id or not ad_service.azure_client_secret:
         flash('אימות Azure AD לא מוגדר - נדרשת הגדרת פרטי התחברות בקובץ .env', 'error')
@@ -222,6 +254,14 @@ def bypass_auth():
 
 @app.route('/auth/callback')
 def auth_callback():
+    # Reset auth attempts counter on successful callback
+    session.pop('auth_attempts', None)
+    
+    # If user is already logged in, redirect to index to prevent loops
+    if 'user_id' in session:
+        app.logger.info(f"User {session.get('username')} already logged in during callback, redirecting to index")
+        return redirect(url_for('index'))
+    
     # Verify state parameter
     state = request.args.get('state')
     session_state = session.get('oauth_state')
@@ -241,14 +281,38 @@ def auth_callback():
     error = request.args.get('error')
     if error:
         error_description = request.args.get('error_description', error)
+        app.logger.error(f"Azure AD returned error: {error} - {error_description}")
         flash(f'שגיאת אימות Azure AD: {error_description}', 'error')
-        return redirect(url_for('login'))
+        # Don't redirect to login to prevent loop - show error page instead
+        return render_template('base.html', content=f"""
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="alert alert-danger text-center">
+                    <h4><i class="bi bi-exclamation-triangle"></i> שגיאת אימות</h4>
+                    <p>{error_description}</p>
+                    <p><a href="{url_for('login')}" class="btn btn-primary">נסה שוב</a></p>
+                </div>
+            </div>
+        </div>
+        """)
     
     # Get authorization code
     auth_code = request.args.get('code')
     if not auth_code:
+        app.logger.error("No authorization code received from Azure AD")
         flash('לא התקבל קוד אימות מ-Azure AD', 'error')
-        return redirect(url_for('login'))
+        # Don't redirect to login to prevent loop - show error page instead
+        return render_template('base.html', content=f"""
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="alert alert-danger text-center">
+                    <h4><i class="bi bi-exclamation-triangle"></i> שגיאה באימות</h4>
+                    <p>לא התקבל קוד אימות מ-Azure AD</p>
+                    <p><a href="{url_for('login')}" class="btn btn-primary">נסה שוב</a></p>
+                </div>
+            </div>
+        </div>
+        """)
     
     # Authenticate with code
     app.logger.info("Authenticating with Azure AD code...")
@@ -258,14 +322,50 @@ def auth_callback():
         app.logger.error(f"Azure AD authentication failed: {message}")
         flash(f'שגיאה באימות: {message}', 'error')
         audit_logger.log_login(request.args.get('loginHint', 'unknown'), False, message)
-        return redirect(url_for('login'))
+        # Don't redirect to login to prevent loop - show error page instead
+        return render_template('base.html', content=f"""
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="alert alert-danger text-center">
+                    <h4><i class="bi bi-exclamation-triangle"></i> שגיאה באימות</h4>
+                    <p>{message}</p>
+                    <p><a href="{url_for('login')}" class="btn btn-primary">נסה שוב</a></p>
+                </div>
+            </div>
+        </div>
+        """)
+    
+    # Validate user info from Azure AD
+    username = ad_user_info.get('username') or ad_user_info.get('email', '').split('@')[0] if ad_user_info.get('email') else None
+    if not username:
+        app.logger.error("Cannot determine username from Azure AD user info")
+        flash('שגיאה: לא ניתן לקבוע שם משתמש מפרטי Azure AD', 'error')
+        audit_logger.log_login('unknown', False, 'Missing username in Azure AD response')
+        # Don't redirect to login to prevent loop - show error page instead
+        return render_template('base.html', content=f"""
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="alert alert-danger text-center">
+                    <h4><i class="bi bi-exclamation-triangle"></i> שגיאה באימות</h4>
+                    <p>לא ניתן לקבוע שם משתמש מפרטי Azure AD</p>
+                    <p><a href="{url_for('login')}" class="btn btn-primary">נסה שוב</a></p>
+                </div>
+            </div>
+        </div>
+        """)
+    
+    email = ad_user_info.get('email', '')
+    full_name = ad_user_info.get('full_name', '') or f"{ad_user_info.get('given_name', '')} {ad_user_info.get('surname', '')}".strip() or username
+    
+    app.logger.info(f"Azure AD auth successful. Username: {username}, Email: {email}, Full Name: {full_name}")
+    app.logger.info(f"User info from Azure AD: {ad_user_info}")
     
     # Check if user exists in local DB
-    username = ad_user_info.get('username', ad_user_info.get('email', 'unknown'))
-    app.logger.info(f"Azure AD auth successful. Username: {username}")
-    app.logger.info(f"User info: {ad_user_info}")
-    
     user = db.get_user_by_username_any_source(username)
+    if not user and email:
+        # Also try to find by email
+        user = db.get_user_by_email(email)
+    
     app.logger.info(f"User exists in DB: {user is not None}")
     
     if user:
@@ -273,7 +373,18 @@ def auth_callback():
         if not user['is_active']:
             flash('חשבון המשתמש מושבת', 'error')
             audit_logger.log_login(username, False, 'User account disabled')
-            return redirect(url_for('login'))
+            # Don't redirect to login to prevent loop - show error page instead
+            return render_template('base.html', content=f"""
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <div class="alert alert-danger text-center">
+                        <h4><i class="bi bi-exclamation-triangle"></i> חשבון מושבת</h4>
+                        <p>חשבון המשתמש מושבת. אנא פנה למנהל המערכת.</p>
+                        <p><a href="{url_for('logout')}" class="btn btn-secondary">התנתק</a></p>
+                    </div>
+                </div>
+            </div>
+            """)
         
         # Sync user info from Azure AD if configured
         if db.get_system_setting('ad_sync_on_login') == '1':
@@ -291,47 +402,109 @@ def auth_callback():
         auto_create = db.get_system_setting('ad_auto_create_users')
         app.logger.info(f"User not found. Auto-create setting: {auto_create}")
         
-        if auto_create == '1':
-            # Determine role from Azure AD groups
-            role = ad_service.get_default_role_from_groups(ad_user_info.get('groups', []))
-            app.logger.info(f"Determined role: {role}")
-            
-            # Get default hativa
-            default_hativa_str = db.get_system_setting('ad_default_hativa_id')
+        if auto_create != '1':
+            app.logger.warning(f"User {username} not authorized - auto-create disabled (setting={auto_create})")
+            flash('משתמש לא מורשה להתחבר למערכת. אנא פנה למנהל המערכת כדי להוסיף את החשבון.', 'error')
+            audit_logger.log_login(username, False, 'Auto-create disabled for new user')
+            # Don't redirect to login to prevent loop - show error page instead
+            return render_template('base.html', content=f"""
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <div class="alert alert-warning text-center">
+                        <h4><i class="bi bi-exclamation-triangle"></i> משתמש לא מורשה</h4>
+                        <p>משתמש לא מורשה להתחבר למערכת. אנא פנה למנהל המערכת כדי להוסיף את החשבון.</p>
+                        <p><a href="{url_for('logout')}" class="btn btn-secondary">התנתק</a></p>
+                    </div>
+                </div>
+            </div>
+            """)
+        
+        # Determine role from Azure AD groups
+        groups = ad_user_info.get('groups', [])
+        app.logger.info(f"Azure AD groups for user: {groups}")
+        role = ad_service.get_default_role_from_groups(groups)
+        app.logger.info(f"Determined role: {role}")
+        
+        # Get default hativa
+        default_hativa_str = db.get_system_setting('ad_default_hativa_id') or ''
+        default_hativa_str = default_hativa_str.strip()
+        try:
             default_hativa_id = int(default_hativa_str) if default_hativa_str else None
-            app.logger.info(f"Default hativa_id: {default_hativa_id}")
-            
-            # Create user
-            app.logger.info(f"Creating new user: {username}")
-            try:
-                user_id = ad_service.sync_user_to_local(
-                    ad_user_info,
-                    role,
-                    default_hativa_id
-                )
-                app.logger.info(f"User created with ID: {user_id}")
-            except Exception as e:
-                app.logger.error(f"Error creating user: {e}", exc_info=True)
-                flash(f'שגיאה ביצירת חשבון: {str(e)}', 'error')
-                return redirect(url_for('login'))
-            
-            if not user_id:
-                app.logger.error("User creation failed - sync_user_to_local returned None")
-                flash('שגיאה ביצירת חשבון משתמש', 'error')
-                return redirect(url_for('login'))
-            
-            hativa_id = default_hativa_id
-        else:
-            app.logger.warning(f"User {username} not authorized - auto-create disabled")
-            flash('משתמש לא מורשה להתחבר למערכת', 'error')
-            return redirect(url_for('login'))
+        except ValueError:
+            app.logger.warning(f"Invalid default_hativa_id setting: '{default_hativa_str}'. Using None.")
+            default_hativa_id = None
+        app.logger.info(f"Default hativa_id: {default_hativa_id}")
+        
+        # Validate required fields before creating user
+        if not email:
+            app.logger.error(f"Missing email for user {username}")
+            flash('שגיאה: חסר אימייל בפרטי המשתמש מ-Azure AD', 'error')
+            audit_logger.log_login(username, False, 'Missing email in Azure AD response')
+            # Don't redirect to login to prevent loop - show error page instead
+            return render_template('base.html', content=f"""
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <div class="alert alert-danger text-center">
+                        <h4><i class="bi bi-exclamation-triangle"></i> שגיאה באימות</h4>
+                        <p>חסר אימייל בפרטי המשתמש מ-Azure AD</p>
+                        <p><a href="{url_for('login')}" class="btn btn-primary">נסה שוב</a></p>
+                    </div>
+                </div>
+            </div>
+            """)
+        
+        # Create user
+        app.logger.info(f"Creating new user: username={username}, email={email}, role={role}, hativa_id={default_hativa_id}")
+        try:
+            user_id = ad_service.sync_user_to_local(
+                ad_user_info,
+                role,
+                default_hativa_id
+            )
+            app.logger.info(f"User creation result: {user_id}")
+        except Exception as e:
+            app.logger.error(f"Error creating user: {e}", exc_info=True)
+            flash(f'שגיאה ביצירת חשבון: {str(e)}. אנא פנה למנהל המערכת.', 'error')
+            audit_logger.log_login(username, False, f'Error creating user: {str(e)}')
+            # Don't redirect to login to prevent loop - show error page instead
+            return render_template('base.html', content=f"""
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <div class="alert alert-danger text-center">
+                        <h4><i class="bi bi-exclamation-triangle"></i> שגיאה ביצירת חשבון</h4>
+                        <p>שגיאה ביצירת חשבון: {str(e)}</p>
+                        <p>אנא פנה למנהל המערכת.</p>
+                        <p><a href="{url_for('logout')}" class="btn btn-secondary">התנתק</a></p>
+                    </div>
+                </div>
+            </div>
+            """)
+        
+        if not user_id:
+            app.logger.error(f"User creation failed - sync_user_to_local returned None for user {username}")
+            flash('שגיאה ביצירת חשבון משתמש. אנא פנה למנהל המערכת.', 'error')
+            audit_logger.log_login(username, False, 'User creation returned None')
+            # Don't redirect to login to prevent loop - show error page instead
+            return render_template('base.html', content=f"""
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <div class="alert alert-danger text-center">
+                        <h4><i class="bi bi-exclamation-triangle"></i> שגיאה ביצירת חשבון</h4>
+                        <p>שגיאה ביצירת חשבון משתמש. אנא פנה למנהל המערכת.</p>
+                        <p><a href="{url_for('logout')}" class="btn btn-secondary">התנתק</a></p>
+                    </div>
+                </div>
+            </div>
+            """)
+        
+        hativa_id = default_hativa_id
     
     # Create session for Azure AD user
     session['user_id'] = user_id
     session['username'] = username
     session['role'] = role
     session['hativa_id'] = hativa_id
-    session['full_name'] = ad_user_info['full_name']
+    session['full_name'] = full_name
     session['auth_source'] = 'azure_ad'
     
     # Update last login
@@ -340,7 +513,7 @@ def auth_callback():
     # Log successful login
     audit_logger.log_login(username, True, None)
     
-    flash(f"ברוך הבא, {ad_user_info['full_name']}", 'success')
+    flash(f"ברוך הבא, {full_name}", 'success')
     return redirect(url_for('index'))
 
 
