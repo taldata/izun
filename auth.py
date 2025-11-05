@@ -84,6 +84,10 @@ def login_required(f):
         if 'user_id' not in session:
             if request.is_json:
                 return jsonify({'error': 'נדרשת התחברות'}), 401
+            # Prevent redirect loops - check if we're already on auth routes
+            if request.path in ['/auth/azure', '/auth/callback', '/login']:
+                # Already on auth route, don't redirect again
+                return jsonify({'error': 'נדרשת התחברות'}), 401
             # Redirect directly to SSO instead of login page
             return redirect(url_for('auth_azure'))
         return f(*args, **kwargs)
@@ -95,6 +99,9 @@ def admin_required(f):
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
             if request.is_json:
+                return jsonify({'error': 'נדרשת התחברות'}), 401
+            # Prevent redirect loops - check if we're already on auth routes
+            if request.path in ['/auth/azure', '/auth/callback', '/login']:
                 return jsonify({'error': 'נדרשת התחברות'}), 401
             # Redirect directly to SSO instead of login page
             return redirect(url_for('auth_azure'))
@@ -115,6 +122,9 @@ def editor_required(f):
         if 'user_id' not in session:
             if request.is_json:
                 return jsonify({'error': 'נדרשת התחברות'}), 401
+            # Prevent redirect loops - check if we're already on auth routes
+            if request.path in ['/auth/azure', '/auth/callback', '/login']:
+                return jsonify({'error': 'נדרשת התחברות'}), 401
             # Redirect directly to SSO instead of login page
             return redirect(url_for('auth_azure'))
         
@@ -134,6 +144,9 @@ def editing_permission_required(f):
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
             if request.is_json:
+                return jsonify({'error': 'נדרשת התחברות'}), 401
+            # Prevent redirect loops - check if we're already on auth routes
+            if request.path in ['/auth/azure', '/auth/callback', '/login']:
                 return jsonify({'error': 'נדרשת התחברות'}), 401
             # Redirect directly to SSO instead of login page
             return redirect(url_for('auth_azure'))

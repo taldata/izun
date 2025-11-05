@@ -330,6 +330,15 @@ class ADService:
             
             logger.info(f"Syncing user to local DB - Username: {username}, Email: {email}, Role: {default_role}, Hativa: {hativa_id}")
             
+            # Validate required fields
+            if not username:
+                logger.error("Cannot sync user: username is missing from ad_user_info")
+                raise ValueError("שם משתמש חסר")
+            
+            if not email:
+                logger.error(f"Cannot sync user {username}: email is missing from ad_user_info")
+                raise ValueError("אימייל חסר")
+            
             # Check if user already exists (by username OR email)
             existing_user = self.db.get_user_by_username(username)
             if not existing_user:
@@ -349,22 +358,33 @@ class ADService:
                 return user_id
             else:
                 # Create new user
-                logger.info(f"User does not exist. Creating new user...")
+                logger.info(f"User does not exist. Creating new user with username={username}, email={email}, role={default_role}, hativa_id={hativa_id}")
                 # AD users don't need a password hash in local DB
-                user_id = self.db.create_ad_user(
-                    username=username,
-                    email=email,
-                    full_name=full_name,
-                    role=default_role,
-                    hativa_id=hativa_id,
-                    ad_dn=ad_user_info.get('dn', '')
-                )
-                logger.info(f"Created new AD user: {username} with ID: {user_id}")
-                return user_id
+                try:
+                    user_id = self.db.create_ad_user(
+                        username=username,
+                        email=email,
+                        full_name=full_name,
+                        role=default_role,
+                        hativa_id=hativa_id,
+                        ad_dn=ad_user_info.get('dn', '')
+                    )
+                    if not user_id:
+                        logger.error(f"create_ad_user returned None for username={username}")
+                        raise ValueError("יצירת משתמש נכשלה - לא התקבל ID משתמש")
+                    logger.info(f"Created new AD user: {username} with ID: {user_id}")
+                    return user_id
+                except Exception as db_error:
+                    logger.error(f"Database error creating user {username}: {db_error}", exc_info=True)
+                    raise ValueError(f"שגיאה בבסיס הנתונים: {str(db_error)}")
                 
+        except ValueError as ve:
+            # Re-raise validation errors as-is
+            logger.error(f"Validation error syncing user: {ve}")
+            raise
         except Exception as e:
             logger.error(f"Error syncing AD user to local DB: {e}", exc_info=True)
-            return None
+            raise ValueError(f"שגיאה בסנכרון משתמש: {str(e)}")
     
     def get_default_role_from_groups(self, groups: List[str]) -> str:
         """
