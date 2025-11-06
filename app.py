@@ -111,13 +111,19 @@ def login():
 def logout():
     """User logout"""
     username = session.get('username', 'Unknown')
+    
+    # Clear flash messages explicitly to prevent them from persisting after session.clear()
+    # Flask stores flash messages in session['_flashes'], so we need to clear them explicitly
+    session.pop('_flashes', None)
+    
     auth_manager.logout_user()
     
     # Log the logout
     audit_logger.log_logout(username)
     
-    # Redirect to SSO login (which will auto-redirect to Azure AD)
-    flash('התנתקת מהמערכת בהצלחה', 'success')
+    # Don't show logout message if user is immediately logging back in via Azure AD
+    # The login success message will be shown instead, which is more relevant
+    # If user wants to logout without logging back in, they can manually navigate away
     return redirect(url_for('auth_azure'))
 
 @app.route('/refresh_session')
@@ -256,6 +262,10 @@ def bypass_auth():
 def auth_callback():
     # Reset auth attempts counter on successful callback
     session.pop('auth_attempts', None)
+    
+    # Clear any existing flash messages from previous logout/login attempts
+    # This prevents showing both "logout" and "login" messages together
+    session.pop('_flashes', None)
     
     # If user is already logged in, redirect to index to prevent loops
     if 'user_id' in session:
