@@ -2882,6 +2882,7 @@ class DatabaseManager:
     
     # Active Directory User Management Methods
     def create_ad_user(self, username: str, email: str, full_name: str, 
+
                       role: str = 'viewer', hativa_id: Optional[int] = None,
                       ad_dn: str = '') -> int:
         """
