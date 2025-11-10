@@ -310,7 +310,7 @@ class ADService:
             logger.error(f"Error getting user groups: {e}")
             return []
     
-    def sync_user_to_local(self, ad_user_info: Dict, default_role: str = 'user', 
+    def sync_user_to_local(self, ad_user_info: Dict, default_role: str = 'viewer', 
                           hativa_id: Optional[int] = None) -> Optional[int]:
         """
         Sync AD user to local database
@@ -394,7 +394,7 @@ class ADService:
             groups: List of group DNs
             
         Returns:
-            Role string ('admin', 'manager', 'user')
+            Role string ('admin', 'editor', 'viewer')
         """
         # Get configured group mappings from database
         admin_group = self.db.get_system_setting('ad_admin_group') or ''
@@ -404,12 +404,12 @@ class ADService:
         if admin_group and any(admin_group.lower() in group.lower() for group in groups):
             return 'admin'
         
-        # Check if user is in manager group
+        # Check if user is in manager/editor group
         if manager_group and any(manager_group.lower() in group.lower() for group in groups):
-            return 'manager'
+            return 'editor'
         
-        # Default to regular user
-        return 'user'
+        # Default to read-only viewer
+        return 'viewer'
     
     # ============================================================================
     # Azure AD OAuth 2.0 Methods
