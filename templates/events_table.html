@@ -499,7 +499,7 @@
                                     תשובת ועדה
                                 </th>
                                 <th>
-                                    הגשות בפועל
+                                    בקשות בפועל
                                 </th>
                                 <th>
                                     נוצר
@@ -952,20 +952,33 @@ function exportToCSV() {
     const table = document.getElementById('eventsTable');
     const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.style.display !== 'none');
     
-    let csv = 'חטיבה,מסלול,שם האירוע,סוג,בקשות צפויות,פרסום קול קורא,סיום קול קורא,סיום קליטה,סיום בדיקה,תאריך ועדה,תשובת ועדה,הגשות בפועל,נוצר\n';
+    let csv = 'חטיבה,מסלול,שם האירוע,סוג,בקשות צפויות,פרסום קול קורא,סיום קול קורא,סיום קליטה,סיום בדיקה,תאריך ועדה,תשובת ועדה,בקשות בפועל,נוצר\n';
     
     rows.forEach(row => {
         const cells = row.querySelectorAll('td');
-        const rowData = Array.from(cells).map(cell => {
-            let text = cell.textContent.trim();
-            // Remove extra whitespace and normalize
-            text = text.replace(/\s+/g, ' ');
-            // Escape quotes and wrap in quotes if contains comma
+        const getCell = (i) => {
+            let text = (cells[i]?.textContent || '').trim().replace(/\s+/g, ' ');
             if (text.includes(',') || text.includes('"')) {
                 text = '"' + text.replace(/"/g, '""') + '"';
             }
             return text;
-        });
+        };
+        // Skip checkbox (0). Export columns 1..13 in the visual order
+        const rowData = [
+            getCell(1), // חטיבה
+            getCell(2), // מסלול
+            getCell(3), // שם האירוע
+            getCell(4), // סוג
+            getCell(5), // בקשות צפויות
+            getCell(6), // פרסום קול קורא
+            getCell(7), // סיום קול קורא
+            getCell(8), // סיום קליטה
+            getCell(9), // סיום בדיקה
+            getCell(10), // תאריך ועדה
+            getCell(11), // תשובת ועדה
+            getCell(12), // הגשות בפועל
+            getCell(13)  // נוצר
+        ];
         csv += rowData.join(',') + '\n';
     });
     
@@ -1195,18 +1208,32 @@ function exportToCSV() {
         const table = document.getElementById('eventsTable');
         const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.style.display !== 'none');
 
-        let csv = 'חטיבה,מסלול,שם האירוע,סוג,בקשות צפויות,פרסום קול קורא,סיום קול קורא,סיום קליטה,סיום בדיקה,תאריך ועדה,תשובת ועדה,הגשות בפועל,נוצר\n';
+        let csv = 'חטיבה,מסלול,שם האירוע,סוג,בקשות צפויות,פרסום קול קורא,סיום קול קורא,סיום קליטה,סיום בדיקה,תאריך ועדה,תשובת ועדה,בקשות בפועל,נוצר\n';
 
         rows.forEach(row => {
             const cells = row.querySelectorAll('td');
-            const rowData = Array.from(cells).map(cell => {
-                let text = cell.textContent.trim();
-                text = text.replace(/\s+/g, ' ');
+            const getCell = (i) => {
+                let text = (cells[i]?.textContent || '').trim().replace(/\s+/g, ' ');
                 if (text.includes(',') || text.includes('"')) {
                     text = '"' + text.replace(/"/g, '""') + '"';
                 }
                 return text;
-            });
+            };
+            const rowData = [
+                getCell(1), // חטיבה
+                getCell(2), // מסלול
+                getCell(3), // שם האירוע
+                getCell(4), // סוג
+                getCell(5), // בקשות צפויות
+                getCell(6), // פרסום קול קורא
+                getCell(7), // סיום קול קורא
+                getCell(8), // סיום קליטה
+                getCell(9), // סיום בדיקה
+                getCell(10), // תאריך ועדה
+                getCell(11), // תשובת ועדה
+                getCell(12), // הגשות בפועל
+                getCell(13)  // נוצר
+            ];
             csv += rowData.join(',') + '\n';
         });
 
@@ -1301,18 +1328,44 @@ function exportEventsViewToExcel() {
         'סיום בדיקה',
         'תאריך ועדה',
         'תשובת ועדה',
-        'הגשות בפועל',
+        'בקשות בפועל',
         'נוצר'
     ]);
 
     // Add data rows
+    const parseDate = (str, isDateTime = false) => {
+        if (!str) return '';
+        try {
+            const norm = isDateTime ? str.replace(' ', 'T') : str;
+            const d = new Date(norm);
+            if (isNaN(d.getTime())) return '';
+            return d;
+        } catch (_) {
+            return '';
+        }
+    };
     rows.forEach(row => {
         const cells = row.querySelectorAll('td');
-        const rowData = Array.from(cells).map(cell => {
-            let text = cell.textContent.trim();
-            text = text.replace(/\s+/g, ' ');
-            return text;
-        });
+        const txt = (i) => (cells[i]?.textContent || '').trim().replace(/\s+/g, ' ');
+        const num = (v) => {
+            const n = parseFloat(v);
+            return Number.isFinite(n) ? n : 0;
+        };
+        const rowData = [
+            txt(1),                                       // חטיבה
+            txt(2),                                       // מסלול
+            txt(3),                                       // שם האירוע
+            txt(4),                                       // סוג
+            num(row.dataset.expectedRequests),            // בקשות צפויות (number)
+            parseDate(row.dataset.callPublication),       // פרסום קול קורא (date)
+            parseDate(row.dataset.callDeadline),          // סיום קול קורא (date)
+            parseDate(row.dataset.intakeDeadline),        // סיום קליטה (date)
+            parseDate(row.dataset.reviewDeadline),        // סיום בדיקה (date)
+            parseDate(row.dataset.committeeDate),         // תאריך ועדה (date)
+            parseDate(row.dataset.responseDeadline),      // תשובת ועדה (date)
+            num(row.dataset.actualSubmissions),           // הגשות בפועל (number)
+            parseDate(row.dataset.createdAt, true)        // נוצר (datetime)
+        ];
         wsData.push(rowData);
     });
 
@@ -1334,8 +1387,34 @@ function exportEventsViewToExcel() {
         { wch: 12 }, // תאריך ועדה
         { wch: 15 }, // תשובת ועדה
         { wch: 12 }, // הגשות בפועל
-        { wch: 15 }  // נוצר
+        { wch: 18 }  // נוצר
     ];
+
+    // Apply formats for date and number columns
+    // Header is row 1. Data starts at row 2. Columns are 1-based in Excel.
+    const dateCols = [6, 7, 8, 9, 10, 11, 13]; // indices of date-like columns
+    const numCols = [5, 12]; // indices of numeric columns
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let R = range.s.r + 1; R <= range.e.r; R++) { // skip header
+        dateCols.forEach(C1 => {
+            const C = C1 - 1;
+            const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+            const cell = ws[cellRef];
+            if (cell && cell.v && Object.prototype.toString.call(cell.v) === '[object Date]') {
+                cell.t = 'd';
+                cell.z = 'dd/mm/yyyy';
+            }
+        });
+        numCols.forEach(C1 => {
+            const C = C1 - 1;
+            const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+            const cell = ws[cellRef];
+            if (cell && typeof cell.v === 'number') {
+                cell.t = 'n';
+                cell.z = '0';
+            }
+        });
+    }
 
     // Add worksheet to workbook
     XLSX.utils.book_append_sheet(wb, ws, 'אירועים');
