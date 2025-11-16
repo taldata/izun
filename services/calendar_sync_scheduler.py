@@ -116,53 +116,69 @@ class CalendarSyncScheduler:
                     f"Failures: {result['failures']}"
                 )
 
-                # Log to audit if available
-                if self.audit_logger:
-                    self.audit_logger.log(
-                        user_id=None,
-                        username='system',
-                        action='calendar_sync',
-                        entity_type='calendar',
-                        entity_id=None,
-                        entity_name='automatic_sync',
-                        details=f"Synced {result['committees_synced']} committees and {result['events_synced']} events",
-                        status='success'
-                    )
+                # Log to audit if available (direct DB call since no request context)
+                if self.db:
+                    try:
+                        self.db.add_audit_log(
+                            user_id=None,
+                            username='system',
+                            action='calendar_sync',
+                            entity_type='calendar',
+                            entity_id=None,
+                            entity_name='automatic_sync',
+                            details=f"Synced {result['committees_synced']} committees and {result['events_synced']} events",
+                            ip_address='127.0.0.1',
+                            user_agent='calendar_sync_scheduler',
+                            status='success',
+                            error_message=None
+                        )
+                    except Exception as log_error:
+                        logger.warning(f"Failed to write audit log: {log_error}")
             else:
                 logger.error(f"Calendar sync failed: {result['message']}")
 
-                # Log failure to audit
-                if self.audit_logger:
-                    self.audit_logger.log(
-                        user_id=None,
-                        username='system',
-                        action='calendar_sync',
-                        entity_type='calendar',
-                        entity_id=None,
-                        entity_name='automatic_sync',
-                        details=f"Sync failed after processing {result['committees_synced']} committees and {result['events_synced']} events",
-                        status='error',
-                        error_message=result['message']
-                    )
+                # Log failure to audit (direct DB call since no request context)
+                if self.db:
+                    try:
+                        self.db.add_audit_log(
+                            user_id=None,
+                            username='system',
+                            action='calendar_sync',
+                            entity_type='calendar',
+                            entity_id=None,
+                            entity_name='automatic_sync',
+                            details=f"Sync failed after processing {result['committees_synced']} committees and {result['events_synced']} events",
+                            ip_address='127.0.0.1',
+                            user_agent='calendar_sync_scheduler',
+                            status='error',
+                            error_message=result['message']
+                        )
+                    except Exception as log_error:
+                        logger.warning(f"Failed to write audit log: {log_error}")
 
             logger.info("=== Calendar sync job complete ===")
 
         except Exception as e:
             logger.error(f"Error in calendar sync job: {e}", exc_info=True)
 
-            # Log error to audit
-            if self.audit_logger:
-                self.audit_logger.log(
-                    user_id=None,
-                    username='system',
-                    action='calendar_sync',
-                    entity_type='calendar',
-                    entity_id=None,
-                    entity_name='automatic_sync',
-                    details='Calendar sync job failed with exception',
-                    status='error',
-                    error_message=str(e)
-                )
+            # Log error to audit (direct DB call since no request context)
+            if self.db:
+                try:
+                    self.db.add_audit_log(
+                        user_id=None,
+                        username='system',
+                        action='calendar_sync',
+                        entity_type='calendar',
+                        entity_id=None,
+                        entity_name='automatic_sync',
+                        details='Calendar sync job failed with exception',
+                        ip_address='127.0.0.1',
+                        user_agent='calendar_sync_scheduler',
+                        status='error',
+                        error_message=str(e)
+                    )
+                except Exception as log_error:
+                    logger.warning(f"Failed to write audit log: {log_error}")
 
     def trigger_sync_now(self):
         """Manually trigger a sync job immediately"""
