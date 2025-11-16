@@ -458,20 +458,6 @@
                                     <input type="checkbox" id="selectAllEvents" onchange="toggleSelectAllEvents(this)">
                                 </th>
                                 <th>
-                                    שם האירוע
-                                    <span class="ms-1 sort-controls">
-                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="eventName" data-sort-dir="asc" onclick="setSort('eventName','asc')">▲</button>
-                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="eventName" data-sort-dir="desc" onclick="setSort('eventName','desc')">▼</button>
-                                    </span>
-                                </th>
-                                <th>
-                                    סוג
-                                    <span class="ms-1 sort-controls">
-                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="eventType" data-sort-dir="asc" onclick="setSort('eventType','asc')">▲</button>
-                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="eventType" data-sort-dir="desc" onclick="setSort('eventType','desc')">▼</button>
-                                    </span>
-                                </th>
-                                <th>
                                     חטיבה
                                     <span class="ms-1 sort-controls">
                                         <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="hativaName" data-sort-dir="asc" onclick="setSort('hativaName','asc')">▲</button>
@@ -486,10 +472,24 @@
                                     </span>
                                 </th>
                                 <th>
-                                    תאריך ועדה
+                                    שם האירוע
                                     <span class="ms-1 sort-controls">
-                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="committeeDate" data-sort-dir="asc" onclick="setSort('committeeDate','asc')">▲</button>
-                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="committeeDate" data-sort-dir="desc" onclick="setSort('committeeDate','desc')">▼</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="eventName" data-sort-dir="asc" onclick="setSort('eventName','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="eventName" data-sort-dir="desc" onclick="setSort('eventName','desc')">▼</button>
+                                    </span>
+                                </th>
+                                <th>
+                                    סוג
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="eventType" data-sort-dir="asc" onclick="setSort('eventType','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="eventType" data-sort-dir="desc" onclick="setSort('eventType','desc')">▼</button>
+                                    </span>
+                                </th>
+                                <th>
+                                    בקשות צפויות
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="expectedRequests" data-sort-dir="asc" onclick="setSort('expectedRequests','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="expectedRequests" data-sort-dir="desc" onclick="setSort('expectedRequests','desc')">▼</button>
                                     </span>
                                 </th>
                                 <th>
@@ -521,10 +521,10 @@
                                     </span>
                                 </th>
                                 <th>
-                                    ועדה
+                                    תאריך ועדה
                                     <span class="ms-1 sort-controls">
-                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="committeeName" data-sort-dir="asc" onclick="setSort('committeeName','asc')">▲</button>
-                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="committeeName" data-sort-dir="desc" onclick="setSort('committeeName','desc')">▼</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="committeeDate" data-sort-dir="asc" onclick="setSort('committeeDate','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="committeeDate" data-sort-dir="desc" onclick="setSort('committeeDate','desc')">▼</button>
                                     </span>
                                 </th>
                                 <th>
@@ -535,14 +535,7 @@
                                     </span>
                                 </th>
                                 <th>
-                                    בקשות צפויות
-                                    <span class="ms-1 sort-controls">
-                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="expectedRequests" data-sort-dir="asc" onclick="setSort('expectedRequests','asc')">▲</button>
-                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="expectedRequests" data-sort-dir="desc" onclick="setSort('expectedRequests','desc')">▼</button>
-                                    </span>
-                                </th>
-                                <th>
-                                    בקשות בפועל
+                                    הגשות בפועל
                                     <span class="ms-1 sort-controls">
                                         <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="actualSubmissions" data-sort-dir="asc" onclick="setSort('actualSubmissions','asc')">▲</button>
                                         <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="actualSubmissions" data-sort-dir="desc" onclick="setSort('actualSubmissions','desc')">▼</button>
@@ -582,6 +575,12 @@
                                     <input type="checkbox" class="event-select" value="{{ event.event_id }}" onchange="onSelectionChanged()">
                                 </td>
                                 <td>
+                                    {{ event.hativa_name or '-' }}
+                                </td>
+                                <td>
+                                    {{ event.maslul_name or '-' }}
+                                </td>
+                                <td>
                                     <strong>{{ event.name }}</strong>
                                 </td>
                                 <td>
@@ -593,14 +592,8 @@
                                         <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ event.hativa_name or '-' }}</td>
-                                <td>{{ event.maslul_name or '-' }}</td>
                                 <td>
-                                    {% if event.vaada_date %}
-                                        <span class="date-badge date-committee">{{ event.vaada_date }}</span>
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
+                                    <span class="badge bg-secondary">{{ event.expected_requests or 0 }}</span>
                                 </td>
                                 <td>
                                     {% if event.call_publication_date %}
@@ -630,16 +623,19 @@
                                         <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ event.committee_name or '-' }}</td>
+                                <td>
+                                    {% if event.vaada_date %}
+                                        <span class="date-badge date-committee">{{ event.vaada_date }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     {% if event.response_deadline_date %}
                                         <span class="date-badge date-response">{{ event.response_deadline_date }}</span>
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
-                                </td>
-                                <td>
-                                    <span class="badge bg-secondary">{{ event.expected_requests or 0 }}</span>
                                 </td>
                                 <td>
                                     <span class="badge bg-info">{{ event.actual_submissions or 0 }}</span>
@@ -1000,7 +996,7 @@ function exportToCSV() {
     const table = document.getElementById('eventsTable');
     const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.style.display !== 'none');
     
-    let csv = 'שם האירוע,סוג,חטיבה,מסלול,תאריך ועדה,פרסום קול קורא,סיום קול קורא,סיום קליטה,סיום בדיקה,ועדה,תשובת ועדה,בקשות צפויות,נוצר\n';
+    let csv = 'חטיבה,מסלול,שם האירוע,סוג,בקשות צפויות,פרסום קול קורא,סיום קול קורא,סיום קליטה,סיום בדיקה,תאריך ועדה,תשובת ועדה,הגשות בפועל,נוצר\n';
     
     rows.forEach(row => {
         const cells = row.querySelectorAll('td');
@@ -1243,7 +1239,7 @@ function exportToCSV() {
         const table = document.getElementById('eventsTable');
         const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.style.display !== 'none');
 
-        let csv = 'שם האירוע,סוג,חטיבה,מסלול,תאריך ועדה,פרסום קול קורא,סיום קול קורא,סיום קליטה,סיום בדיקה,ועדה,תשובת ועדה,בקשות צפויות,נוצר\n';
+        let csv = 'חטיבה,מסלול,שם האירוע,סוג,בקשות צפויות,פרסום קול קורא,סיום קול קורא,סיום קליטה,סיום בדיקה,תאריך ועדה,תשובת ועדה,הגשות בפועל,נוצר\n';
 
         rows.forEach(row => {
             const cells = row.querySelectorAll('td');
@@ -1338,18 +1334,18 @@ function exportEventsViewToExcel() {
     
     // Add headers
     wsData.push([
-        'שם האירוע',
-        'סוג',
         'חטיבה',
         'מסלול',
-        'תאריך ועדה',
+        'שם האירוע',
+        'סוג',
+        'בקשות צפויות',
         'פרסום קול קורא',
         'סיום קול קורא',
         'סיום קליטה',
         'סיום בדיקה',
-        'ועדה',
+        'תאריך ועדה',
         'תשובת ועדה',
-        'בקשות צפויות',
+        'הגשות בפועל',
         'נוצר'
     ]);
 
@@ -1370,18 +1366,18 @@ function exportEventsViewToExcel() {
 
     // Set column widths
     ws['!cols'] = [
-        { wch: 25 }, // שם האירוע
-        { wch: 10 }, // סוג
         { wch: 15 }, // חטיבה
         { wch: 20 }, // מסלול
-        { wch: 12 }, // תאריך ועדה
+        { wch: 25 }, // שם האירוע
+        { wch: 10 }, // סוג
+        { wch: 12 }, // בקשות צפויות
         { wch: 15 }, // פרסום קול קורא
         { wch: 15 }, // סיום קול קורא
         { wch: 15 }, // סיום קליטה
         { wch: 15 }, // סיום בדיקה
-        { wch: 20 }, // ועדה
+        { wch: 12 }, // תאריך ועדה
         { wch: 15 }, // תשובת ועדה
-        { wch: 12 }, // בקשות צפויות
+        { wch: 12 }, // הגשות בפועל
         { wch: 15 }  // נוצר
     ];
 
