@@ -293,8 +293,29 @@
         border-color: #ffffff;
         box-shadow: none;
     }
+    .sort-controls{
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        white-space: nowrap;
+        vertical-align: middle;
+        font-size: .85rem;
+    }
     .sort-controls .btn{
         line-height: 1;
+        padding: 0 .25rem;
+        border: 0;
+        background: transparent;
+        color: #6c757d;
+    }
+    .sort-controls .btn:hover{
+        color: #343a40;
+        background: transparent;
+    }
+    .sort-controls .btn.active{
+        color: #0d6efd;
+        font-weight: 700;
+        text-shadow: 0 0 0 currentColor;
     }
 </style>
 {% endblock %}
@@ -436,26 +457,104 @@
                                 <th style="width:36px;">
                                     <input type="checkbox" id="selectAllEvents" onchange="toggleSelectAllEvents(this)">
                                 </th>
-                                <th>שם האירוע</th>
-                                <th>סוג</th>
-                                <th>חטיבה</th>
-                                <th>מסלול</th>
+                                <th>
+                                    שם האירוע
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="eventName" data-sort-dir="asc" onclick="setSort('eventName','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="eventName" data-sort-dir="desc" onclick="setSort('eventName','desc')">▼</button>
+                                    </span>
+                                </th>
+                                <th>
+                                    סוג
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="eventType" data-sort-dir="asc" onclick="setSort('eventType','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="eventType" data-sort-dir="desc" onclick="setSort('eventType','desc')">▼</button>
+                                    </span>
+                                </th>
+                                <th>
+                                    חטיבה
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="hativaName" data-sort-dir="asc" onclick="setSort('hativaName','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="hativaName" data-sort-dir="desc" onclick="setSort('hativaName','desc')">▼</button>
+                                    </span>
+                                </th>
+                                <th>
+                                    מסלול
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="maslulName" data-sort-dir="asc" onclick="setSort('maslulName','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="maslulName" data-sort-dir="desc" onclick="setSort('maslulName','desc')">▼</button>
+                                    </span>
+                                </th>
                                 <th>
                                     תאריך ועדה
                                     <span class="ms-1 sort-controls">
-                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" onclick="setSort('committeeDate','asc')">▲</button>
-                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" onclick="setSort('committeeDate','desc')">▼</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="committeeDate" data-sort-dir="asc" onclick="setSort('committeeDate','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="committeeDate" data-sort-dir="desc" onclick="setSort('committeeDate','desc')">▼</button>
                                     </span>
                                 </th>
-                                <th>פרסום קול קורא</th>
-                                <th>סיום קול קורא</th>
-                                <th>סיום קליטה</th>
-                                <th>סיום בדיקה</th>
-                                <th>ועדה</th>
-                                <th>תשובת ועדה</th>
-                                <th>בקשות צפויות</th>
-                                <th>הגשות בפועל</th>
-                                <th>נוצר</th>
+                                <th>
+                                    פרסום קול קורא
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="callPublication" data-sort-dir="asc" onclick="setSort('callPublication','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="callPublication" data-sort-dir="desc" onclick="setSort('callPublication','desc')">▼</button>
+                                    </span>
+                                </th>
+                                <th>
+                                    סיום קול קורא
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="callDeadline" data-sort-dir="asc" onclick="setSort('callDeadline','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="callDeadline" data-sort-dir="desc" onclick="setSort('callDeadline','desc')">▼</button>
+                                    </span>
+                                </th>
+                                <th>
+                                    סיום קליטה
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="intakeDeadline" data-sort-dir="asc" onclick="setSort('intakeDeadline','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="intakeDeadline" data-sort-dir="desc" onclick="setSort('intakeDeadline','desc')">▼</button>
+                                    </span>
+                                </th>
+                                <th>
+                                    סיום בדיקה
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="reviewDeadline" data-sort-dir="asc" onclick="setSort('reviewDeadline','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="reviewDeadline" data-sort-dir="desc" onclick="setSort('reviewDeadline','desc')">▼</button>
+                                    </span>
+                                </th>
+                                <th>
+                                    ועדה
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="committeeName" data-sort-dir="asc" onclick="setSort('committeeName','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="committeeName" data-sort-dir="desc" onclick="setSort('committeeName','desc')">▼</button>
+                                    </span>
+                                </th>
+                                <th>
+                                    תשובת ועדה
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="responseDeadline" data-sort-dir="asc" onclick="setSort('responseDeadline','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="responseDeadline" data-sort-dir="desc" onclick="setSort('responseDeadline','desc')">▼</button>
+                                    </span>
+                                </th>
+                                <th>
+                                    בקשות צפויות
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="expectedRequests" data-sort-dir="asc" onclick="setSort('expectedRequests','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="expectedRequests" data-sort-dir="desc" onclick="setSort('expectedRequests','desc')">▼</button>
+                                    </span>
+                                </th>
+                                <th>
+                                    הגשות בפועל
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="actualSubmissions" data-sort-dir="asc" onclick="setSort('actualSubmissions','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="actualSubmissions" data-sort-dir="desc" onclick="setSort('actualSubmissions','desc')">▼</button>
+                                    </span>
+                                </th>
+                                <th>
+                                    נוצר
+                                    <span class="ms-1 sort-controls">
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="createdAt" data-sort-dir="asc" onclick="setSort('createdAt','asc')">▲</button>
+                                        <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="createdAt" data-sort-dir="desc" onclick="setSort('createdAt','desc')">▼</button>
+                                    </span>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
@@ -465,9 +564,20 @@
                                 data-maslul-id="{{ event.maslul_id }}"
                                 data-committee-type="{{ event.get('committee_type_id', '') }}"
                                 data-event-type="{{ event.event_type or '' }}"
+                                data-event-type-name="{{ event.event_type or '' }}"
                                 data-committee-date="{{ event.vaada_date or '' }}"
+                                data-call-publication="{{ event.call_publication_date or '' }}"
+                                data-call-deadline="{{ event.call_deadline_date or '' }}"
+                                data-intake-deadline="{{ event.intake_deadline_date or '' }}"
+                                data-review-deadline="{{ event.review_deadline_date or '' }}"
+                                data-committee-name="{{ event.committee_name or '' }}"
+                                data-response-deadline="{{ event.response_deadline_date or '' }}"
                                 data-expected-requests="{{ event.expected_requests or 0 }}"
-                                data-event-name="{{ event.name.lower() }}">
+                                data-actual-submissions="{{ event.actual_submissions or 0 }}"
+                                data-event-name="{{ event.name.lower() }}"
+                                data-hativa-name="{{ event.hativa_name or '' }}"
+                                data-maslul-name="{{ event.maslul_name or '' }}"
+                                data-created-at="{{ event.created_at.strftime('%Y-%m-%d %H:%M:%S') if event.created_at else '' }}">
                                 <td>
                                     <input type="checkbox" class="event-select" value="{{ event.event_id }}" onchange="onSelectionChanged()">
                                 </td>
@@ -636,11 +746,13 @@ let currentSort = { key: null, dir: 'asc' };
 function setSort(key, dir) {
     currentSort = { key, dir: dir === 'desc' ? 'desc' : 'asc' };
     sortEventsTable();
+    updateSortIndicators();
 }
 
 function applyCurrentSort() {
     if (currentSort.key) {
         sortEventsTable();
+        updateSortIndicators();
     }
 }
 
@@ -665,11 +777,62 @@ function sortEventsTable() {
             const t = Date.parse(v);
             return Number.isFinite(t) ? t : null;
         }
+        if (key === 'callDeadline') {
+            const v = row.dataset.callDeadline;
+            if (!v) return null;
+            const t = Date.parse(v);
+            return Number.isFinite(t) ? t : null;
+        }
+        if (key === 'callPublication') {
+            const v = row.dataset.callPublication;
+            if (!v) return null;
+            const t = Date.parse(v);
+            return Number.isFinite(t) ? t : null;
+        }
+        if (key === 'intakeDeadline') {
+            const v = row.dataset.intakeDeadline;
+            if (!v) return null;
+            const t = Date.parse(v);
+            return Number.isFinite(t) ? t : null;
+        }
+        if (key === 'reviewDeadline') {
+            const v = row.dataset.reviewDeadline;
+            if (!v) return null;
+            const t = Date.parse(v);
+            return Number.isFinite(t) ? t : null;
+        }
+        if (key === 'responseDeadline') {
+            const v = row.dataset.responseDeadline;
+            if (!v) return null;
+            const t = Date.parse(v);
+            return Number.isFinite(t) ? t : null;
+        }
+        if (key === 'createdAt') {
+            const v = row.dataset.createdAt;
+            if (!v) return null;
+            const t = Date.parse(v.replace(' ', 'T'));
+            return Number.isFinite(t) ? t : null;
+        }
         if (key === 'expectedRequests') {
             return toNum(row.dataset.expectedRequests);
         }
+        if (key === 'actualSubmissions') {
+            return toNum(row.dataset.actualSubmissions);
+        }
         if (key === 'eventName') {
             return (row.dataset.eventName || '').toString();
+        }
+        if (key === 'eventType') {
+            return (row.dataset.eventTypeName || '').toString();
+        }
+        if (key === 'hativaName') {
+            return (row.dataset.hativaName || '').toString();
+        }
+        if (key === 'maslulName') {
+            return (row.dataset.maslulName || '').toString();
+        }
+        if (key === 'committeeName') {
+            return (row.dataset.committeeName || '').toString();
         }
         return null;
     };
@@ -698,6 +861,16 @@ function sortEventsTable() {
     const frag = document.createDocumentFragment();
     rows.forEach(r => frag.appendChild(r));
     tbody.appendChild(frag);
+}
+
+function updateSortIndicators() {
+    try {
+        const { key, dir } = currentSort;
+        document.querySelectorAll('.sort-controls .btn').forEach(btn => btn.classList.remove('active'));
+        if (!key || !dir) return;
+        const selector = `.sort-controls .btn[data-sort-key="${key}"][data-sort-dir="${dir}"]`;
+        document.querySelectorAll(selector).forEach(btn => btn.classList.add('active'));
+    } catch (e) {}
 }
 
 function filterTable() {
@@ -872,6 +1045,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (initial === 'asc' || initial === 'desc') {
             setSort('committeeDate', initial);
         }
+        updateSortIndicators();
     } catch (e) {}
 });
 
