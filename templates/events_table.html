@@ -542,7 +542,7 @@
                                     </span>
                                 </th>
                                 <th>
-                                    הגשות בפועל
+                                    בקשות בפועל
                                     <span class="ms-1 sort-controls">
                                         <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון עולה" data-sort-key="actualSubmissions" data-sort-dir="asc" onclick="setSort('actualSubmissions','asc')">▲</button>
                                         <button type="button" class="btn btn-light btn-sm py-0 px-1" title="מיון יורד" data-sort-key="actualSubmissions" data-sort-dir="desc" onclick="setSort('actualSubmissions','desc')">▼</button>
@@ -676,7 +676,7 @@
                                 {% set total_submissions = events|sum(attribute='actual_submissions') %}
                                 {{ total_submissions or 0 }}
                             </strong>
-                            <div class="text-muted small">סה"כ הגשות בפועל</div>
+                            <div class="text-muted small">סה\"כ בקשות בפועל</div>
                         </div>
                         <div class="col-md-2">
                             <strong id="avgRequests">
@@ -717,7 +717,7 @@
                                     <th>תאריך ועדה</th>
                                     <th>אירועים</th>
                                     <th>בקשות צפויות</th>
-                                    <th>הגשות בפועל</th>
+                                    <th>בקשות בפועל</th>
                                     <th>סוגי אירועים</th>
                                 </tr>
                             </thead>
@@ -1174,7 +1174,7 @@ function renderCommitteeTable(committees) {
                                 <div class="event-details">
                                     <strong>מסלול:</strong> ${event.maslul_name} •
                                     <strong>בקשות צפויות:</strong> ${event.expected_requests} •
-                                    <strong>הגשות בפועל:</strong> ${event.actual_submissions || 0}
+                                    <strong>בקשות בפועל:</strong> ${event.actual_submissions || 0}
                                     ${event.event_type ? `• <span class="badge ${event.event_type === 'kokok' ? 'badge-kokok' : 'badge-shotef'}">${event.event_type === 'kokok' ? 'קו"ק' : 'שוטף'}</span>` : ''}
                                 </div>
                                 <div class="event-details mt-2">
@@ -1272,7 +1272,7 @@ async function exportCommitteeViewToCSV() {
             return;
         }
 
-        let csv = 'שם ועדה,חטיבה,סוג ועדה,תאריך ועדה,מספר אירועים,בקשות צפויות,הגשות בפועל,סוגי אירועים,פרטי אירועים\n';
+        let csv = 'שם ועדה,חטיבה,סוג ועדה,תאריך ועדה,מספר אירועים,בקשות צפויות,בקשות בפועל,סוגי אירועים,פרטי אירועים\n';
 
         data.events_by_committee.forEach(committee => {
             const eventTypes = committee.summary.event_types.join('; ');
@@ -1414,7 +1414,7 @@ async function exportCommitteeViewToExcel() {
             'תאריך ועדה',
             'מספר אירועים',
             'בקשות צפויות',
-            'הגשות בפועל',
+            'בקשות בפועל',
             'סוגי אירועים',
             'פרטי אירועים'
         ]);
@@ -1451,7 +1451,7 @@ async function exportCommitteeViewToExcel() {
             { wch: 12 }, // תאריך ועדה
             { wch: 12 }, // מספר אירועים
             { wch: 12 }, // בקשות צפויות
-            { wch: 12 }, // הגשות בפועל
+            { wch: 12 }, // בקשות בפועל
             { wch: 20 }, // סוגי אירועים
             { wch: 50 }  // פרטי אירועים
         ];

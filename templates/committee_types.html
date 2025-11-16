@@ -133,8 +133,14 @@
             </div>
             
             {% if committee_types %}
-            <div class="row" id="committeeTypesGrid">
-                {% for committee_type in committee_types %}
+            <div id="committeeTypesGrid">
+                {% for group in committee_types|groupby('hativa_name') %}
+                <div class="mb-3">
+                    <h5 class="mb-2">
+                        <span class="badge bg-light text-dark border">{{ group.grouper }}</span>
+                    </h5>
+                    <div class="row">
+                    {% for committee_type in group.list %}
                 <div class="col-xl-3 col-lg-4 col-md-6 mb-3 committee-type-card" 
                      data-frequency="{{ committee_type.frequency }}" 
                      data-name="{{ committee_type.name|lower }}">
@@ -263,6 +269,9 @@
                                 </form>
                             </div>
                         </div>
+                    </div>
+                </div>
+                    {% endfor %}
                     </div>
                 </div>
                 {% endfor %}
