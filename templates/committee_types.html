@@ -137,7 +137,7 @@
                 {% for group in committee_types|groupby('hativa_name') %}
                 <div class="mb-3">
                     <h5 class="mb-2">
-                        <span class="badge bg-light text-dark border">{{ group.grouper }}</span>
+                        <span class="badge bg-light text-dark border">חטיבה: {{ group.grouper }}</span>
                     </h5>
                     <div class="row">
                     {% for committee_type in group.list %}
