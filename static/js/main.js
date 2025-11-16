@@ -336,6 +336,282 @@ function formatDate(dateString, locale = 'he-IL') {
     });
 }
 
+// Committee hover popover (summary)
+(function () {
+    var hoverTimer = null;
+    var cache = new Map(); // committeeId -> { data, timestamp }
+    var CACHE_TTL_MS = 60 * 1000; // 60 seconds
+    var activePopover = null;
+    var activeEl = null;
+
+    function getCommitteeIdFromRow(row) {
+        // rows in committee view use [data-committee-id]
+        var id = row && row.getAttribute('data-committee-id');
+        return id ? parseInt(id, 10) : null;
+    }
+
+    function isCacheFresh(entry) {
+        if (!entry) return false;
+        return Date.now() - entry.timestamp < CACHE_TTL_MS;
+    }
+
+    function buildPopoverContent(summary) {
+        if (!summary || !summary.success) {
+            return '<div class="text-danger">שגיאה בטעינת פרטי הוועדה</div>';
+        }
+        var c = summary.committee || {};
+        var events = summary.nearest_events || [];
+
+        var header = `
+            <div>
+                <div class="fw-bold">${c.name || ''}</div>
+                <div class="small text-muted">
+                    ${c.hativa_name ? c.hativa_name + ' • ' : ''}${c.date ? formatDate(c.date) : ''}
+                </div>
+            </div>
+        `;
+
+        if (events.length === 0) {
+            return header + '<div class="mt-2 text-muted small">אין אירועים להצגה</div>';
+        }
+
+        var list = '<div class="mt-2">';
+        events.forEach(function (ev) {
+            var when = ev.start ? formatDate(ev.start) : (ev.end ? formatDate(ev.end) : '');
+            var typeBadge = '';
+            if (ev.event_type) {
+                var cls = ev.event_type === 'kokok' ? 'badge-kokok' : (ev.event_type === 'shotef' ? 'badge-shotef' : 'bg-secondary');
+                var label = ev.event_type === 'kokok' ? 'קו\"ק' : (ev.event_type === 'shotef' ? 'שוטף' : ev.event_type);
+                typeBadge = `<span class="badge ${cls} ms-1">${label}</span>`;
+            }
+            list += `
+                <div class="d-flex align-items-start mb-1">
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold">${ev.title || ''}</div>
+                        <div class="small text-muted">
+                            ${when || ''}${ev.maslul_name ? ' • ' + ev.maslul_name : ''}${ev.location ? ' • ' + ev.location : ''}
+                        </div>
+                    </div>
+                    <div class="ms-2">
+                        ${typeBadge}
+                    </div>
+                </div>
+            `;
+        });
+        list += '</div>';
+        return header + list;
+    }
+
+    function showPopover(targetEl, content) {
+        hidePopover();
+        activeEl = targetEl;
+        activePopover = new bootstrap.Popover(targetEl, {
+            container: 'body',
+            trigger: 'manual',
+            html: true,
+            placement: 'auto',
+            customClass: 'committee-summary-popover',
+            content: content
+        });
+        activePopover.show();
+    }
+
+    function hidePopover() {
+        if (activePopover && activeEl) {
+            try {
+                activePopover.hide();
+            } catch (e) {}
+            try {
+                activePopover.dispose();
+            } catch (e) {}
+        }
+        activePopover = null;
+        activeEl = null;
+    }
+
+    // Delegate hover on committee rows (works with dynamic rows)
+    document.addEventListener('mouseover', function (e) {
+        var row = e.target && (e.target.closest && e.target.closest('.committee-row'));
+        if (!row) return;
+
+        // only fire once per row hover
+        if (row._hoverBound) return;
+        row._hoverBound = true;
+
+        row.addEventListener('mouseenter', function () {
+            var committeeId = getCommitteeIdFromRow(row);
+            if (!committeeId) return;
+            // hover intent delay
+            hoverTimer = setTimeout(function () {
+                // loading placeholder
+                showPopover(row, '<div class="small text-muted">טוען...</div>');
+
+                var entry = cache.get(committeeId);
+                if (isCacheFresh(entry)) {
+                    showPopover(row, buildPopoverContent(entry.data));
+                    return;
+                }
+
+                fetch('/api/committees/' + committeeId + '/summary')
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        cache.set(committeeId, { data: data, timestamp: Date.now() });
+                        // still hovered?
+                        if (activeEl === row) {
+                            showPopover(row, buildPopoverContent(data));
+                        }
+                    })
+                    .catch(function () {
+                        if (activeEl === row) {
+                            showPopover(row, '<div class="text-danger small">שגיאה בטעינה</div>');
+                        }
+                    });
+            }, 250);
+        });
+
+        row.addEventListener('mouseleave', function () {
+            if (hoverTimer) {
+                clearTimeout(hoverTimer);
+                hoverTimer = null;
+            }
+            hidePopover();
+        });
+    });
+})();
+
+// Calendar committee hover popover
+(function () {
+    var hoverTimer = null;
+    var cache = new Map(); // committeeId -> { data, timestamp }
+    var CACHE_TTL_MS = 60 * 1000; // 60 seconds
+    var activePopover = null;
+    var activeEl = null;
+
+    function getCommitteeIdFromEl(el) {
+        var id = el && el.getAttribute('data-vaada-id');
+        return id ? parseInt(id, 10) : null;
+    }
+
+    function isCacheFresh(entry) {
+        if (!entry) return false;
+        return Date.now() - entry.timestamp < CACHE_TTL_MS;
+    }
+
+    function buildPopoverContent(summary) {
+        if (!summary || !summary.success) {
+            return '<div class="text-danger">שגיאה בטעינת פרטי הוועדה</div>';
+        }
+        var c = summary.committee || {};
+        var events = summary.nearest_events || [];
+
+        var header = `
+            <div>
+                <div class="fw-bold">${c.name || ''}</div>
+                <div class="small text-muted">
+                    ${c.hativa_name ? c.hativa_name + ' • ' : ''}${c.date ? formatDate(c.date) : ''}
+                </div>
+            </div>
+        `;
+
+        if (events.length === 0) {
+            return header + '<div class="mt-2 text-muted small">אין אירועים להצגה</div>';
+        }
+
+        var list = '<div class="mt-2">';
+        events.forEach(function (ev) {
+            var when = ev.start ? formatDate(ev.start) : (ev.end ? formatDate(ev.end) : '');
+            var typeBadge = '';
+            if (ev.event_type) {
+                var cls = ev.event_type === 'kokok' ? 'badge-kokok' : (ev.event_type === 'shotef' ? 'badge-shotef' : 'bg-secondary');
+                var label = ev.event_type === 'kokok' ? 'קו\"ק' : (ev.event_type === 'shotef' ? 'שוטף' : ev.event_type);
+                typeBadge = `<span class="badge ${cls} ms-1">${label}</span>`;
+            }
+            list += `
+                <div class="d-flex align-items-start mb-1">
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold">${ev.title || ''}</div>
+                        <div class="small text-muted">
+                            ${when || ''}${ev.maslul_name ? ' • ' + ev.maslul_name : ''}${ev.location ? ' • ' + ev.location : ''}
+                        </div>
+                    </div>
+                    <div class="ms-2">
+                        ${typeBadge}
+                    </div>
+                </div>
+            `;
+        });
+        list += '</div>';
+        return header + list;
+    }
+
+    function showPopover(targetEl, content) {
+        hidePopover();
+        activeEl = targetEl;
+        activePopover = new bootstrap.Popover(targetEl, {
+            container: 'body',
+            trigger: 'manual',
+            html: true,
+            placement: 'auto',
+            customClass: 'committee-summary-popover',
+            content: content
+        });
+        activePopover.show();
+    }
+
+    function hidePopover() {
+        if (activePopover && activeEl) {
+            try { activePopover.hide(); } catch (e) {}
+            try { activePopover.dispose(); } catch (e) {}
+        }
+        activePopover = null;
+        activeEl = null;
+    }
+
+    // Delegate to dynamically created calendar badges
+    document.addEventListener('mouseover', function (e) {
+        var el = e.target && (e.target.closest && e.target.closest('.committee-badge'));
+        if (!el) return;
+        if (el._hoverBound) return;
+        el._hoverBound = true;
+
+        el.addEventListener('mouseenter', function () {
+            var committeeId = getCommitteeIdFromEl(el);
+            if (!committeeId) return;
+            hoverTimer = setTimeout(function () {
+                showPopover(el, '<div class="small text-muted">טוען...</div>');
+
+                var entry = cache.get(committeeId);
+                if (isCacheFresh(entry)) {
+                    showPopover(el, buildPopoverContent(entry.data));
+                    return;
+                }
+
+                fetch('/api/committees/' + committeeId + '/summary')
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        cache.set(committeeId, { data: data, timestamp: Date.now() });
+                        if (activeEl === el) {
+                            showPopover(el, buildPopoverContent(data));
+                        }
+                    })
+                    .catch(function () {
+                        if (activeEl === el) {
+                            showPopover(el, '<div class="text-danger small">שגיאה בטעינה</div>');
+                        }
+                    });
+            }, 250);
+        });
+
+        el.addEventListener('mouseleave', function () {
+            if (hoverTimer) {
+                clearTimeout(hoverTimer);
+                hoverTimer = null;
+            }
+            hidePopover();
+        });
+    });
+})();
+
 function showNotification(message, type = 'info', options = {}) {
     var alertClass = type === 'error' ? 'alert-danger' :
                     type === 'warning' ? 'alert-warning' :
