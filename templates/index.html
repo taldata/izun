@@ -202,16 +202,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="committee_type_id" class="form-label">סוג ועדה</label>
-                        <select class="form-select" name="committee_type_id" required>
+                        <select class="form-select" name="committee_type_id" id="committee_type_id" required>
                             <option value="">בחר סוג ועדה</option>
                             {% for committee_type in committee_types %}
-                                <option value="{{ committee_type.committee_type_id }}">{{ committee_type.name }}</option>
+                                <option value="{{ committee_type.committee_type_id }}" data-hativa-id="{{ committee_type.hativa_id }}">{{ committee_type.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="mb-3">
                         <label for="hativa_id" class="form-label">חטיבה</label>
-                        <select class="form-select" name="hativa_id" required>
+                        <select class="form-select" name="hativa_id" id="hativa_id" required>
                             <option value="">בחר חטיבה</option>
                             {% for hativa in hativot %}
                                 <option value="{{ hativa.hativa_id }}">{{ hativa.name }}</option>
@@ -369,7 +369,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <select class="form-select" name="committee_type_id" id="edit_committee_type_id" required>
                             <option value="">בחר סוג ועדה</option>
                             {% for committee_type in committee_types %}
-                                <option value="{{ committee_type.committee_type_id }}">{{ committee_type.name }}</option>
+                                <option value="{{ committee_type.committee_type_id }}" data-hativa-id="{{ committee_type.hativa_id }}">{{ committee_type.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -1659,14 +1659,38 @@ function darkenColor(color, amount) {
 // Edit functions
 function editCommittee(committee) {
     document.getElementById('edit_vaadot_id').value = committee.vaadot_id;
-    document.getElementById('edit_committee_type_id').value = committee.committee_type_id;
     document.getElementById('edit_hativa_id').value = committee.hativa_id;
+
+    // Filter committee types by selected division before setting the value
+    const editCommitteeTypeSelect = document.getElementById('edit_committee_type_id');
+    const selectedHativaId = committee.hativa_id;
+
+    if (editCommitteeTypeSelect) {
+        const committeeTypeOptions = editCommitteeTypeSelect.querySelectorAll('option');
+        committeeTypeOptions.forEach(option => {
+            if (option.value === '') {
+                option.style.display = '';
+                option.disabled = false;
+            } else {
+                const optionHativaId = option.getAttribute('data-hativa-id');
+                if (optionHativaId === String(selectedHativaId)) {
+                    option.style.display = '';
+                    option.disabled = false;
+                } else {
+                    option.style.display = 'none';
+                    option.disabled = true;
+                }
+            }
+        });
+    }
+
+    document.getElementById('edit_committee_type_id').value = committee.committee_type_id;
     document.getElementById('edit_vaada_date').value = committee.vaada_date;
     document.getElementById('edit_notes').value = committee.notes || '';
-    
+
     // Set form action with the committee ID
     document.getElementById('editCommitteeForm').action = '/committees/edit/' + committee.vaadot_id;
-    
+
     const modal = new bootstrap.Modal(document.getElementById('editCommitteeModal'));
     modal.show();
 }
@@ -3099,16 +3123,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Ensure date is in YYYY-MM-DD format
                 const dateValue = dateInput.value;
                 console.log('Date value before submission:', dateValue);
-                
+
                 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-                
+
                 if (!dateRegex.test(dateValue)) {
                     e.preventDefault();
                     alert('שגיאה: פורמט התאריך אינו תקין. נא לבחור תאריך מהלוח.\nפורמט נדרש: YYYY-MM-DD');
                     console.error('Invalid date format:', dateValue);
                     return false;
                 }
-                
+
                 // Validate it's a valid date
                 const dateObj = new Date(dateValue);
                 if (isNaN(dateObj.getTime())) {
@@ -3117,8 +3141,120 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.error('Invalid date:', dateValue);
                     return false;
                 }
-                
+
                 console.log('Date validation passed:', dateValue);
+            }
+
+            // Validate committee type belongs to selected division
+            const committeeTypeSelect = document.getElementById('committee_type_id');
+            const hativaSelect = document.getElementById('hativa_id');
+
+            if (committeeTypeSelect && hativaSelect) {
+                const selectedOption = committeeTypeSelect.options[committeeTypeSelect.selectedIndex];
+                const committeeHativaId = selectedOption ? selectedOption.getAttribute('data-hativa-id') : null;
+                const selectedHativaId = hativaSelect.value;
+
+                if (committeeHativaId && selectedHativaId && committeeHativaId !== selectedHativaId) {
+                    e.preventDefault();
+                    alert('שגיאה: סוג הועדה שנבחר אינו שייך לחטיבה שנבחרה. אנא בחר סוג ועדה מתאים או שנה את החטיבה.');
+                    return false;
+                }
+            }
+        });
+    }
+
+    // Add change listener to filter committee types by selected division in add form
+    const addHativaSelect = document.getElementById('hativa_id');
+    const addCommitteeTypeSelect = document.getElementById('committee_type_id');
+
+    if (addHativaSelect && addCommitteeTypeSelect) {
+        addHativaSelect.addEventListener('change', function() {
+            const selectedHativaId = this.value;
+            const committeeTypeOptions = addCommitteeTypeSelect.querySelectorAll('option');
+
+            committeeTypeOptions.forEach(option => {
+                if (option.value === '') {
+                    // Keep the placeholder option
+                    option.style.display = '';
+                    option.disabled = false;
+                } else {
+                    const optionHativaId = option.getAttribute('data-hativa-id');
+                    if (!selectedHativaId || optionHativaId === selectedHativaId) {
+                        option.style.display = '';
+                        option.disabled = false;
+                    } else {
+                        option.style.display = 'none';
+                        option.disabled = true;
+                    }
+                }
+            });
+
+            // Reset committee type selection if current selection is no longer valid
+            const currentSelection = addCommitteeTypeSelect.options[addCommitteeTypeSelect.selectedIndex];
+            if (currentSelection && currentSelection.value !== '') {
+                const currentHativaId = currentSelection.getAttribute('data-hativa-id');
+                if (selectedHativaId && currentHativaId !== selectedHativaId) {
+                    addCommitteeTypeSelect.value = '';
+                }
+            }
+        });
+    }
+
+    // Add change listener to filter committee types by selected division in edit form
+    const editHativaSelect = document.getElementById('edit_hativa_id');
+    const editCommitteeTypeSelect = document.getElementById('edit_committee_type_id');
+
+    if (editHativaSelect && editCommitteeTypeSelect) {
+        editHativaSelect.addEventListener('change', function() {
+            const selectedHativaId = this.value;
+            const committeeTypeOptions = editCommitteeTypeSelect.querySelectorAll('option');
+
+            committeeTypeOptions.forEach(option => {
+                if (option.value === '') {
+                    // Keep the placeholder option
+                    option.style.display = '';
+                    option.disabled = false;
+                } else {
+                    const optionHativaId = option.getAttribute('data-hativa-id');
+                    if (!selectedHativaId || optionHativaId === selectedHativaId) {
+                        option.style.display = '';
+                        option.disabled = false;
+                    } else {
+                        option.style.display = 'none';
+                        option.disabled = true;
+                    }
+                }
+            });
+
+            // Reset committee type selection if current selection is no longer valid
+            const currentSelection = editCommitteeTypeSelect.options[editCommitteeTypeSelect.selectedIndex];
+            if (currentSelection && currentSelection.value !== '') {
+                const currentHativaId = currentSelection.getAttribute('data-hativa-id');
+                if (selectedHativaId && currentHativaId !== selectedHativaId) {
+                    editCommitteeTypeSelect.value = '';
+                }
+            }
+        });
+    }
+
+    // Add form validation for edit committee form
+    const editCommitteeForm = document.getElementById('editCommitteeForm');
+    if (editCommitteeForm) {
+        editCommitteeForm.addEventListener('submit', function(e) {
+            // Validate committee type belongs to selected division
+            const committeeTypeSelect = document.getElementById('edit_committee_type_id');
+            const hativaSelect = document.getElementById('edit_hativa_id');
+
+            if (committeeTypeSelect && hativaSelect) {
+                const selectedOption = committeeTypeSelect.options[committeeTypeSelect.selectedIndex];
+                const committeeHativaId = selectedOption ? selectedOption.getAttribute('data-hativa-id') : null;
+                const selectedHativaId = hativaSelect.value;
+
+                if (committeeHativaId && selectedHativaId && committeeHativaId !== selectedHativaId) {
+                    e.preventDefault();
+                    alert('שגיאה: סוג הועדה שנבחר אינו שייך לחטיבה שנבחרה. אנא בחר סוג ועדה מתאים או שנה את החטיבה.');
+                    return false;
+                }
             }
         });
     }
