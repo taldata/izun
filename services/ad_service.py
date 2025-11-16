@@ -608,19 +608,19 @@ class ADService:
     def test_azure_connection(self) -> Tuple[bool, str]:
         """
         Test Azure AD configuration
-        
+
         Returns:
             Tuple of (success, message)
         """
         if not self.azure_client_id or not self.azure_tenant_id:
             return False, "הגדרות Azure AD חסרות (Tenant ID או Client ID)"
-        
+
         if not self.azure_client_secret:
             return False, "Client Secret חסר"
-        
+
         if not self.azure_redirect_uri:
             return False, "Redirect URI חסר"
-        
+
         try:
             # Try to create MSAL app and get auth URL
             msal_app = self._get_msal_app()
@@ -628,12 +628,56 @@ class ADService:
                 scopes=self.azure_scope,
                 redirect_uri=self.azure_redirect_uri
             )
-            
+
             if auth_url:
                 return True, "הגדרות Azure AD תקינות"
             else:
                 return False, "לא ניתן ליצור URL אימות"
-                
+
         except Exception as e:
             return False, f"שגיאה בבדיקת הגדרות: {str(e)}"
+
+    def get_app_only_token(self, scopes: List[str] = None) -> Optional[str]:
+        """
+        Get app-only access token for service-to-service authentication
+        Used for calendar sync and other automated operations
+
+        Args:
+            scopes: List of permission scopes (e.g., ['https://graph.microsoft.com/.default'])
+                   If None, defaults to Graph API with all app permissions
+
+        Returns:
+            Access token string or None on error
+        """
+        if not self.azure_client_id or not self.azure_tenant_id or not self.azure_client_secret:
+            logger.error("Azure AD credentials not configured for app-only token")
+            return None
+
+        try:
+            # Default to Graph API scope with all configured app permissions
+            if scopes is None:
+                scopes = ['https://graph.microsoft.com/.default']
+
+            logger.info(f"Acquiring app-only token with scopes: {scopes}")
+
+            msal_app = self._get_msal_app()
+
+            # Acquire token using client credentials flow
+            result = msal_app.acquire_token_for_client(scopes=scopes)
+
+            if "error" in result:
+                error_desc = result.get("error_description", result.get("error"))
+                logger.error(f"App-only token error: {error_desc}")
+                return None
+
+            if "access_token" not in result:
+                logger.error("No access token in app-only response")
+                return None
+
+            logger.info("Successfully acquired app-only access token")
+            return result["access_token"]
+
+        except Exception as e:
+            logger.error(f"Error acquiring app-only token: {e}", exc_info=True)
+            return None
 
