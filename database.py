@@ -86,7 +86,6 @@ class DatabaseManager:
                 committee_type_id INTEGER NOT NULL,
                 hativa_id INTEGER NOT NULL,
                 vaada_date DATE NOT NULL,
-                status TEXT DEFAULT 'planned',
                 exception_date_id INTEGER,
                 notes TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -381,7 +380,6 @@ class DatabaseManager:
                     ('is_call_deadline_manual', 'INTEGER DEFAULT 0'),
                     ('actual_submissions', 'INTEGER DEFAULT 0'),
                     ('scheduled_date', 'DATE'),
-                    ('status', 'TEXT DEFAULT "planned"'),
                     ('is_deleted', 'INTEGER DEFAULT 0'),
                     ('deleted_at', 'TIMESTAMP'),
                     ('deleted_by', 'INTEGER')
@@ -749,12 +747,11 @@ class DatabaseManager:
     
     # Vaadot operations (specific meeting instances)
     def add_vaada(self, committee_type_id: int, hativa_id: int, vaada_date: date, 
-                  notes: str = "", status: str = "scheduled", created_by: int = None, override_constraints: bool = False) -> tuple[int, str]:
+                  notes: str = "", created_by: int = None, override_constraints: bool = False) -> tuple[int, str]:
         """
         Add a new committee meeting with constraint checking
         Returns: (vaadot_id, warning_message)
         If override_constraints=True (for admins), constraints become warnings
-        status: 'scheduled' or 'planned' (default: 'scheduled')
         """
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -792,9 +789,9 @@ class DatabaseManager:
                     raise ValueError(f"השבוע של {vaada_date} כבר מכיל {weekly_count} ועדות (המגבלה היא {weekly_limit})")
 
             cursor.execute('''
-                INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, status, notes)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (committee_type_id, hativa_id, vaada_date, status, notes))
+                INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, notes)
+                VALUES (?, ?, ?, ?)
+            ''', (committee_type_id, hativa_id, vaada_date, notes))
             vaadot_id = cursor.lastrowid
             conn.commit()
             conn.close()
@@ -839,7 +836,7 @@ class DatabaseManager:
         
         query = '''
             SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date, 
-                   v.status, v.exception_date_id, v.notes, v.created_at,
+                   v.exception_date_id, v.notes, v.created_at,
                    ct.name as committee_name, ct.is_operational, h.name as hativa_name,
                    ed.exception_date, ed.description as exception_description, ed.type as exception_type
             FROM vaadot v
@@ -872,10 +869,10 @@ class DatabaseManager:
         conn.close()
         
         return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2],
-                'vaada_date': row[3], 'status': row[4], 'exception_date_id': row[5],
-                'notes': row[6], 'created_at': row[7], 'committee_name': row[8], 'is_operational': row[9], 'hativa_name': row[10],
-                'exception_date': row[11], 'exception_description': row[12], 
-                'exception_type': row[13]} for row in rows]
+                'vaada_date': row[3], 'exception_date_id': row[4],
+                'notes': row[5], 'created_at': row[6], 'committee_name': row[7], 'is_operational': row[8], 'hativa_name': row[9],
+                'exception_date': row[10], 'exception_description': row[11], 
+                'exception_type': row[12]} for row in rows]
 
     def duplicate_vaada_with_events(self, source_vaadot_id: int, target_date: date, created_by: Optional[int] = None,
                                     override_constraints: bool = False) -> Dict:
@@ -894,7 +891,6 @@ class DatabaseManager:
             hativa_id=int(source['hativa_id']),
             vaada_date=target_date,
             notes=source.get('notes') or "",
-            status=source.get('status') or 'scheduled',
             created_by=created_by,
             override_constraints=override_constraints
         )
@@ -927,7 +923,7 @@ class DatabaseManager:
         }
     
     def update_vaada(self, vaadot_id: int, committee_type_id: int, hativa_id: int,
-                     vaada_date: date, status: str = 'planned',
+                     vaada_date: date,
                      exception_date_id: Optional[int] = None, notes: str = "") -> bool:
         """Update committee meeting details including date, type, division, and notes"""
         conn = None
@@ -968,10 +964,10 @@ class DatabaseManager:
 
             cursor.execute('''
                 UPDATE vaadot
-                SET committee_type_id = ?, hativa_id = ?, vaada_date = ?, status = ?,
+                SET committee_type_id = ?, hativa_id = ?, vaada_date = ?,
                     exception_date_id = ?, notes = ?
                 WHERE vaadot_id = ?
-            ''', (committee_type_id, hativa_id, vaada_date, status, exception_date_id, notes, vaadot_id))
+            ''', (committee_type_id, hativa_id, vaada_date, exception_date_id, notes, vaadot_id))
 
             success = cursor.rowcount > 0
             conn.commit()
@@ -1358,7 +1354,6 @@ class DatabaseManager:
                 e.actual_submissions,
                 e.call_publication_date,
                 e.scheduled_date,
-                e.status,
                 e.created_at,
                 e.call_deadline_date,
                 e.intake_deadline_date,
@@ -1397,12 +1392,12 @@ class DatabaseManager:
         
         return [{'event_id': row[0], 'vaadot_id': row[1], 'maslul_id': row[2], 'name': row[3],
                 'event_type': row[4], 'expected_requests': row[5], 'actual_submissions': row[6], 'call_publication_date': row[7],
-                'scheduled_date': row[8], 'status': row[9], 'created_at': row[10], 
-                'call_deadline_date': row[11], 'intake_deadline_date': row[12], 'review_deadline_date': row[13],
-                'response_deadline_date': row[14], 'is_call_deadline_manual': row[15], 'committee_name': row[16], 
-                'vaada_date': row[17], 'vaada_hativa_name': row[18], 'maslul_name': row[19], 'hativa_name': row[20],
-                'hativa_id': row[21] if len(row) > 21 else None,
-                'committee_type_id': row[22] if len(row) > 22 else None} for row in rows]
+                'scheduled_date': row[8], 'created_at': row[9], 
+                'call_deadline_date': row[10], 'intake_deadline_date': row[11], 'review_deadline_date': row[12],
+                'response_deadline_date': row[13], 'is_call_deadline_manual': row[14], 'committee_name': row[15], 
+                'vaada_date': row[16], 'vaada_hativa_name': row[17], 'maslul_name': row[18], 'hativa_name': row[19],
+                'hativa_id': row[20] if len(row) > 20 else None,
+                'committee_type_id': row[21] if len(row) > 21 else None} for row in rows]
     
     def update_event(self, event_id: int, vaadot_id: int, maslul_id: int, name: str, event_type: str,
                      expected_requests: int = 0, actual_submissions: int = 0, call_publication_date: Optional[date] = None,
@@ -2525,7 +2520,10 @@ class DatabaseManager:
             conn = self.get_connection()
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT v.*, ct.name as committee_name, h.name as hativa_name
+                SELECT 
+                    v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date,
+                    v.exception_date_id, v.notes, v.created_at,
+                    ct.name as committee_name, h.name as hativa_name
                 FROM vaadot v
                 JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
                 JOIN hativot h ON v.hativa_id = h.hativa_id
@@ -2541,12 +2539,11 @@ class DatabaseManager:
                     'committee_type_id': row[1],
                     'hativa_id': row[2],
                     'vaada_date': row[3],
-                    'status': row[4],
-                    'exception_date_id': row[5],
-                    'notes': row[6],
-                    'created_at': row[7],
-                    'committee_name': row[8],
-                    'hativa_name': row[9]
+                    'exception_date_id': row[4],
+                    'notes': row[5],
+                    'created_at': row[6],
+                    'committee_name': row[7],
+                    'hativa_name': row[8]
                 }
             return None
         except Exception as e:

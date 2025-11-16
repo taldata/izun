@@ -14,6 +14,7 @@ from services.committee_recommendation_service import CommitteeRecommendationSer
 from services.audit_logger import AuditLogger
 from services.ad_service import ADService
 from auth import AuthManager, login_required, admin_required, editor_required, editing_permission_required
+from services.committee_service import get_committee_summary
 
 app = Flask(__name__)
 app.secret_key = 'committee_management_secret_key_2025_azure_oauth_enabled'
@@ -1642,7 +1643,6 @@ def add_committee_meeting():
     committee_type_id = request.form.get('committee_type_id')
     hativa_id = request.form.get('hativa_id')
     vaada_date = request.form.get('vaada_date')
-    status = request.form.get('status', 'planned')
     notes = request.form.get('notes', '').strip()
     
     if not all([committee_type_id, hativa_id, vaada_date]):
@@ -3530,6 +3530,18 @@ def get_events_by_committee():
             'success': False,
             'error': str(e)
         }), 500
+
+# Committee summary (hover popover)
+@app.route('/api/committees/<int:committee_id>/summary')
+@login_required
+def committee_summary(committee_id: int):
+    """Return committee details and up to 5 nearest events for hover popover"""
+    try:
+        summary = get_committee_summary(db, committee_id)
+        status_code = 200 if summary.get('success') else 404
+        return jsonify(summary), status_code
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 # Recycle Bin Routes
 @app.route('/recycle_bin')
