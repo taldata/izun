@@ -3763,8 +3763,6 @@ def trigger_calendar_sync():
 
         # Log to audit
         audit_logger.log(
-            user_id=session.get('user_id'),
-            username=session.get('username'),
             action='calendar_sync',
             entity_type='calendar',
             entity_id=None,
@@ -3826,8 +3824,6 @@ def sync_committee_to_calendar(vaadot_id):
 
         # Log to audit
         audit_logger.log(
-            user_id=session.get('user_id'),
-            username=session.get('username'),
             action='calendar_sync_committee',
             entity_type='vaadot',
             entity_id=vaadot_id,
@@ -3859,8 +3855,6 @@ def sync_event_to_calendar(event_id):
 
         # Log to audit
         audit_logger.log(
-            user_id=session.get('user_id'),
-            username=session.get('username'),
             action='calendar_sync_event',
             entity_type='events',
             entity_id=event_id,
