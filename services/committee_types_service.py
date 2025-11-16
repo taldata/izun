@@ -116,7 +116,8 @@ class CommitteeTypesService:
                 'total_count': len(committee_types),
                 'weekly_count': len([ct for ct in committee_types if ct['frequency'] == 'weekly']),
                 'monthly_count': len([ct for ct in committee_types if ct['frequency'] == 'monthly']),
-                'active_meetings_count': len([v for v in vaadot_list if v['status'] in ['planned', 'scheduled']])
+                # Status column was removed; count all meetings or adjust per business rule
+                'active_meetings_count': len(vaadot_list)
             }
             
             logger.info(f"Retrieved {len(committee_types)} committee types with statistics: {statistics}")
