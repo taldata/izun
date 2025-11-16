@@ -178,6 +178,9 @@
                             <li><a class="dropdown-item" href="#" onclick="toggleEditingPeriod()">
                                 <i class="bi bi-toggle-on me-2"></i>ניהול תקופת עריכה
                             </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="showCalendarSyncModal()">
+                                <i class="bi bi-calendar-check me-2 text-info"></i>סנכרון לוח שנה
+                            </a></li>
                             <li><hr class="dropdown-divider"></li>
                             {% endif %}
                             <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">
@@ -342,8 +345,127 @@
             })
             .catch(error => console.error('Error checking editing status:', error));
     }
+
+    // Calendar Sync Functions
+    function showCalendarSyncModal() {
+        // Fetch sync status first
+        fetch('/api/calendar/sync/status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const modal = document.getElementById('calendarSyncModal');
+
+                    // Update status info
+                    document.getElementById('syncEnabled').textContent = data.sync_enabled ? 'מופעל' : 'כבוי';
+                    document.getElementById('syncEmail').textContent = data.calendar_email || 'לא הוגדר';
+                    document.getElementById('schedulerStatus').textContent = data.scheduler_running ? 'פועל' : 'מושהה';
+
+                    if (data.next_run_time) {
+                        const nextRun = new Date(data.next_run_time);
+                        document.getElementById('nextRunTime').textContent = nextRun.toLocaleString('he-IL');
+                    } else {
+                        document.getElementById('nextRunTime').textContent = 'לא זמין';
+                    }
+
+                    // Show modal
+                    const bsModal = new bootstrap.Modal(modal);
+                    bsModal.show();
+                } else {
+                    alert('שגיאה בטעינת סטטוס סנכרון: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching sync status:', error);
+                alert('שגיאה בטעינת סטטוס סנכרון');
+            });
+    }
+
+    function triggerCalendarSync() {
+        const btn = document.getElementById('triggerSyncBtn');
+        const originalText = btn.innerHTML;
+
+        // Disable button and show loading
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>מסנכרן...';
+
+        fetch('/api/calendar/sync', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`סנכרון הושלם בהצלחה!\n\nועדות: ${data.committees_synced}\nאירועים: ${data.events_synced}\nכשלונות: ${data.failures}`);
+                // Refresh status
+                showCalendarSyncModal();
+            } else {
+                alert('שגיאה בסנכרון: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error triggering sync:', error);
+            alert('שגיאה בסנכרון לוח השנה');
+        })
+        .finally(() => {
+            // Re-enable button
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        });
+    }
     </script>
-    
+
+    <!-- Calendar Sync Modal -->
+    <div class="modal fade" id="calendarSyncModal" tabindex="-1" aria-labelledby="calendarSyncModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title" id="calendarSyncModalLabel">
+                        <i class="bi bi-calendar-check me-2"></i>סנכרון לוח שנה
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-4">
+                        <h6 class="text-primary mb-3">סטטוס סנכרון</h6>
+                        <table class="table table-sm">
+                            <tbody>
+                                <tr>
+                                    <td class="fw-bold">סנכרון:</td>
+                                    <td><span id="syncEnabled" class="badge bg-success">מופעל</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">לוח שנה:</td>
+                                    <td id="syncEmail">plan@innovationisrael.org.il</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">סטטוס תזמון:</td>
+                                    <td><span id="schedulerStatus" class="badge bg-info">פועל</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">סנכרון הבא:</td>
+                                    <td id="nextRunTime">טוען...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>הערה:</strong> סנכרון אוטומטי מתבצע מדי שעה. ניתן להפעיל סנכרון ידני בכל עת.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">סגור</button>
+                    <button type="button" class="btn btn-info" id="triggerSyncBtn" onclick="triggerCalendarSync()">
+                        <i class="bi bi-arrow-clockwise me-2"></i>הפעל סנכרון כעת
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>

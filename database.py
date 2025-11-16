@@ -192,7 +192,36 @@ class DatabaseManager:
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs (entity_type, entity_id)
         ''')
-        
+
+        # Create calendar sync tracking table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS calendar_sync_events (
+                sync_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_type TEXT NOT NULL CHECK (source_type IN ('vaadot', 'event_deadline')),
+                source_id INTEGER NOT NULL,
+                deadline_type TEXT,
+                calendar_event_id TEXT,
+                calendar_email TEXT NOT NULL,
+                last_synced TIMESTAMP,
+                sync_status TEXT DEFAULT 'pending' CHECK (sync_status IN ('pending', 'synced', 'failed', 'deleted')),
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(source_type, source_id, deadline_type, calendar_email)
+            )
+        ''')
+
+        # Create indexes for faster calendar sync queries
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_calendar_sync_source ON calendar_sync_events (source_type, source_id)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_calendar_sync_status ON calendar_sync_events (sync_status)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_calendar_sync_calendar_id ON calendar_sync_events (calendar_event_id)
+        ''')
+
         cursor.execute('''
             INSERT OR IGNORE INTO system_settings (setting_key, setting_value, description)
             VALUES 
@@ -243,7 +272,10 @@ class DatabaseManager:
                 ('ad_manager_group', '', 'AD group name/DN for manager role'),
                 ('ad_auto_create_users', '1', 'Automatically create users on first AD login (1=yes, 0=no)'),
                 ('ad_default_hativa_id', '', 'Default division ID for new AD users'),
-                ('ad_sync_on_login', '1', 'Sync user info from AD on each login (1=yes, 0=no)')
+                ('ad_sync_on_login', '1', 'Sync user info from AD on each login (1=yes, 0=no)'),
+                ('calendar_sync_enabled', '1', 'Enable automatic calendar synchronization (1=yes, 0=no)'),
+                ('calendar_sync_email', 'plan@innovationisrael.org.il', 'Email address of the shared calendar to sync to'),
+                ('calendar_sync_interval_hours', '1', 'How often to sync calendar (in hours)')
         ''')
         
         conn.commit()
@@ -3246,3 +3278,165 @@ class DatabaseManager:
             if 'conn' in locals():
                 conn.close()
             return 0, 0
+
+    # Calendar Sync Operations
+    def create_calendar_sync_record(self, source_type: str, source_id: int, deadline_type: str = None,
+                                     calendar_email: str = 'plan@innovationisrael.org.il',
+                                     calendar_event_id: str = None) -> int:
+        """Create a calendar sync tracking record"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO calendar_sync_events
+                (source_type, source_id, deadline_type, calendar_email, calendar_event_id, sync_status)
+                VALUES (?, ?, ?, ?, ?, 'pending')
+            ''', (source_type, source_id, deadline_type, calendar_email, calendar_event_id))
+            sync_id = cursor.lastrowid
+            conn.commit()
+            return sync_id
+        except sqlite3.IntegrityError:
+            # Record already exists, update it instead
+            cursor.execute('''
+                UPDATE calendar_sync_events
+                SET sync_status = 'pending', updated_at = CURRENT_TIMESTAMP
+                WHERE source_type = ? AND source_id = ? AND deadline_type = ? AND calendar_email = ?
+            ''', (source_type, source_id, deadline_type, calendar_email))
+            conn.commit()
+            cursor.execute('''
+                SELECT sync_id FROM calendar_sync_events
+                WHERE source_type = ? AND source_id = ? AND deadline_type = ? AND calendar_email = ?
+            ''', (source_type, source_id, deadline_type, calendar_email))
+            sync_id = cursor.fetchone()[0]
+            return sync_id
+        finally:
+            conn.close()
+
+    def update_calendar_sync_status(self, sync_id: int, status: str, calendar_event_id: str = None,
+                                      error_message: str = None) -> bool:
+        """Update calendar sync status"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        if calendar_event_id:
+            cursor.execute('''
+                UPDATE calendar_sync_events
+                SET sync_status = ?, calendar_event_id = ?, error_message = ?,
+                    last_synced = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE sync_id = ?
+            ''', (status, calendar_event_id, error_message, sync_id))
+        else:
+            cursor.execute('''
+                UPDATE calendar_sync_events
+                SET sync_status = ?, error_message = ?,
+                    last_synced = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE sync_id = ?
+            ''', (status, error_message, sync_id))
+
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
+
+    def get_calendar_sync_record(self, source_type: str, source_id: int, deadline_type: str = None,
+                                   calendar_email: str = 'plan@innovationisrael.org.il') -> Optional[Dict]:
+        """Get calendar sync record"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT sync_id, source_type, source_id, deadline_type, calendar_event_id, calendar_email,
+                   last_synced, sync_status, error_message, created_at, updated_at
+            FROM calendar_sync_events
+            WHERE source_type = ? AND source_id = ? AND deadline_type IS ? AND calendar_email = ?
+        ''', (source_type, source_id, deadline_type, calendar_email))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return {
+                'sync_id': row[0], 'source_type': row[1], 'source_id': row[2],
+                'deadline_type': row[3], 'calendar_event_id': row[4], 'calendar_email': row[5],
+                'last_synced': row[6], 'sync_status': row[7], 'error_message': row[8],
+                'created_at': row[9], 'updated_at': row[10]
+            }
+        return None
+
+    def get_pending_calendar_syncs(self, calendar_email: str = 'plan@innovationisrael.org.il') -> List[Dict]:
+        """Get all pending calendar sync records"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT sync_id, source_type, source_id, deadline_type, calendar_event_id, calendar_email,
+                   last_synced, sync_status, error_message, created_at, updated_at
+            FROM calendar_sync_events
+            WHERE sync_status = 'pending' AND calendar_email = ?
+            ORDER BY created_at ASC
+        ''', (calendar_email,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [
+            {
+                'sync_id': row[0], 'source_type': row[1], 'source_id': row[2],
+                'deadline_type': row[3], 'calendar_event_id': row[4], 'calendar_email': row[5],
+                'last_synced': row[6], 'sync_status': row[7], 'error_message': row[8],
+                'created_at': row[9], 'updated_at': row[10]
+            }
+            for row in rows
+        ]
+
+    def delete_calendar_sync_record(self, source_type: str, source_id: int, deadline_type: str = None,
+                                      calendar_email: str = 'plan@innovationisrael.org.il') -> bool:
+        """Delete calendar sync record"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            DELETE FROM calendar_sync_events
+            WHERE source_type = ? AND source_id = ? AND deadline_type IS ? AND calendar_email = ?
+        ''', (source_type, source_id, deadline_type, calendar_email))
+
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
+
+    def mark_calendar_sync_deleted(self, source_type: str, source_id: int,
+                                     calendar_email: str = 'plan@innovationisrael.org.il') -> List[Dict]:
+        """Mark all calendar sync records for a source as deleted and return them"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Get all sync records for this source
+        cursor.execute('''
+            SELECT sync_id, source_type, source_id, deadline_type, calendar_event_id, calendar_email,
+                   last_synced, sync_status, error_message, created_at, updated_at
+            FROM calendar_sync_events
+            WHERE source_type = ? AND source_id = ? AND calendar_email = ? AND sync_status != 'deleted'
+        ''', (source_type, source_id, calendar_email))
+
+        rows = cursor.fetchall()
+
+        # Mark them as deleted
+        cursor.execute('''
+            UPDATE calendar_sync_events
+            SET sync_status = 'deleted', updated_at = CURRENT_TIMESTAMP
+            WHERE source_type = ? AND source_id = ? AND calendar_email = ? AND sync_status != 'deleted'
+        ''', (source_type, source_id, calendar_email))
+
+        conn.commit()
+        conn.close()
+
+        return [
+            {
+                'sync_id': row[0], 'source_type': row[1], 'source_id': row[2],
+                'deadline_type': row[3], 'calendar_event_id': row[4], 'calendar_email': row[5],
+                'last_synced': row[6], 'sync_status': row[7], 'error_message': row[8],
+                'created_at': row[9], 'updated_at': row[10]
+            }
+            for row in rows
+        ]

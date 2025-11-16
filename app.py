@@ -13,6 +13,8 @@ from services.committee_types_service import CommitteeTypesService, CommitteeTyp
 from services.committee_recommendation_service import CommitteeRecommendationService
 from services.audit_logger import AuditLogger
 from services.ad_service import ADService
+from services.calendar_service import CalendarService
+from services.calendar_sync_scheduler import CalendarSyncScheduler
 from auth import AuthManager, login_required, admin_required, editor_required, editing_permission_required
 from services.committee_service import get_committee_summary
 
@@ -39,6 +41,13 @@ committee_types_service = CommitteeTypesService(db)
 committee_recommendation_service = CommitteeRecommendationService(db)
 auth_manager = AuthManager(db, ad_service)
 audit_logger = AuditLogger(db)
+
+# Initialize calendar sync components
+calendar_service = CalendarService(ad_service, db)
+calendar_sync_scheduler = CalendarSyncScheduler(calendar_service, db, audit_logger)
+
+# Start calendar sync scheduler
+calendar_sync_scheduler.start()
 
 # Mobile device detection middleware
 def is_mobile_device():
@@ -3735,6 +3744,140 @@ def empty_recycle_bin_route():
             'events_deleted': events_deleted
         })
     except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+# ============================================================================
+# Calendar Sync API Endpoints
+# ============================================================================
+
+@app.route('/api/calendar/sync', methods=['POST'])
+@login_required
+@admin_required
+def trigger_calendar_sync():
+    """Manually trigger full calendar sync"""
+    try:
+        app.logger.info(f"Manual calendar sync triggered by user {session.get('username')}")
+
+        # Run sync
+        result = calendar_service.sync_all()
+
+        # Log to audit
+        audit_logger.log(
+            user_id=session.get('user_id'),
+            username=session.get('username'),
+            action='calendar_sync',
+            entity_type='calendar',
+            entity_id=None,
+            entity_name='manual_sync',
+            details=f"Synced {result['committees_synced']} committees and {result['events_synced']} events",
+            status='success' if result['success'] else 'error',
+            error_message=result.get('message') if not result['success'] else None
+        )
+
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': result['message'],
+                'committees_synced': result['committees_synced'],
+                'events_synced': result['events_synced'],
+                'failures': result['failures']
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': result['message']
+            }), 500
+
+    except Exception as e:
+        app.logger.error(f"Error in manual calendar sync: {e}", exc_info=True)
+        audit_logger.log_error('calendar_sync', 'calendar', str(e))
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/calendar/sync/status')
+@login_required
+@admin_required
+def calendar_sync_status():
+    """Get calendar sync status"""
+    try:
+        next_run = calendar_sync_scheduler.get_next_run_time()
+        is_running = calendar_sync_scheduler.is_scheduler_running()
+        sync_enabled = calendar_service.is_enabled()
+
+        return jsonify({
+            'success': True,
+            'sync_enabled': sync_enabled,
+            'scheduler_running': is_running,
+            'next_run_time': next_run.isoformat() if next_run else None,
+            'calendar_email': calendar_service.calendar_email
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting calendar sync status: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/calendar/sync/committee/<int:vaadot_id>', methods=['POST'])
+@login_required
+@admin_required
+def sync_committee_to_calendar(vaadot_id):
+    """Sync a single committee to calendar"""
+    try:
+        app.logger.info(f"Syncing committee {vaadot_id} to calendar by user {session.get('username')}")
+
+        success, message = calendar_service.sync_committee_to_calendar(vaadot_id)
+
+        # Log to audit
+        audit_logger.log(
+            user_id=session.get('user_id'),
+            username=session.get('username'),
+            action='calendar_sync_committee',
+            entity_type='vaadot',
+            entity_id=vaadot_id,
+            entity_name=f'Committee {vaadot_id}',
+            details=message,
+            status='success' if success else 'error',
+            error_message=message if not success else None
+        )
+
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'message': message}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error syncing committee {vaadot_id}: {e}", exc_info=True)
+        audit_logger.log_error('calendar_sync_committee', 'vaadot', str(e), entity_id=vaadot_id)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/calendar/sync/event/<int:event_id>', methods=['POST'])
+@login_required
+@admin_required
+def sync_event_to_calendar(event_id):
+    """Sync a single event's deadlines to calendar"""
+    try:
+        app.logger.info(f"Syncing event {event_id} to calendar by user {session.get('username')}")
+
+        success, message = calendar_service.sync_event_deadlines_to_calendar(event_id)
+
+        # Log to audit
+        audit_logger.log(
+            user_id=session.get('user_id'),
+            username=session.get('username'),
+            action='calendar_sync_event',
+            entity_type='events',
+            entity_id=event_id,
+            entity_name=f'Event {event_id}',
+            details=message,
+            status='success' if success else 'error',
+            error_message=message if not success else None
+        )
+
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'message': message}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error syncing event {event_id}: {e}", exc_info=True)
+        audit_logger.log_error('calendar_sync_event', 'events', str(e), entity_id=event_id)
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/events_table')
