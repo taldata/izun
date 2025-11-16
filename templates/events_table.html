@@ -461,7 +461,7 @@
                         <tbody>
                             {% for event in events %}
                             <tr data-event-id="{{ event.event_id }}"
-                                data-hativa-id="{{ event.get('hativa_id', '') }}"
+                                data-hativa-id="{{ event.get('maslul_hativa_id', '') }}"
                                 data-maslul-id="{{ event.maslul_id }}"
                                 data-committee-type="{{ event.get('committee_type_id', '') }}"
                                 data-event-type="{{ event.event_type or '' }}"
