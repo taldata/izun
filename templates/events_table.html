@@ -344,14 +344,6 @@
                                     <i class="bi bi-grid-3x2 me-1"></i>תצוגת ועדות
                                 </label>
                             </div>
-                            <!-- Chronological order selector -->
-                            <div class="ms-2">
-                                <label for="orderSelect" class="form-label mb-0 small d-block text-white">סדר כרונולוגי</label>
-                                <select id="orderSelect" class="form-select form-select-sm" onchange="onOrderChange(this.value)">
-                                    <option value="asc" {% if order == 'asc' %}selected{% endif %}>עולה</option>
-                                    <option value="desc" {% if order == 'desc' %}selected{% endif %}>יורד</option>
-                                </select>
-                            </div>
                             <div id="emptyCommitteesToggle" class="form-check form-switch ms-2" style="opacity: 0; pointer-events: none;">
                                 <input class="form-check-input" type="checkbox" id="includeEmptyCommittees" onchange="onEmptyCommitteesToggle()" disabled>
                                 <label class="form-check-label text-white small" for="includeEmptyCommittees" style="cursor: default;">הצג ועדות ללא אירועים</label>
@@ -362,6 +354,9 @@
                             <!-- Export button -->
                             <button class="btn export-btn btn-sm" onclick="exportToExcel()">
                                 <i class="bi bi-file-earmark-excel me-1"></i>ייצא ל-Excel
+                            </button>
+                            <button class="btn export-btn btn-sm" onclick="exportToPDF()">
+                                <i class="bi bi-file-earmark-pdf me-1"></i>ייצא ל-PDF
                             </button>
                         </div>
                     </div>
@@ -687,11 +682,6 @@
 
 {% block extra_scripts %}
 <script>
-function onOrderChange(order) {
-    const url = new URL(window.location.href);
-    url.searchParams.set('order', order === 'desc' ? 'desc' : 'asc');
-    window.location.href = url.toString();
-}
 
 let currentSort = { key: null, dir: 'asc' };
 
@@ -1004,14 +994,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize bulk bar visibility
     onSelectionChanged();
 
-    // If server passed an initial order, reflect it in client sort
-    try {
-        const initial = ("{{ order|default('asc') }}" || 'asc').toLowerCase();
-        if (initial === 'asc' || initial === 'desc') {
-            setSort('committeeDate', initial);
-        }
-        updateSortIndicators();
-    } catch (e) {}
+    // Default sort by committee date ascending on load
+    try { setSort('committeeDate', 'asc'); updateSortIndicators(); } catch (e) {}
 });
 
 // View Toggle Functions
@@ -1308,6 +1292,123 @@ function exportToExcel() {
     }
 }
 
+function exportToPDF() {
+    const eventsViewRadio = document.getElementById('eventsView');
+    const committeesViewRadio = document.getElementById('committeesView');
+
+    if (committeesViewRadio.checked) {
+        exportCommitteeViewToPDF();
+    } else {
+        exportEventsViewToPDF();
+    }
+}
+
+function exportEventsViewToPDF() {
+    const table = document.getElementById('eventsTable');
+    const headerCells = Array.from(table.querySelectorAll('thead th'))
+        .slice(1) // skip checkbox
+        .map(th => th.textContent.trim());
+    const rows = Array.from(table.querySelectorAll('tbody tr'))
+        .filter(row => row.style.display !== 'none')
+        .map(row => Array.from(row.querySelectorAll('td')).slice(1).map(td => td.textContent.trim().replace(/\s+/g, ' ')));
+
+    const win = window.open('', '_blank');
+    if (!win) {
+        alert('אנא אפשר חלונות קופצים כדי לייצא ל-PDF');
+        return;
+    }
+    const today = new Date().toLocaleDateString('he-IL');
+    const html = `
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>ייצוא אירועים - ${today}</title>
+<style>
+    body { font-family: sans-serif; margin: 24px; }
+    h1 { font-size: 18px; margin: 0 0 12px 0; }
+    .meta { color: #555; font-size: 12px; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; direction: rtl; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; font-size: 12px; vertical-align: top; }
+    th { background: #f8f9fa; }
+    @media print {
+        @page { size: A4 landscape; margin: 12mm; }
+        body { margin: 0; }
+    }
+</style>
+</head>
+<body>
+    <h1>טבלת אירועים</h1>
+    <div class="meta">תאריך ייצוא: ${today}</div>
+    <table>
+        <thead>
+            <tr>${headerCells.map(h => `<th>${h}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+            ${rows.map(cols => `<tr>${cols.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}
+        </tbody>
+    </table>
+    <scr` + `ipt>window.addEventListener('load', () => { window.print(); setTimeout(() => window.close(), 300); });</scr` + `ipt>
+</body>
+</html>`;
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+}
+
+function exportCommitteeViewToPDF() {
+    const table = document.getElementById('committeeTable');
+    const headerCells = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
+    const rows = Array.from(document.querySelectorAll('#committeeTableBody tr.committee-row')).map(row => {
+        const tds = Array.from(row.querySelectorAll('td'));
+        // skip checkbox and expand button columns (first two)
+        const textCols = tds.slice(2).map(td => td.textContent.trim().replace(/\s+/g, ' '));
+        return textCols;
+    });
+
+    const win = window.open('', '_blank');
+    if (!win) {
+        alert('אנא אפשר חלונות קופצים כדי לייצא ל-PDF');
+        return;
+    }
+    const today = new Date().toLocaleDateString('he-IL');
+    const html = `
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>ייצוא ועדות - ${today}</title>
+<style>
+    body { font-family: sans-serif; margin: 24px; }
+    h1 { font-size: 18px; margin: 0 0 12px 0; }
+    .meta { color: #555; font-size: 12px; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; direction: rtl; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; font-size: 12px; vertical-align: top; }
+    th { background: #f8f9fa; }
+    @media print {
+        @page { size: A4 landscape; margin: 12mm; }
+        body { margin: 0; }
+    }
+</style>
+</head>
+<body>
+    <h1>טבלת ועדות</h1>
+    <div class="meta">תאריך ייצוא: ${today}</div>
+    <table>
+        <thead>
+            <tr>${headerCells.slice(2).map(h => `<th>${h}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+            ${rows.map(cols => `<tr>${cols.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}
+        </tbody>
+    </table>
+    <scr` + `ipt>window.addEventListener('load', () => { window.print(); setTimeout(() => window.close(), 300); });</scr` + `ipt>
+</body>
+</html>`;
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+}
 function exportEventsViewToExcel() {
     const table = document.getElementById('eventsTable');
     const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.style.display !== 'none');
