@@ -272,7 +272,7 @@ class CalendarService:
         """
         try:
             # Get committee details
-            committee = self.db.get_vaada_details(vaadot_id)
+            committee = self.db.get_vaada_by_id(vaadot_id)
             if not committee:
                 return False, f"Committee {vaadot_id} not found"
 
@@ -374,7 +374,7 @@ class CalendarService:
         """
         try:
             # Get event details
-            event = self.db.get_event_details(event_id)
+            event = self.db.get_event_by_id(event_id)
             if not event:
                 return False, f"Event {event_id} not found"
 
@@ -510,7 +510,7 @@ class CalendarService:
 
         try:
             # Get all active (non-deleted) committees
-            committees = self.db.get_all_vaadot()
+            committees = self.db.get_vaadot(include_deleted=False)
 
             for committee in committees:
                 vaadot_id = committee.get('vaadot_id')
@@ -526,7 +526,7 @@ class CalendarService:
                     failures += 1
 
             # Get all active (non-deleted) events
-            events = self.db.get_all_events()
+            events = self.db.get_all_events(include_deleted=False)
 
             for event in events:
                 event_id = event.get('event_id')
