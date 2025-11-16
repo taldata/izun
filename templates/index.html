@@ -694,7 +694,12 @@ const eventsData = eventsDataElement ? JSON.parse(eventsDataElement.textContent)
 const showDeadlineDatesElement = document.getElementById('show-deadline-dates');
 let showDeadlineDates = showDeadlineDatesElement ? JSON.parse(showDeadlineDatesElement.textContent) : false;
 
-// Debug data
+// Normalize types (ensure booleans/numbers are correct) and Debug data
+committeesData.forEach(c => {
+    // Coerce is_operational to boolean
+    c.is_operational = (c.is_operational === true) || (c.is_operational === 1) || (c.is_operational === '1');
+});
+
 console.log('Committees data loaded:', committeesData.length, committeesData);
 console.log('Events data loaded:', eventsData.length, eventsData);
 
@@ -927,6 +932,9 @@ function createMonthCalendar(year, month, isCompact = false) {
                     committeeContainer.style.padding = '6px';
                     committeeContainer.style.backgroundColor = committee.is_operational ? opBg : baseBg;
                     committeeContainer.style.position = 'relative';
+                    if (committee.is_operational) {
+                        committeeContainer.classList.add('operational');
+                    }
                     
                     // Committee header
                     const committeeDiv = document.createElement('div');
@@ -938,6 +946,9 @@ function createMonthCalendar(year, month, isCompact = false) {
                     committeeDiv.style.backgroundColor = committee.is_operational ? '#495057' : hativaColor;
                     committeeDiv.style.borderRadius = '6px';
                     committeeDiv.style.fontWeight = 'bold';
+                    if (committee.is_operational) {
+                        committeeDiv.classList.add('operational');
+                    }
                     
                     // Add drag & drop attributes (only for managers and admins)
                     const userRole = '{{ current_user.role }}';
@@ -3994,6 +4005,11 @@ document.getElementById('addEventModal').addEventListener('hidden.bs.modal', fun
     transition: all 0.2s ease;
 }
 
+.committee-container.operational {
+    border: 2px dashed #6c757d !important;
+    background-color: #f1f3f5 !important;
+}
+
 .committee-container:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
@@ -4047,6 +4063,10 @@ document.getElementById('addEventModal').addEventListener('hidden.bs.modal', fun
 .committee-badge {
     position: relative;
     overflow: hidden;
+}
+
+.committee-badge.operational {
+    background-color: #495057 !important;
 }
 
 .committee-badge::after {
