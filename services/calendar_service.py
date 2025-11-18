@@ -10,7 +10,7 @@ Uses Microsoft Graph API with app-only authentication
 import requests
 import logging
 from typing import Optional, Dict, List, Tuple
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
@@ -89,6 +89,11 @@ class CalendarService:
             if end_date is None:
                 end_date = start_date
 
+            # For all-day events, Microsoft Graph requires duration of at least 24 hours.
+            # Ensure end_date is at least start_date + 1 day for single-day all-day events.
+            if is_all_day and end_date <= start_date:
+                end_date = start_date + timedelta(days=1)
+
             target_email = user_email or self.calendar_email
 
             # Build event object
@@ -99,11 +104,11 @@ class CalendarService:
                     "content": body
                 },
                 "start": {
-                    "dateTime": start_date.isoformat(),
+                    "dateTime": datetime.combine(start_date, datetime.min.time()).isoformat(),
                     "timeZone": "Asia/Jerusalem"
                 },
                 "end": {
-                    "dateTime": end_date.isoformat(),
+                    "dateTime": datetime.combine(end_date, datetime.min.time()).isoformat(),
                     "timeZone": "Asia/Jerusalem"
                 },
                 "isAllDay": is_all_day,
@@ -175,21 +180,30 @@ class CalendarService:
                 }
 
             if start_date is not None:
+                # For all-day events, ensure at least 24 hours duration by default
+                effective_end_date = end_date
+                if is_all_day:
+                    if effective_end_date is None:
+                        effective_end_date = start_date + timedelta(days=1)
+                    elif effective_end_date <= start_date:
+                        effective_end_date = start_date + timedelta(days=1)
+
                 event_update["start"] = {
-                    "dateTime": start_date.isoformat(),
+                    "dateTime": datetime.combine(start_date, datetime.min.time()).isoformat(),
                     "timeZone": "Asia/Jerusalem"
                 }
                 event_update["isAllDay"] = is_all_day
 
-            if end_date is not None:
+                if effective_end_date is not None:
+                    event_update["end"] = {
+                        "dateTime": datetime.combine(effective_end_date, datetime.min.time()).isoformat(),
+                        "timeZone": "Asia/Jerusalem"
+                    }
+
+            # If only end_date is provided (rare), update it directly
+            if start_date is None and end_date is not None:
                 event_update["end"] = {
-                    "dateTime": end_date.isoformat(),
-                    "timeZone": "Asia/Jerusalem"
-                }
-            elif start_date is not None:
-                # If start_date provided but not end_date, make them the same
-                event_update["end"] = {
-                    "dateTime": start_date.isoformat(),
+                    "dateTime": datetime.combine(end_date, datetime.min.time()).isoformat(),
                     "timeZone": "Asia/Jerusalem"
                 }
 
@@ -405,6 +419,7 @@ class CalendarService:
 
             synced_count = 0
             failed_count = 0
+            processed_count = 0
 
             for field_name, hebrew_name in deadline_fields.items():
                 deadline_date = event.get(field_name)
@@ -415,6 +430,8 @@ class CalendarService:
                 # Parse date
                 if isinstance(deadline_date, str):
                     deadline_date = datetime.strptime(deadline_date, '%Y-%m-%d').date()
+
+                processed_count += 1
 
                 # Build event title and description
                 subject = f"{event_name} - {hebrew_name}"
@@ -475,6 +492,9 @@ class CalendarService:
                     logger.error(f"Error syncing deadline {field_name} for event {event_id}: {deadline_error}")
                     failed_count += 1
 
+            if processed_count == 0:
+                # No deadlines configured for this event – treat as successful no-op
+                return True, "No deadlines to sync"
             if synced_count > 0 and failed_count == 0:
                 return True, f"Successfully synced {synced_count} deadlines"
             elif synced_count > 0:
