@@ -40,5 +40,5 @@ fi
 echo ""
 echo "🌟 Step 3: Starting application server..."
 echo "==========================================="
-exec gunicorn --bind 0.0.0.0:$PORT app:app
+exec gunicorn --bind 0.0.0.0:$PORT --timeout 300 app:app
 
