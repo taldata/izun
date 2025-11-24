@@ -51,6 +51,11 @@
                                                 data-bs-toggle="modal" data-bs-target="#editHativaModal">
                                             <i class="bi bi-pencil me-1"></i>ערוך
                                         </button>
+                                        <button class="btn btn-sm btn-outline-warning me-1" 
+                                                onclick="manageDayConstraints({{ hativa.hativa_id }}, '{{ hativa.name }}', {{ hativa.get('allowed_days', [])|tojson }})"
+                                                data-bs-toggle="modal" data-bs-target="#dayConstraintsModal">
+                                            <i class="bi bi-calendar-week me-1"></i>אילוצי ימים
+                                        </button>
                                         <a href="{{ url_for('maslulim') }}?hativa_id={{ hativa.hativa_id }}" 
                                            class="btn btn-sm btn-outline-info">
                                             <i class="bi bi-arrow-right-circle me-1"></i>מסלולים
@@ -159,12 +164,94 @@
     </div>
 </div>
 
+<!-- Day Constraints Modal -->
+<div class="modal fade" id="dayConstraintsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-calendar-week me-2"></i>ניהול אילוצי ימים
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('set_hativa_day_constraints') }}" id="dayConstraintsForm">
+                <input type="hidden" id="constraints_hativa_id" name="hativa_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">חטיבה: <strong id="constraints_hativa_name"></strong></label>
+                        <p class="text-muted small">בחר את הימים בשבוע שבהם החטיבה יכולה לקבוע ועדות</p>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="allowed_days" value="6" id="day_sunday">
+                            <label class="form-check-label" for="day_sunday">יום ראשון</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="allowed_days" value="0" id="day_monday">
+                            <label class="form-check-label" for="day_monday">יום שני</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="allowed_days" value="1" id="day_tuesday">
+                            <label class="form-check-label" for="day_tuesday">יום שלישי</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="allowed_days" value="2" id="day_wednesday">
+                            <label class="form-check-label" for="day_wednesday">יום רביעי</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="allowed_days" value="3" id="day_thursday">
+                            <label class="form-check-label" for="day_thursday">יום חמישי</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="allowed_days" value="4" id="day_friday">
+                            <label class="form-check-label" for="day_friday">יום שישי</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="allowed_days" value="5" id="day_saturday">
+                            <label class="form-check-label" for="day_saturday">שבת</label>
+                        </div>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>הערה:</strong> אם לא נבחרו ימים, החטיבה תוכל לקבוע ועדות בכל יום (ללא הגבלה).
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>שמור אילוצים
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 function editHativa(hativaId, name, description, color) {
     document.getElementById('edit_hativa_id').value = hativaId;
     document.getElementById('edit_name').value = name;
     document.getElementById('edit_description').value = description;
     document.getElementById('edit_color').value = color;
+}
+
+function manageDayConstraints(hativaId, hativaName, allowedDays) {
+    document.getElementById('constraints_hativa_id').value = hativaId;
+    document.getElementById('constraints_hativa_name').textContent = hativaName;
+    
+    // Reset all checkboxes
+    const checkboxes = document.querySelectorAll('#dayConstraintsModal input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    
+    // Set checked for allowed days
+    if (allowedDays && allowedDays.length > 0) {
+        allowedDays.forEach(day => {
+            const checkbox = document.getElementById(`day_${['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'][day]}`);
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+        });
+    }
 }
 </script>
 {% endblock %}

@@ -3466,6 +3466,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     return false;
                 }
             }
+            
+            // Validate date is allowed for selected division
+            if (hativaSelect && hativaSelect.value && dateInput && dateInput.value) {
+                const selectedHativaId = hativaSelect.value;
+                const selectedDate = new Date(dateInput.value);
+                const dayOfWeek = selectedDate.getDay(); // JavaScript: 0=Sunday, 6=Saturday
+                // Convert to Python weekday format (0=Monday, 6=Sunday)
+                const pythonWeekday = (dayOfWeek + 6) % 7;
+                
+                // Get allowed days from hativa data (if available)
+                const hativaData = hativotData.find(h => h.hativa_id == selectedHativaId);
+                if (hativaData && hativaData.allowed_days && hativaData.allowed_days.length > 0) {
+                    if (!hativaData.allowed_days.includes(pythonWeekday)) {
+                        const dayNames = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון'];
+                        const dayName = dayNames[pythonWeekday];
+                        const allowedDayNames = hativaData.allowed_days.map(d => dayNames[d]).join(', ');
+                        e.preventDefault();
+                        alert(`שגיאה: התאריך שנבחר (${dayName}) אינו יום מותר לקביעת ועדות עבור חטיבה זו.\nהימים המותרים: ${allowedDayNames}`);
+                        return false;
+                    }
+                }
+            }
         });
     }
 
@@ -3561,6 +3583,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Validate committee type belongs to selected division
             const committeeTypeSelect = document.getElementById('edit_committee_type_id');
             const hativaSelect = document.getElementById('edit_hativa_id');
+            const dateInput = document.getElementById('edit_vaada_date');
 
             if (committeeTypeSelect && hativaSelect) {
                 const selectedOption = committeeTypeSelect.options[committeeTypeSelect.selectedIndex];
@@ -3571,6 +3594,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     e.preventDefault();
                     alert('שגיאה: סוג הועדה שנבחר אינו שייך לחטיבה שנבחרה. אנא בחר סוג ועדה מתאים או שנה את החטיבה.');
                     return false;
+                }
+            }
+            
+            // Validate date is allowed for selected division
+            if (hativaSelect && hativaSelect.value && dateInput && dateInput.value) {
+                const selectedHativaId = hativaSelect.value;
+                const selectedDate = new Date(dateInput.value);
+                const dayOfWeek = selectedDate.getDay(); // JavaScript: 0=Sunday, 6=Saturday
+                // Convert to Python weekday format (0=Monday, 6=Sunday)
+                const pythonWeekday = (dayOfWeek + 6) % 7;
+                
+                // Get allowed days from hativa data (if available)
+                const hativaData = hativotData.find(h => h.hativa_id == selectedHativaId);
+                if (hativaData && hativaData.allowed_days && hativaData.allowed_days.length > 0) {
+                    if (!hativaData.allowed_days.includes(pythonWeekday)) {
+                        const dayNames = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון'];
+                        const dayName = dayNames[pythonWeekday];
+                        const allowedDayNames = hativaData.allowed_days.map(d => dayNames[d]).join(', ');
+                        e.preventDefault();
+                        alert(`שגיאה: התאריך שנבחר (${dayName}) אינו יום מותר לקביעת ועדות עבור חטיבה זו.\nהימים המותרים: ${allowedDayNames}`);
+                        return false;
+                    }
                 }
             }
         });
