@@ -150,6 +150,24 @@ class DatabaseManager:
             )
         ''')
         
+        # Create hativa_day_constraints table for division day constraints
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS hativa_day_constraints (
+                constraint_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hativa_id INTEGER NOT NULL,
+                day_of_week INTEGER NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id) ON DELETE CASCADE,
+                UNIQUE(hativa_id, day_of_week)
+            )
+        ''')
+        
+        # Create index for faster queries
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_hativa_day_constraints_hativa 
+            ON hativa_day_constraints (hativa_id)
+        ''')
+        
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS system_settings (
                 setting_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -447,8 +465,68 @@ class DatabaseManager:
         rows = cursor.fetchall()
         conn.close()
         
-        return [{'hativa_id': row[0], 'name': row[1], 'description': row[2], 'color': row[3], 
+        hativot = [{'hativa_id': row[0], 'name': row[1], 'description': row[2], 'color': row[3], 
                 'is_active': row[4], 'created_at': row[5]} for row in rows]
+        
+        # Add allowed days for each division
+        for hativa in hativot:
+            hativa['allowed_days'] = self.get_hativa_allowed_days(hativa['hativa_id'])
+        
+        return hativot
+    
+    def get_hativa_allowed_days(self, hativa_id: int) -> List[int]:
+        """Get allowed days of week for a division"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT day_of_week 
+            FROM hativa_day_constraints 
+            WHERE hativa_id = ?
+            ORDER BY day_of_week
+        ''', (hativa_id,))
+        rows = cursor.fetchall()
+        conn.close()
+        return [row[0] for row in rows]
+    
+    def set_hativa_allowed_days(self, hativa_id: int, allowed_days: List[int]) -> bool:
+        """Set allowed days of week for a division"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Validate days (0-6)
+        for day in allowed_days:
+            if day < 0 or day > 6:
+                conn.close()
+                raise ValueError(f'יום לא תקין: {day}. יש לבחור יום בין 0 (שני) ל-6 (ראשון)')
+        
+        # Delete existing constraints
+        cursor.execute('DELETE FROM hativa_day_constraints WHERE hativa_id = ?', (hativa_id,))
+        
+        # Insert new constraints
+        for day in allowed_days:
+            cursor.execute('''
+                INSERT INTO hativa_day_constraints (hativa_id, day_of_week)
+                VALUES (?, ?)
+            ''', (hativa_id, day))
+        
+        conn.commit()
+        conn.close()
+        return True
+    
+    def is_day_allowed_for_hativa(self, hativa_id: int, date_obj: date) -> bool:
+        """Check if a date is allowed for a division based on day constraints"""
+        # Get allowed days for this division
+        allowed_days = self.get_hativa_allowed_days(hativa_id)
+        
+        # If no constraints set, allow all days (backward compatibility)
+        if not allowed_days:
+            return True
+        
+        # Get day of week (Python weekday: Monday=0, Sunday=6)
+        day_of_week = date_obj.weekday()
+        
+        # Check if this day is allowed
+        return day_of_week in allowed_days
     
     def update_hativa_color(self, hativa_id: int, color: str) -> bool:
         """Update division color"""
@@ -805,6 +883,19 @@ class DatabaseManager:
             else:
                 conn.close()
                 raise ValueError(f'התאריך {vaada_date} אינו יום עסקים חוקי לועדות')
+        
+        # Check if the date is allowed for this division based on day constraints
+        if not self.is_day_allowed_for_hativa(hativa_id, vaada_date):
+            day_names = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון']
+            day_name = day_names[vaada_date.weekday()]
+            allowed_days = self.get_hativa_allowed_days(hativa_id)
+            allowed_day_names = [day_names[d] for d in sorted(allowed_days)]
+            
+            if override_constraints:
+                warning_message += f'\n⚠️ אזהרה: התאריך {vaada_date} ({day_name}) אינו יום מותר לקביעת ועדות עבור חטיבה זו. הימים המותרים: {", ".join(allowed_day_names)}.'
+            else:
+                conn.close()
+                raise ValueError(f'התאריך {vaada_date} ({day_name}) אינו יום מותר לקביעת ועדות עבור חטיבה זו. הימים המותרים: {", ".join(allowed_day_names)}')
         
         try:
             constraint_settings = self.get_constraint_settings()

@@ -1289,6 +1289,40 @@ def update_hativa():
     
     return redirect(url_for('hativot'))
 
+@app.route('/hativot/set_day_constraints', methods=['POST'])
+@editing_permission_required
+def set_hativa_day_constraints():
+    """Set allowed days for a division"""
+    hativa_id = request.form.get('hativa_id')
+    allowed_days = request.form.getlist('allowed_days')
+    
+    if not hativa_id:
+        flash('שגיאה: מזהה חטיבה חסר', 'error')
+        return redirect(url_for('hativot'))
+    
+    try:
+        # Convert string list to integers
+        allowed_days_int = [int(day) for day in allowed_days] if allowed_days else []
+        
+        db.set_hativa_allowed_days(int(hativa_id), allowed_days_int)
+        
+        # Log the action
+        hativa = next((h for h in db.get_hativot() if h['hativa_id'] == int(hativa_id)), None)
+        if hativa:
+            day_names = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון']
+            selected_days = [day_names[int(d)] for d in allowed_days] if allowed_days else []
+            changes = f'עודכנו אילוצי ימים: {", ".join(selected_days) if selected_days else "ללא הגבלה (כל הימים)"}'
+            audit_logger.log_hativa_updated(int(hativa_id), hativa['name'], changes)
+        
+        flash('אילוצי הימים עודכנו בהצלחה', 'success')
+    except ValueError as e:
+        flash(f'שגיאה בעדכון אילוצי הימים: {str(e)}', 'error')
+    except Exception as e:
+        flash(f'שגיאה בעדכון אילוצי הימים: {str(e)}', 'error')
+        app.logger.error(f"Error setting day constraints: {e}", exc_info=True)
+    
+    return redirect(url_for('hativot'))
+
 @app.route('/maslulim')
 def maslulim():
     """Manage routes with enhanced functionality"""
