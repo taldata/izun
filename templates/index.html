@@ -393,22 +393,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 <input type="hidden" name="vaadot_id" id="edit_vaadot_id">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="edit_committee_type_id" class="form-label">סוג ועדה</label>
-                        <select class="form-select" name="committee_type_id" id="edit_committee_type_id" required>
-                            <option value="">בחר סוג ועדה</option>
-                            {% for committee_type in committee_types %}
-                                <option value="{{ committee_type.committee_type_id }}" data-hativa-id="{{ committee_type.hativa_id }}">{{ committee_type.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit_hativa_id" class="form-label">חטיבה</label>
+                        <label for="edit_hativa_id" class="form-label">חטיבה <span class="text-danger">*</span></label>
                         <select class="form-select" name="hativa_id" id="edit_hativa_id" required>
                             <option value="">בחר חטיבה</option>
                             {% for hativa in hativot %}
                                 <option value="{{ hativa.hativa_id }}">{{ hativa.name }}</option>
                             {% endfor %}
                         </select>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            בחר חטיבה תחילה כדי לראות סוגי ועדות זמינים
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_committee_type_id" class="form-label">סוג ועדה <span class="text-danger">*</span></label>
+                        <select class="form-select" name="committee_type_id" id="edit_committee_type_id" required disabled>
+                            <option value="">בחר סוג ועדה</option>
+                            {% for committee_type in committee_types %}
+                                <option value="{{ committee_type.committee_type_id }}" data-hativa-id="{{ committee_type.hativa_id }}">{{ committee_type.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            בחר חטיבה תחילה כדי לראות סוגי ועדות זמינים
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="edit_vaada_date" class="form-label">תאריך הישיבה</label>
@@ -1710,39 +1718,42 @@ function darkenColor(color, amount) {
 // Edit functions
 function editCommittee(committee) {
     document.getElementById('edit_vaadot_id').value = committee.vaadot_id;
-    document.getElementById('edit_hativa_id').value = committee.hativa_id;
-
-    // Filter committee types by selected division before setting the value
+    
+    // Set division first
+    const editHativaSelect = document.getElementById('edit_hativa_id');
     const editCommitteeTypeSelect = document.getElementById('edit_committee_type_id');
     const selectedHativaId = committee.hativa_id;
-
-    if (editCommitteeTypeSelect) {
-        const committeeTypeOptions = editCommitteeTypeSelect.querySelectorAll('option');
-        committeeTypeOptions.forEach(option => {
-            if (option.value === '') {
-                option.style.display = '';
-                option.disabled = false;
-            } else {
-                const optionHativaId = option.getAttribute('data-hativa-id');
-                if (optionHativaId === String(selectedHativaId)) {
-                    option.style.display = '';
-                    option.disabled = false;
-                } else {
-                    option.style.display = 'none';
-                    option.disabled = true;
-                }
-            }
-        });
+    
+    if (editHativaSelect) {
+        editHativaSelect.value = selectedHativaId;
+        // Trigger change event to filter committee types
+        const changeEvent = new Event('change');
+        editHativaSelect.dispatchEvent(changeEvent);
     }
 
-    document.getElementById('edit_committee_type_id').value = committee.committee_type_id;
+    // Set committee type after filtering (with small delay to ensure filtering is complete)
+    setTimeout(() => {
+        if (editCommitteeTypeSelect) {
+            editCommitteeTypeSelect.value = committee.committee_type_id;
+        }
+    }, 0);
+    
     document.getElementById('edit_vaada_date').value = committee.vaada_date;
     document.getElementById('edit_notes').value = committee.notes || '';
 
     // Set form action with the committee ID
     document.getElementById('editCommitteeForm').action = '/committees/edit/' + committee.vaadot_id;
 
-    const modal = new bootstrap.Modal(document.getElementById('editCommitteeModal'));
+    const modalEl = document.getElementById('editCommitteeModal');
+    const modal = new bootstrap.Modal(modalEl);
+    
+    // Focus on division field when modal is shown
+    modalEl.addEventListener('shown.bs.modal', function () {
+        if (editHativaSelect) {
+            editHativaSelect.focus();
+        }
+    }, { once: true });
+    
     modal.show();
 }
 
@@ -3548,29 +3559,40 @@ document.addEventListener('DOMContentLoaded', function() {
             const selectedHativaId = this.value;
             const committeeTypeOptions = editCommitteeTypeSelect.querySelectorAll('option');
 
-            committeeTypeOptions.forEach(option => {
-                if (option.value === '') {
-                    // Keep the placeholder option
-                    option.style.display = '';
-                    option.disabled = false;
-                } else {
-                    const optionHativaId = option.getAttribute('data-hativa-id');
-                    if (!selectedHativaId || optionHativaId === selectedHativaId) {
+            if (!selectedHativaId) {
+                // If no division selected, disable committee type select
+                editCommitteeTypeSelect.disabled = true;
+                editCommitteeTypeSelect.value = '';
+                committeeTypeOptions.forEach(option => {
+                    if (option.value) option.style.display = 'none';
+                });
+            } else {
+                // Enable committee type select and filter options
+                editCommitteeTypeSelect.disabled = false;
+                committeeTypeOptions.forEach(option => {
+                    if (option.value === '') {
+                        // Keep the placeholder option
                         option.style.display = '';
                         option.disabled = false;
                     } else {
-                        option.style.display = 'none';
-                        option.disabled = true;
+                        const optionHativaId = option.getAttribute('data-hativa-id');
+                        if (optionHativaId === selectedHativaId) {
+                            option.style.display = '';
+                            option.disabled = false;
+                        } else {
+                            option.style.display = 'none';
+                            option.disabled = true;
+                        }
                     }
-                }
-            });
+                });
 
-            // Reset committee type selection if current selection is no longer valid
-            const currentSelection = editCommitteeTypeSelect.options[editCommitteeTypeSelect.selectedIndex];
-            if (currentSelection && currentSelection.value !== '') {
-                const currentHativaId = currentSelection.getAttribute('data-hativa-id');
-                if (selectedHativaId && currentHativaId !== selectedHativaId) {
-                    editCommitteeTypeSelect.value = '';
+                // Reset committee type selection if current selection is no longer valid
+                const currentSelection = editCommitteeTypeSelect.options[editCommitteeTypeSelect.selectedIndex];
+                if (currentSelection && currentSelection.value !== '') {
+                    const currentHativaId = currentSelection.getAttribute('data-hativa-id');
+                    if (currentHativaId !== selectedHativaId) {
+                        editCommitteeTypeSelect.value = '';
+                    }
                 }
             }
         });
