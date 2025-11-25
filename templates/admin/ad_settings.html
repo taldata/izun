@@ -339,6 +339,37 @@
         </div>
     </form>
 
+    <!-- Calendar Sync Section -->
+    <div class="card settings-card">
+        <div class="card-header">
+            <i class="bi bi-calendar-event me-2"></i>
+            סנכרון יומן Azure AD
+        </div>
+        <div class="card-body form-section">
+            <div class="info-box">
+                <i class="bi bi-info-circle me-2"></i>
+                ניהול סנכרון אירועים ליומן המשותף ב-Microsoft 365
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <button type="button" class="btn btn-danger btn-lg w-100" onclick="deleteAllCalendarEvents()">
+                        <i class="bi bi-trash3 me-2"></i>מחק את כל אירועי היומן
+                    </button>
+                    <small class="text-muted d-block mt-2">מוחק את כל האירועים שנוצרו על ידי המערכת מהיומן (ללא סנכרון מחדש)</small>
+                </div>
+                <div class="col-md-6">
+                    <button type="button" class="btn btn-warning btn-lg w-100" onclick="resetCalendarSync()">
+                        <i class="bi bi-arrow-repeat me-2"></i>איפוס וסנכרון מחדש
+                    </button>
+                    <small class="text-muted d-block mt-2">מוחק את כל האירועים ומסנכרן מחדש את כל הועדות והאירועים</small>
+                </div>
+            </div>
+            
+            <div id="calendarSyncResult" class="alert d-none mt-3"></div>
+        </div>
+    </div>
+
     <!-- Help Section -->
     <div class="card settings-card">
         <div class="card-header">
@@ -416,6 +447,72 @@ function copyRedirectUri() {
         }, 2000);
     }).catch(err => {
         alert('שגיאה בהעתקה: ' + err);
+    });
+}
+
+// Delete all calendar events
+function deleteAllCalendarEvents() {
+    if (!confirm('האם אתה בטוח שברצונך למחוק את כל אירועי היומן?\nפעולה זו אינה ניתנת לביטול.')) {
+        return;
+    }
+    
+    const resultDiv = document.getElementById('calendarSyncResult');
+    resultDiv.className = 'alert alert-info mt-3';
+    resultDiv.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>מוחק אירועים... אנא המתן...';
+    resultDiv.classList.remove('d-none');
+    
+    fetch('/api/calendar/delete_all', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultDiv.className = 'alert alert-success mt-3';
+            resultDiv.innerHTML = `<i class="bi bi-check-circle me-2"></i>${data.message}`;
+        } else {
+            resultDiv.className = 'alert alert-danger mt-3';
+            resultDiv.innerHTML = `<i class="bi bi-x-circle me-2"></i>${data.message}`;
+        }
+    })
+    .catch(error => {
+        resultDiv.className = 'alert alert-danger mt-3';
+        resultDiv.innerHTML = `<i class="bi bi-x-circle me-2"></i>שגיאה: ${error}`;
+    });
+}
+
+// Reset calendar sync (delete all and re-sync)
+function resetCalendarSync() {
+    if (!confirm('האם אתה בטוח שברצונך לאפס את סנכרון היומן?\nכל האירועים יימחקו ויסונכרנו מחדש.')) {
+        return;
+    }
+    
+    const resultDiv = document.getElementById('calendarSyncResult');
+    resultDiv.className = 'alert alert-info mt-3';
+    resultDiv.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>מאפס ומסנכרן... אנא המתן (עשוי לקחת מספר דקות)...';
+    resultDiv.classList.remove('d-none');
+    
+    fetch('/api/calendar/sync/reset', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultDiv.className = 'alert alert-success mt-3';
+            resultDiv.innerHTML = `<i class="bi bi-check-circle me-2"></i>${data.message}`;
+        } else {
+            resultDiv.className = 'alert alert-danger mt-3';
+            resultDiv.innerHTML = `<i class="bi bi-x-circle me-2"></i>${data.message}`;
+        }
+    })
+    .catch(error => {
+        resultDiv.className = 'alert alert-danger mt-3';
+        resultDiv.innerHTML = `<i class="bi bi-x-circle me-2"></i>שגיאה: ${error}`;
     });
 }
 
