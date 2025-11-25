@@ -1102,33 +1102,50 @@ def index():
 
 @app.route('/dashboard')
 @login_required
+@admin_required
 def dashboard():
-    """Analytics Dashboard"""
-    from datetime import datetime, timedelta
+    """Admin analytics dashboard"""
     from collections import defaultdict
-    
-    # Get all data
+
+    # Date range parameters (default last 12 months)
+    today = date.today()
+    default_end = today.replace(day=1) + timedelta(days=32)
+    default_end = default_end.replace(day=1) - timedelta(days=1)
+    default_start = (today.replace(day=1) - timedelta(days=365))
+
+    start_str = request.args.get('start_date')
+    end_str = request.args.get('end_date')
+
+    try:
+        start_date = datetime.strptime(start_str, '%Y-%m-%d').date() if start_str else default_start
+    except ValueError:
+        start_date = default_start
+
+    try:
+        end_date = datetime.strptime(end_str, '%Y-%m-%d').date() if end_str else default_end
+    except ValueError:
+        end_date = default_end
+
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    # Fetch data
     hativot = db.get_hativot()
     maslulim = db.get_maslulim()
     committee_types = db.get_committee_types()
     committees = db.get_vaadot()
     events = db.get_all_events()
-    
-    # Current date
-    today = date.today()
-    current_month = today.month
-    current_year = today.year
-    
-    # === Statistics by Division ===
+
+    # Stats by division
     stats_by_hativa = {}
     for hativa in hativot:
         hativa_id = hativa['hativa_id']
         hativa_events = [e for e in events if e.get('hativa_id') == hativa_id]
         hativa_committees = [c for c in committees if c.get('hativa_id') == hativa_id]
-        
+
         total_expected = sum([e.get('expected_requests', 0) or 0 for e in hativa_events])
         total_actual = sum([e.get('actual_submissions', 0) or 0 for e in hativa_events])
-        
+
         stats_by_hativa[hativa_id] = {
             'name': hativa['name'],
             'color': hativa.get('color', '#007bff'),
@@ -1138,56 +1155,51 @@ def dashboard():
             'actual_submissions': total_actual,
             'fulfillment_rate': round((total_actual / total_expected * 100) if total_expected > 0 else 0, 1)
         }
-    
-    # === Events by Type ===
+
+    # Events by type
     events_by_type = defaultdict(int)
     for event in events:
         event_type = event.get('event_type', 'אחר')
         events_by_type[event_type] += 1
-    
-    # === Monthly Trend (last 6 months) ===
-    monthly_data = {}
-    for i in range(6):
-        month_date = today - timedelta(days=30 * i)
-        month_key = f"{month_date.year}-{month_date.month:02d}"
-        monthly_data[month_key] = {
-            'committees': 0,
-            'events': 0,
-            'expected_requests': 0,
-            'actual_submissions': 0
+
+    # Aggregated analytics within date range
+    committees_by_month = db.get_committees_count_by_month_and_hativa(start_date, end_date)
+    requests_by_maslul = db.get_requests_by_maslul_per_month(start_date, end_date)
+    expected_by_submission = db.get_expected_requests_by_submission_month(start_date, end_date)
+
+    # Prepare chart-friendly structures
+    committees_chart = defaultdict(dict)
+    for entry in committees_by_month:
+        committees_chart[entry['month']][entry['hativa_name']] = {
+            'count': entry['total_committees'],
+            'color': entry.get('hativa_color') or '#007bff'
         }
-    
-    for committee in committees:
-        if committee.get('vaada_date'):
-            try:
-                if isinstance(committee['vaada_date'], str):
-                    vaada_date = datetime.strptime(committee['vaada_date'], '%Y-%m-%d').date()
-                else:
-                    vaada_date = committee['vaada_date']
-                
-                month_key = f"{vaada_date.year}-{vaada_date.month:02d}"
-                if month_key in monthly_data:
-                    monthly_data[month_key]['committees'] += 1
-            except:
-                pass
-    
-    for event in events:
-        if event.get('committee_date'):
-            try:
-                if isinstance(event['committee_date'], str):
-                    event_date = datetime.strptime(event['committee_date'], '%Y-%m-%d').date()
-                else:
-                    event_date = event['committee_date']
-                
-                month_key = f"{event_date.year}-{event_date.month:02d}"
-                if month_key in monthly_data:
-                    monthly_data[month_key]['events'] += 1
-                    monthly_data[month_key]['expected_requests'] += event.get('expected_requests', 0) or 0
-                    monthly_data[month_key]['actual_submissions'] += event.get('actual_submissions', 0) or 0
-            except:
-                pass
-    
-    # === Top Routes by Events ===
+
+    maslul_chart = defaultdict(dict)
+    for entry in requests_by_maslul:
+        maslul_chart[entry['month']][entry['maslul_name']] = {
+            'expected': entry['expected_requests'],
+            'actual': entry['actual_submissions'],
+            'hativa_name': entry['hativa_name']
+        }
+
+    expected_submission_chart = {entry['month']: entry['expected_requests'] for entry in expected_by_submission}
+
+    committees_chart_dict = {month: data for month, data in committees_chart.items()}
+    maslul_chart_dict = {month: data for month, data in maslul_chart.items()}
+
+    maslul_totals = defaultdict(int)
+    for month_data in maslul_chart_dict.values():
+        for maslul_name, stats in month_data.items():
+            maslul_totals[maslul_name] += stats['expected']
+
+    top_maslul_names = [name for name, _ in sorted(maslul_totals.items(), key=lambda x: x[1], reverse=True)[:5]]
+    maslul_chart_top = {
+        month: {maslul: stats for maslul, stats in month_data.items() if maslul in top_maslul_names}
+        for month, month_data in maslul_chart_dict.items()
+    }
+
+    # Top maslulim ranking
     maslul_stats = defaultdict(lambda: {'count': 0, 'expected': 0, 'actual': 0})
     for event in events:
         maslul_id = event.get('maslul_id')
@@ -1195,8 +1207,7 @@ def dashboard():
             maslul_stats[maslul_id]['count'] += 1
             maslul_stats[maslul_id]['expected'] += event.get('expected_requests', 0) or 0
             maslul_stats[maslul_id]['actual'] += event.get('actual_submissions', 0) or 0
-    
-    # Add maslul names
+
     maslul_rankings = []
     for maslul in maslulim:
         maslul_id = maslul['maslul_id']
@@ -1210,33 +1221,29 @@ def dashboard():
                 'actual_submissions': stats['actual'],
                 'fulfillment_rate': round((stats['actual'] / stats['expected'] * 100) if stats['expected'] > 0 else 0, 1)
             })
-    
+
     maslul_rankings.sort(key=lambda x: x['events_count'], reverse=True)
     top_maslulim = maslul_rankings[:10]
-    
-    # === Upcoming Events (next 30 days) ===
+
+    # Upcoming events (30 days)
     upcoming_events = []
     future_date = today + timedelta(days=30)
     for event in events:
         if event.get('vaada_date'):
             try:
-                if isinstance(event['vaada_date'], str):
-                    event_date = datetime.strptime(event['vaada_date'], '%Y-%m-%d').date()
-                else:
-                    event_date = event['vaada_date']
-                
+                event_date = datetime.strptime(event['vaada_date'], '%Y-%m-%d').date() if isinstance(event['vaada_date'], str) else event['vaada_date']
                 if today <= event_date <= future_date:
                     upcoming_events.append(event)
-            except:
-                pass
-    
+            except Exception:
+                continue
+
     upcoming_events.sort(key=lambda x: x.get('vaada_date', ''))
-    
-    # === Overall Statistics ===
+
+    # Overall statistics
     total_expected = sum([e.get('expected_requests', 0) or 0 for e in events])
     total_actual = sum([e.get('actual_submissions', 0) or 0 for e in events])
     overall_fulfillment = round((total_actual / total_expected * 100) if total_expected > 0 else 0, 1)
-    
+
     stats = {
         'total_hativot': len(hativot),
         'total_maslulim': len(maslulim),
@@ -1249,17 +1256,23 @@ def dashboard():
         'kokok_count': events_by_type.get('kokok', 0),
         'shotef_count': events_by_type.get('shotef', 0)
     }
-    
+
     current_user = auth_manager.get_current_user()
-    
-    return render_template('dashboard.html',
-                         stats=stats,
-                         stats_by_hativa=stats_by_hativa,
-                         events_by_type=dict(events_by_type),
-                         monthly_data=monthly_data,
-                         top_maslulim=top_maslulim,
-                         upcoming_events=upcoming_events[:10],
-                         current_user=current_user)
+
+    return render_template(
+        'dashboard.html',
+        stats=stats,
+        stats_by_hativa=stats_by_hativa,
+        events_by_type=dict(events_by_type),
+        committees_chart=committees_chart_dict,
+        maslul_chart=maslul_chart_top,
+        expected_submission_chart=expected_submission_chart,
+        top_maslulim=top_maslulim,
+        upcoming_events=upcoming_events[:10],
+        current_user=current_user,
+        start_date=start_date,
+        end_date=end_date
+    )
 
 @app.route('/hativot')
 @login_required
