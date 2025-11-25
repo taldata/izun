@@ -1528,7 +1528,32 @@ def delete_maslul(maslul_id):
         maslul_events = [e for e in events if e['maslul_id'] == maslul_id]
         
         if maslul_events:
-            flash(f'לא ניתן למחוק מסלול המשויך ל-{len(maslul_events)} אירועים. יש למחוק תחילה את האירועים הקשורים.', 'error')
+            # Create examples list (up to 5 events) with dates
+            examples = maslul_events[:5]
+            examples_list = []
+            for e in examples:
+                event_name = e.get('name', 'ללא שם')
+                event_date = e.get('vaada_date')
+                if event_date:
+                    # Format date as DD/MM/YYYY
+                    if isinstance(event_date, str):
+                        try:
+                            from datetime import datetime
+                            date_obj = datetime.strptime(event_date, '%Y-%m-%d').date()
+                            formatted_date = date_obj.strftime('%d/%m/%Y')
+                        except:
+                            formatted_date = event_date
+                    else:
+                        formatted_date = event_date.strftime('%d/%m/%Y') if hasattr(event_date, 'strftime') else str(event_date)
+                    examples_list.append(f'"{event_name}" (תאריך: {formatted_date})')
+                else:
+                    examples_list.append(f'"{event_name}" (ללא תאריך)')
+            
+            examples_text = ', '.join(examples_list)
+            if len(maslul_events) > 5:
+                examples_text += f' ועוד {len(maslul_events) - 5} אירועים'
+            
+            flash(f'לא ניתן למחוק מסלול המשויך ל-{len(maslul_events)} אירועים. יש למחוק תחילה את האירועים הקשורים. דוגמאות לאירועים: {examples_text}.', 'error')
             return redirect(url_for('maslulim'))
         
         # Get maslul name before deletion
