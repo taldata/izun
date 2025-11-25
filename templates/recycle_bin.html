@@ -84,7 +84,7 @@
                             <td>{{ vaada.deleted_by_name or 'לא ידוע' }}</td>
                             <td>{{ vaada.deleted_at }}</td>
                             <td>
-                                {% if current_user.role != 'user' %}
+                                {% if current_user.role != 'viewer' %}
                                 <button class="btn btn-sm btn-success me-2"
                                         onclick="restoreVaada({{ vaada.vaadot_id }})"
                                         title="שחזר ועדה">
@@ -154,7 +154,7 @@
                             <td>{{ event.deleted_by_name or 'לא ידוע' }}</td>
                             <td>{{ event.deleted_at }}</td>
                             <td>
-                                {% if current_user.role != 'user' %}
+                                {% if current_user.role != 'viewer' %}
                                 <button class="btn btn-sm btn-success me-2"
                                         onclick="restoreEvent({{ event.event_id }})"
                                         title="שחזר אירוע">

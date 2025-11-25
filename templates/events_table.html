@@ -1588,6 +1588,68 @@ function exportToPDF() {
     }
 }
 
+function getActiveFilters() {
+    const filters = [];
+    
+    const hativaFilter = document.getElementById('filterHativa');
+    if (hativaFilter && hativaFilter.value) {
+        const hativaName = hativaFilter.options[hativaFilter.selectedIndex].text;
+        filters.push(`חטיבה: ${hativaName}`);
+    }
+    
+    const maslulFilter = document.getElementById('filterMaslul');
+    if (maslulFilter && maslulFilter.value) {
+        const maslulName = maslulFilter.options[maslulFilter.selectedIndex].text;
+        filters.push(`מסלול: ${maslulName}`);
+    }
+    
+    const committeeTypeFilter = document.getElementById('filterCommitteeType');
+    if (committeeTypeFilter && committeeTypeFilter.value) {
+        const committeeTypeName = committeeTypeFilter.options[committeeTypeFilter.selectedIndex].text;
+        filters.push(`סוג ועדה: ${committeeTypeName}`);
+    }
+    
+    const eventTypeFilter = document.getElementById('filterEventType');
+    if (eventTypeFilter && eventTypeFilter.value) {
+        const eventTypeName = eventTypeFilter.options[eventTypeFilter.selectedIndex].text;
+        filters.push(`סוג אירוע: ${eventTypeName}`);
+    }
+    
+    const dateFromFilter = document.getElementById('filterDateFrom');
+    const dateToFilter = document.getElementById('filterDateTo');
+    if (dateFromFilter && dateFromFilter.value) {
+        const dateFrom = new Date(dateFromFilter.value).toLocaleDateString('he-IL');
+        if (dateToFilter && dateToFilter.value) {
+            const dateTo = new Date(dateToFilter.value).toLocaleDateString('he-IL');
+            filters.push(`תאריך: ${dateFrom} - ${dateTo}`);
+        } else {
+            filters.push(`תאריך מ-: ${dateFrom}`);
+        }
+    } else if (dateToFilter && dateToFilter.value) {
+        const dateTo = new Date(dateToFilter.value).toLocaleDateString('he-IL');
+        filters.push(`תאריך עד: ${dateTo}`);
+    }
+    
+    const textFilter = document.getElementById('filterText');
+    if (textFilter && textFilter.value.trim()) {
+        filters.push(`חיפוש: ${textFilter.value.trim()}`);
+    }
+    
+    const minRequestsFilter = document.getElementById('filterMinRequests');
+    const maxRequestsFilter = document.getElementById('filterMaxRequests');
+    if (minRequestsFilter && minRequestsFilter.value) {
+        if (maxRequestsFilter && maxRequestsFilter.value) {
+            filters.push(`בקשות: ${minRequestsFilter.value} - ${maxRequestsFilter.value}`);
+        } else {
+            filters.push(`בקשות מ-: ${minRequestsFilter.value}`);
+        }
+    } else if (maxRequestsFilter && maxRequestsFilter.value) {
+        filters.push(`בקשות עד: ${maxRequestsFilter.value}`);
+    }
+    
+    return filters;
+}
+
 function exportEventsViewToPDF() {
     const table = document.getElementById('eventsTable');
     const headerCells = Array.from(table.querySelectorAll('thead th'))
@@ -1603,6 +1665,12 @@ function exportEventsViewToPDF() {
         return;
     }
     const today = new Date().toLocaleDateString('he-IL');
+    const activeFilters = getActiveFilters();
+    const filtersHtml = activeFilters.length > 0 ? `
+    <div class="meta" style="margin-bottom: 8px;">
+        <strong>פילטרים פעילים:</strong> ${activeFilters.join(' • ')}
+    </div>` : '';
+    
     const html = `
 <!doctype html>
 <html lang="he" dir="rtl">
@@ -1625,6 +1693,7 @@ function exportEventsViewToPDF() {
 <body>
     <h1>טבלת אירועים</h1>
     <div class="meta">תאריך ייצוא: ${today}</div>
+    ${filtersHtml}
     <table>
         <thead>
             <tr>${headerCells.map(h => `<th>${h}</th>`).join('')}</tr>
@@ -1644,12 +1713,14 @@ function exportEventsViewToPDF() {
 function exportCommitteeViewToPDF() {
     const table = document.getElementById('committeeTable');
     const headerCells = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
-    const rows = Array.from(document.querySelectorAll('#committeeTableBody tr.committee-row')).map(row => {
-        const tds = Array.from(row.querySelectorAll('td'));
-        // skip checkbox and expand button columns (first two)
-        const textCols = tds.slice(2).map(td => td.textContent.trim().replace(/\s+/g, ' '));
-        return textCols;
-    });
+    const rows = Array.from(document.querySelectorAll('#committeeTableBody tr.committee-row'))
+        .filter(row => row.style.display !== 'none')
+        .map(row => {
+            const tds = Array.from(row.querySelectorAll('td'));
+            // skip checkbox and expand button columns (first two)
+            const textCols = tds.slice(2).map(td => td.textContent.trim().replace(/\s+/g, ' '));
+            return textCols;
+        });
 
     const win = window.open('', '_blank');
     if (!win) {
@@ -1657,6 +1728,12 @@ function exportCommitteeViewToPDF() {
         return;
     }
     const today = new Date().toLocaleDateString('he-IL');
+    const activeFilters = getActiveFilters();
+    const filtersHtml = activeFilters.length > 0 ? `
+    <div class="meta" style="margin-bottom: 8px;">
+        <strong>פילטרים פעילים:</strong> ${activeFilters.join(' • ')}
+    </div>` : '';
+    
     const html = `
 <!doctype html>
 <html lang="he" dir="rtl">
@@ -1679,6 +1756,7 @@ function exportCommitteeViewToPDF() {
 <body>
     <h1>טבלת ועדות</h1>
     <div class="meta">תאריך ייצוא: ${today}</div>
+    ${filtersHtml}
     <table>
         <thead>
             <tr>${headerCells.slice(2).map(h => `<th>${h}</th>`).join('')}</tr>
@@ -1700,6 +1778,16 @@ function exportEventsViewToExcel() {
 
     // Create worksheet data
     const wsData = [];
+    
+    // Add metadata rows with filters
+    const activeFilters = getActiveFilters();
+    if (activeFilters.length > 0) {
+        wsData.push(['פילטרים פעילים:']);
+        activeFilters.forEach(filter => {
+            wsData.push([filter]);
+        });
+        wsData.push([]); // Empty row
+    }
     
     // Add headers
     wsData.push([
@@ -1777,11 +1865,15 @@ function exportEventsViewToExcel() {
     ];
 
     // Apply formats for date and number columns
-    // Header is row 1. Data starts at row 2. Columns are 1-based in Excel.
-    const dateCols = [6, 7, 8, 9, 10, 11, 13]; // indices of date-like columns
-    const numCols = [5, 12]; // indices of numeric columns
+    // Find the header row (first row with headers)
+    const activeFilters = getActiveFilters();
+    const filterRowsCount = activeFilters.length > 0 ? activeFilters.length + 2 : 0; // +1 for "פילטרים פעילים:" row, +1 for empty row
+    const dataStartRow = filterRowsCount + 1; // +1 for header row
+    
+    const dateCols = [6, 7, 8, 9, 10, 11, 13]; // indices of date-like columns (1-based)
+    const numCols = [5, 12]; // indices of numeric columns (1-based)
     const range = XLSX.utils.decode_range(ws['!ref']);
-    for (let R = range.s.r + 1; R <= range.e.r; R++) { // skip header
+    for (let R = dataStartRow; R <= range.e.r; R++) { // skip header and filter rows
         dateCols.forEach(C1 => {
             const C = C1 - 1;
             const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
@@ -1822,6 +1914,16 @@ async function exportCommitteeViewToExcel() {
 
         // Create worksheet data
         const wsData = [];
+        
+        // Add metadata rows with filters
+        const activeFilters = getActiveFilters();
+        if (activeFilters.length > 0) {
+            wsData.push(['פילטרים פעילים:']);
+            activeFilters.forEach(filter => {
+                wsData.push([filter]);
+            });
+            wsData.push([]); // Empty row
+        }
         
         // Add headers
         wsData.push([

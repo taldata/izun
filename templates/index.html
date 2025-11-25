@@ -3478,8 +3478,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // Validate date is allowed for selected division
-            if (hativaSelect && hativaSelect.value && dateInput && dateInput.value) {
+            // Validate date is allowed for selected division (only for non-admin users)
+            const userRole = '{{ current_user.role }}';
+            const isAdmin = userRole === 'admin';
+            if (!isAdmin && hativaSelect && hativaSelect.value && dateInput && dateInput.value) {
                 const selectedHativaId = hativaSelect.value;
                 const selectedDate = new Date(dateInput.value);
                 const dayOfWeek = selectedDate.getDay(); // JavaScript: 0=Sunday, 6=Saturday
@@ -3619,8 +3621,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // Validate date is allowed for selected division
-            if (hativaSelect && hativaSelect.value && dateInput && dateInput.value) {
+            // Validate date is allowed for selected division (only for non-admin users)
+            const userRole = '{{ current_user.role }}';
+            const isAdmin = userRole === 'admin';
+            if (!isAdmin && hativaSelect && hativaSelect.value && dateInput && dateInput.value) {
                 const selectedHativaId = hativaSelect.value;
                 const selectedDate = new Date(dateInput.value);
                 const dayOfWeek = selectedDate.getDay(); // JavaScript: 0=Sunday, 6=Saturday

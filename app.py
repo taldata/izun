@@ -618,9 +618,9 @@ def bulk_delete_events():
         if not user:
             return jsonify({'success': False, 'message': 'נדרשת התחברות'}), 401
         
-        # Check permissions: Users cannot delete events
-        if user['role'] == 'user':
-            return jsonify({'success': False, 'message': 'משתמשים רגילים לא יכולים למחוק אירועים'}), 403
+        # Check permissions: Viewers cannot delete events
+        if user['role'] == 'viewer':
+            return jsonify({'success': False, 'message': 'צופים לא יכולים למחוק אירועים - נדרשות הרשאות עורך'}), 403
         
         # Pre-fetch names for audit per item (best-effort)
         events_map = {e['event_id']: e for e in db.get_all_events()}
@@ -687,9 +687,9 @@ def bulk_delete_committees():
         if not user:
             return jsonify({'success': False, 'message': 'נדרשת התחברות'}), 401
         
-        # Check permissions: Users cannot delete committees
-        if user['role'] == 'user':
-            return jsonify({'success': False, 'message': 'משתמשים רגילים לא יכולים למחוק ועדות'}), 403
+        # Check permissions: Viewers cannot delete committees
+        if user['role'] == 'viewer':
+            return jsonify({'success': False, 'message': 'צופים לא יכולים למחוק ועדות - נדרשות הרשאות עורך'}), 403
         
         # Pre-fetch names for audit per item (best-effort)
         vaadot_map = {v['vaadot_id']: v for v in db.get_vaadot()}
@@ -1709,6 +1709,7 @@ def delete_exception_date(date_id):
 
 
 @app.route('/committees/add', methods=['POST'])
+@editor_required
 def add_committee_meeting():
     """Add new committee meeting"""
     committee_type_id = request.form.get('committee_type_id')
@@ -1782,6 +1783,7 @@ def add_committee_meeting():
     return redirect(url_for('index'))
 
 @app.route('/committees/edit/<int:vaadot_id>', methods=['POST'])
+@editor_required
 def edit_committee_meeting(vaadot_id):
     """Edit existing committee meeting"""
     committee_type_id = request.form.get('committee_type_id')
@@ -1808,7 +1810,9 @@ def edit_committee_meeting(vaadot_id):
         if meeting_date is None:
             raise ValueError(f'פורמט תאריך לא תקין: {vaada_date}. נא להזין תאריך בפורמט YYYY-MM-DD')
         
-        success = db.update_vaada(vaadot_id, int(committee_type_id), int(hativa_id), meeting_date, notes=notes)
+        # Get user role for constraint checking
+        user_role = session.get('role')
+        success = db.update_vaada(vaadot_id, int(committee_type_id), int(hativa_id), meeting_date, notes=notes, user_role=user_role)
         if success:
             # Get committee name for logging
             committee_types = db.get_committee_types()
@@ -1829,6 +1833,7 @@ def edit_committee_meeting(vaadot_id):
     return redirect(url_for('index'))
 
 @app.route('/committees/delete/<int:vaadot_id>', methods=['POST'])
+@editor_required
 def delete_committee_meeting(vaadot_id):
     """Delete committee meeting and its events"""
     try:
@@ -1863,6 +1868,7 @@ def delete_committee_meeting(vaadot_id):
 
 
 @app.route('/events/add', methods=['POST'])
+@editor_required
 def add_event():
     """Add new event"""
     vaadot_id = request.form.get('vaadot_id')
@@ -1949,6 +1955,7 @@ def add_event():
     return redirect(url_for('index'))
 
 @app.route('/events/edit/<int:event_id>', methods=['POST'])
+@editor_required
 def edit_event(event_id):
     """Edit existing event"""
     vaadot_id = request.form.get('vaadot_id')
@@ -2017,7 +2024,7 @@ def edit_event(event_id):
     return redirect(url_for('index'))
 
 @app.route('/events/delete/<int:event_id>', methods=['POST'])
-@login_required
+@editor_required
 def delete_event_route(event_id):
     """Delete event"""
     try:
@@ -2026,11 +2033,6 @@ def delete_event_route(event_id):
         if not user:
             flash('נדרשת התחברות', 'error')
             return redirect(url_for('login'))
-        
-        # Check permissions: Users cannot delete events
-        if user['role'] == 'user':
-            flash('משתמשים רגילים לא יכולים למחוק אירועים', 'error')
-            return redirect(url_for('index'))
         
         # Get event name before deletion
         events = db.get_all_events()
@@ -3280,7 +3282,7 @@ def sync_ad_user():
 
 # Drag & Drop API endpoints
 @app.route('/api/move_committee', methods=['POST'])
-@login_required
+@editor_required
 def move_committee():
     """Move committee meeting to a different date"""
     try:
@@ -3300,10 +3302,6 @@ def move_committee():
         vaada = db.get_vaada_by_id(vaada_id)
         if not vaada:
             return jsonify({'success': False, 'message': 'ועדה לא נמצאה'}), 404
-        
-        # Check permissions: Only managers and admins can move committees
-        if user['role'] == 'user':
-            return jsonify({'success': False, 'message': 'רק מנהלים ומנהלי מערכת יכולים להזיז ועדות'}), 403
         
         # Manager can only move committees in their division
         if user['role'] == 'manager':
@@ -3372,7 +3370,7 @@ def move_committee():
         return jsonify({'success': False, 'message': f'שגיאה: {str(e)}'}), 500
 
 @app.route('/api/duplicate_committee', methods=['POST'])
-@login_required
+@editor_required
 def duplicate_committee():
     """Duplicate a committee (vaada) with all its events to a new date"""
     try:
@@ -3402,9 +3400,7 @@ def duplicate_committee():
         if not source_vaada:
             return jsonify({'success': False, 'message': 'ועדה מקורית לא נמצאה'}), 404
 
-        # Permissions: user cannot duplicate; managers only within their division; admins allowed
-        if user['role'] == 'user':
-            return jsonify({'success': False, 'message': 'רק מנהלים ומנהלי מערכת יכולים לשכפל ועדות'}), 403
+        # Permissions: managers only within their division; admins allowed
         if user['role'] == 'manager' and source_vaada['hativa_id'] != user.get('hativa_id'):
             return jsonify({'success': False, 'message': 'מנהל יכול לשכפל רק ועדות בחטיבה שלו'}), 403
 
@@ -3440,8 +3436,7 @@ def duplicate_committee():
         return jsonify({'success': False, 'message': f'שגיאה: {str(e)}'}), 500
 
 @app.route('/api/move_event', methods=['POST'])
-@login_required
-@editing_permission_required
+@editor_required
 def move_event():
     """Move event to a different committee meeting"""
     try:
@@ -3863,6 +3858,50 @@ def trigger_calendar_sync():
     except Exception as e:
         app.logger.error(f"Error in manual calendar sync: {e}", exc_info=True)
         audit_logger.log_error('calendar_sync', 'calendar', str(e))
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/calendar/sync/reset', methods=['POST'])
+@login_required
+@admin_required
+def reset_calendar_sync():
+    """Delete all calendar events and reset sync, then re-sync everything"""
+    try:
+        app.logger.info(f"Calendar sync reset triggered by user {session.get('username')}")
+
+        # Run delete and reset
+        result = calendar_service.delete_all_calendar_events_and_reset()
+
+        # Log to audit
+        audit_logger.log(
+            action='calendar_sync_reset',
+            entity_type='calendar',
+            entity_id=None,
+            entity_name='full_reset',
+            details=f"Deleted {result['events_deleted']} events, cleared {result['records_cleared']} records. Re-synced: {result['committees_synced']} committees, {result['events_synced']} events",
+            status='success' if result['success'] else 'error',
+            error_message=result.get('message') if not result['success'] else None
+        )
+
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': result['message'],
+                'events_deleted': result['events_deleted'],
+                'deletion_failures': result.get('deletion_failures', 0),
+                'records_cleared': result['records_cleared'],
+                'committees_synced': result['committees_synced'],
+                'events_synced': result['events_synced'],
+                'failures': result['failures']
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': result['message']
+            }), 500
+
+    except Exception as e:
+        app.logger.error(f"Error in calendar sync reset: {e}", exc_info=True)
+        audit_logger.log_error('calendar_sync_reset', 'calendar', str(e))
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/calendar/sync/status')

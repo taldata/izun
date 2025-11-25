@@ -414,6 +414,45 @@
             btn.innerHTML = originalText;
         });
     }
+
+    function resetCalendarSync() {
+        if (!confirm('האם אתה בטוח שברצונך למחוק את כל האירועים מה-calendar ולסנכרן אותם מחדש?\n\nפעולה זו לא ניתנת לביטול!')) {
+            return;
+        }
+
+        const btn = document.getElementById('resetSyncBtn');
+        const originalText = btn.innerHTML;
+
+        // Disable button and show loading
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>מאפס וסינכרן...';
+
+        fetch('/api/calendar/sync/reset', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`איפוס וסנכרון מחדש הושלמו בהצלחה!\n\nנמחקו: ${data.events_deleted} אירועים\nנוקו: ${data.records_cleared} רשומות\n\nועדות: ${data.committees_synced}\nאירועים: ${data.events_synced}\nכשלונות: ${data.failures}`);
+                // Refresh status
+                showCalendarSyncModal();
+            } else {
+                alert('שגיאה באיפוס וסנכרון: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error resetting sync:', error);
+            alert('שגיאה באיפוס וסנכרון לוח השנה');
+        })
+        .finally(() => {
+            // Re-enable button
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        });
+    }
     </script>
 
     <!-- Calendar Sync Modal -->
@@ -455,9 +494,17 @@
                         <i class="bi bi-info-circle me-2"></i>
                         <strong>הערה:</strong> סנכרון אוטומטי מתבצע מדי שעה. ניתן להפעיל סנכרון ידני בכל עת.
                     </div>
+
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>אזהרה:</strong> פעולת איפוס תמחק את כל האירועים מה-calendar ותסנכרן אותם מחדש.
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">סגור</button>
+                    <button type="button" class="btn btn-danger" id="resetSyncBtn" onclick="resetCalendarSync()">
+                        <i class="bi bi-trash me-2"></i>איפוס וסנכרון מחדש
+                    </button>
                     <button type="button" class="btn btn-info" id="triggerSyncBtn" onclick="triggerCalendarSync()">
                         <i class="bi bi-arrow-clockwise me-2"></i>הפעל סנכרון כעת
                     </button>
