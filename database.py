@@ -255,9 +255,6 @@ class DatabaseManager:
                 ('max_third_week_meetings', '4', 'Maximum number of committee meetings during the third week of a month'),
                 ('max_requests_committee_date', '100', 'Maximum total expected requests on committee meeting date'),
                 ('max_requests_call_deadline', '100', 'Maximum total expected requests on call deadline date'),
-                ('max_requests_intake_deadline', '100', 'Maximum total expected requests on intake deadline date'),
-                ('max_requests_review_deadline', '100', 'Maximum total expected requests on review deadline date'),
-                ('max_requests_response_deadline', '100', 'Maximum total expected requests on response deadline date'),
                 ('show_deadline_dates_in_calendar', '1', 'Show derived deadline dates in calendar (1=yes, 0=no)'),
                 ('rec_base_score', '100', 'Committee recommendation base score'),
                 ('rec_best_bonus', '25', 'Bonus for best recommendation'),
@@ -2438,8 +2435,7 @@ class DatabaseManager:
     def check_derived_dates_constraints(self, stage_dates: Dict, expected_requests: int, 
                                        exclude_event_id: Optional[int] = None) -> Optional[str]:
         """
-        Check if adding/updating an event would violate max_requests constraints on derived dates
-        Each date type has its own configurable constraint.
+        Check if adding/updating an event would violate max_requests constraint on call deadline date
         
         Args:
             stage_dates: Dictionary with call_deadline_date, intake_deadline_date, review_deadline_date, response_deadline_date
@@ -2449,41 +2445,19 @@ class DatabaseManager:
         Returns:
             Error message if constraint is violated, None otherwise
         """
-        # Map each date type to its specific constraint setting
-        date_configs = {
-            'call_deadline': {
-                'label': 'תאריך סגירת קול קורא',
-                'setting_key': 'max_requests_call_deadline'
-            },
-            'intake_deadline': {
-                'label': 'תאריך סגירת קליטה',
-                'setting_key': 'max_requests_intake_deadline'
-            },
-            'review_deadline': {
-                'label': 'תאריך סיום בדיקה',
-                'setting_key': 'max_requests_review_deadline'
-            },
-            'response_deadline': {
-                'label': 'תאריך הגשת תשובה',
-                'setting_key': 'max_requests_response_deadline'
-            }
-        }
-        
-        # Check each derived date with its specific constraint
-        for date_type, config in date_configs.items():
-            date_key = f'{date_type}_date'
-            if date_key not in stage_dates or stage_dates[date_key] is None:
-                continue
-                
-            check_date = stage_dates[date_key]
-            max_requests = int(self.get_system_setting(config['setting_key']) or '100')
-            current_total = self.get_total_requests_on_derived_date(check_date, date_type, exclude_event_id)
-            new_total = current_total + expected_requests
+        # Check only call_deadline constraint
+        if 'call_deadline_date' not in stage_dates or stage_dates['call_deadline_date'] is None:
+            return None
             
-            if new_total > max_requests:
-                return (f'חריגה מאילוץ מקסימום בקשות ביום: {config["label"]} ({check_date}) כבר מכיל {current_total} '
-                       f'בקשות צפויות. הוספת {expected_requests} בקשות תגרום לסך של {new_total} '
-                       f'(המגבלה היא {max_requests})')
+        check_date = stage_dates['call_deadline_date']
+        max_requests = int(self.get_system_setting('max_requests_call_deadline') or '100')
+        current_total = self.get_total_requests_on_derived_date(check_date, 'call_deadline', exclude_event_id)
+        new_total = current_total + expected_requests
+        
+        if new_total > max_requests:
+            return (f'חריגה מאילוץ מקסימום בקשות ביום: תאריך סגירת קול קורא ({check_date}) כבר מכיל {current_total} '
+                   f'בקשות צפויות. הוספת {expected_requests} בקשות תגרום לסך של {new_total} '
+                   f'(המגבלה היא {max_requests})')
         
         return None
     
