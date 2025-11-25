@@ -366,7 +366,7 @@
                         <div class="row g-3">
                             <div class="col-md-3">
                                 <label class="form-label">חטיבה</label>
-                                <select class="form-select form-select-sm" id="filterHativa" onchange="filterTable()">
+                                <select class="form-select form-select-sm" id="filterHativa" onchange="onHativaFilterChange()">
                                     <option value="">כל החטיבות</option>
                                     {% for hativa in hativot %}
                                         <option value="{{ hativa.hativa_id }}">{{ hativa.name }}</option>
@@ -504,9 +504,9 @@
                         <tbody>
                             {% for event in events %}
                             <tr data-event-id="{{ event.event_id }}"
-                                data-hativa-id="{{ event.get('maslul_hativa_id', '') }}"
-                                data-maslul-id="{{ event.maslul_id }}"
-                                data-committee-type="{{ event.get('committee_type_id', '') }}"
+                                data-hativa-id="{{ event.get('maslul_hativa_id') or '' }}"
+                                data-maslul-id="{{ event.maslul_id or '' }}"
+                                data-committee-type="{{ event.get('committee_type_id') or '' }}"
                                 data-event-type="{{ event.event_type or '' }}"
                                 data-event-type-name="{{ event.event_type or '' }}"
                                 data-committee-date="{{ event.vaada_date or '' }}"
@@ -815,6 +815,11 @@ function updateSortIndicators() {
     } catch (e) {}
 }
 
+function onHativaFilterChange() {
+    updateMaslulFilter();
+    filterTable();
+}
+
 function filterTable() {
     const hativaFilter = document.getElementById('filterHativa').value;
     const maslulFilter = document.getElementById('filterMaslul').value;
@@ -822,7 +827,7 @@ function filterTable() {
     const eventTypeFilter = document.getElementById('filterEventType').value;
     const dateFromFilter = document.getElementById('filterDateFrom').value;
     const dateToFilter = document.getElementById('filterDateTo').value;
-    const textFilter = document.getElementById('filterText').value.toLowerCase();
+    const textFilter = document.getElementById('filterText').value.toLowerCase().trim();
     const minRequestsFilter = document.getElementById('filterMinRequests').value;
     
     const rows = document.querySelectorAll('#eventsTable tbody tr');
@@ -834,26 +839,38 @@ function filterTable() {
         let show = true;
         
         // Filter by hativa
-        if (hativaFilter && row.dataset.hativaId !== hativaFilter) {
-            show = false;
+        if (hativaFilter) {
+            const rowHativaId = (row.dataset.hativaId || '').toString();
+            if (rowHativaId !== hativaFilter) {
+                show = false;
+            }
         }
         
         // Filter by maslul
-        if (maslulFilter && row.dataset.maslulId !== maslulFilter) {
-            show = false;
+        if (maslulFilter) {
+            const rowMaslulId = (row.dataset.maslulId || '').toString();
+            if (rowMaslulId !== maslulFilter) {
+                show = false;
+            }
         }
         
         // Filter by committee type
-        if (committeeTypeFilter && row.dataset.committeeType !== committeeTypeFilter) {
-            show = false;
+        if (committeeTypeFilter) {
+            const rowCommitteeType = (row.dataset.committeeType || '').toString();
+            if (rowCommitteeType !== committeeTypeFilter) {
+                show = false;
+            }
         }
         
         // Filter by event type
-        if (eventTypeFilter && row.dataset.eventType !== eventTypeFilter) {
-            show = false;
+        if (eventTypeFilter) {
+            const rowEventType = (row.dataset.eventType || '').toString();
+            if (rowEventType !== eventTypeFilter) {
+                show = false;
+            }
         }
         
-        // Filter by date range
+        // Filter by date range - only filter if date exists, don't hide rows without dates
         if (dateFromFilter || dateToFilter) {
             const eventDate = row.dataset.committeeDate;
             if (eventDate) {
@@ -863,20 +880,29 @@ function filterTable() {
                 if (dateToFilter && eventDate > dateToFilter) {
                     show = false;
                 }
-            } else if (dateFromFilter || dateToFilter) {
-                show = false;
             }
+            // If no date and filters are set, we still show the row (don't hide rows without dates)
         }
         
-        // Filter by text
-        if (textFilter && !row.dataset.eventName.includes(textFilter)) {
-            show = false;
+        // Filter by text - search in multiple fields
+        if (textFilter) {
+            const searchFields = [
+                row.dataset.eventName || '',
+                row.dataset.hativaName || '',
+                row.dataset.maslulName || '',
+                row.dataset.committeeName || ''
+            ];
+            const found = searchFields.some(field => field.toLowerCase().includes(textFilter));
+            if (!found) {
+                show = false;
+            }
         }
         
         // Filter by minimum requests
         if (minRequestsFilter) {
             const requests = parseInt(row.dataset.expectedRequests) || 0;
-            if (requests < parseInt(minRequestsFilter)) {
+            const minRequests = parseInt(minRequestsFilter) || 0;
+            if (requests < minRequests) {
                 show = false;
             }
         }
@@ -894,9 +920,6 @@ function filterTable() {
     document.getElementById('visibleEvents').textContent = visibleCount;
     document.getElementById('totalRequests').textContent = visibleRequests;
     document.getElementById('avgRequests').textContent = visibleCount > 0 ? (visibleRequests / visibleCount).toFixed(1) : '0';
-    
-    // Update maslul filter based on hativa selection
-    updateMaslulFilter();
 
     // Re-apply sorting after filtering
     applyCurrentSort();
@@ -906,6 +929,7 @@ function updateMaslulFilter() {
     const hativaFilter = document.getElementById('filterHativa').value;
     const maslulSelect = document.getElementById('filterMaslul');
     const currentMaslul = maslulSelect.value;
+    let currentMaslulStillVisible = false;
     
     // Show/hide maslul options based on hativa selection
     Array.from(maslulSelect.options).forEach(option => {
@@ -916,13 +940,18 @@ function updateMaslulFilter() {
         
         if (!hativaFilter || option.dataset.hativa === hativaFilter) {
             option.style.display = '';
+            if (option.value === currentMaslul) {
+                currentMaslulStillVisible = true;
+            }
         } else {
             option.style.display = 'none';
-            if (option.value === currentMaslul) {
-                maslulSelect.value = '';
-            }
         }
     });
+    
+    // If current maslul is not visible anymore, clear the selection
+    if (currentMaslul && !currentMaslulStillVisible) {
+        maslulSelect.value = '';
+    }
 }
 
 function clearAllFilters() {
