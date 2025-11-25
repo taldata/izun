@@ -92,36 +92,6 @@
                                 {% endif %}
                                 <small class="form-text text-muted">בתאריך סגירת קול קורא</small>
                             </div>
-                            <div class="col-12 col-md-6">
-                                <label class="form-label">
-                                    <i class="bi bi-inbox me-1"></i>מקסימום בקשות בסגירת קליטה
-                                </label>
-                                <input type="number" min="1" max="1000" class="form-control {% if errors and errors.get('max_requests_intake_deadline') %}is-invalid{% endif %}" name="max_requests_intake_deadline" value="{{ settings.limits.max_requests_intake_deadline }}">
-                                {% if errors and errors.get('max_requests_intake_deadline') %}
-                                <div class="invalid-feedback d-block">{{ errors.get('max_requests_intake_deadline') }}</div>
-                                {% endif %}
-                                <small class="form-text text-muted">בתאריך סגירת קליטה</small>
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <label class="form-label">
-                                    <i class="bi bi-search me-1"></i>מקסימום בקשות בסיום בדיקה
-                                </label>
-                                <input type="number" min="1" max="1000" class="form-control {% if errors and errors.get('max_requests_review_deadline') %}is-invalid{% endif %}" name="max_requests_review_deadline" value="{{ settings.limits.max_requests_review_deadline }}">
-                                {% if errors and errors.get('max_requests_review_deadline') %}
-                                <div class="invalid-feedback d-block">{{ errors.get('max_requests_review_deadline') }}</div>
-                                {% endif %}
-                                <small class="form-text text-muted">בתאריך סיום בדיקה</small>
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <label class="form-label">
-                                    <i class="bi bi-reply me-1"></i>מקסימום בקשות בהגשת תשובה
-                                </label>
-                                <input type="number" min="1" max="1000" class="form-control {% if errors and errors.get('max_requests_response_deadline') %}is-invalid{% endif %}" name="max_requests_response_deadline" value="{{ settings.limits.max_requests_response_deadline }}">
-                                {% if errors and errors.get('max_requests_response_deadline') %}
-                                <div class="invalid-feedback d-block">{{ errors.get('max_requests_response_deadline') }}</div>
-                                {% endif %}
-                                <small class="form-text text-muted">בתאריך הגשת תשובת הועדה</small>
-                            </div>
                         </div>
                     </div>
 
@@ -340,18 +310,6 @@
                         <span class="text-muted">סגירת קול קורא:</span>
                         <span class="fw-semibold">{{ settings.limits.max_requests_call_deadline }}</span>
                     </li>
-                    <li class="mb-2">
-                        <span class="text-muted">סגירת קליטה:</span>
-                        <span class="fw-semibold">{{ settings.limits.max_requests_intake_deadline }}</span>
-                    </li>
-                    <li class="mb-2">
-                        <span class="text-muted">סיום בדיקה:</span>
-                        <span class="fw-semibold">{{ settings.limits.max_requests_review_deadline }}</span>
-                    </li>
-                    <li class="mb-2">
-                        <span class="text-muted">הגשת תשובה:</span>
-                        <span class="fw-semibold">{{ settings.limits.max_requests_response_deadline }}</span>
-                    </li>
                     <li class="mb-0">
                         <hr class="my-2">
                         <strong class="text-primary"><i class="bi bi-lightbulb me-1"></i>הגדרות המלצות</strong>
@@ -378,7 +336,7 @@
             </div>
             <div class="card-body small text-muted">
                 <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>הקפידו על התאמה בין מכסות יומיות ושבועיות כדי למנוע חסימות מיותרות.</p>
-                <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>אילוצי הבקשות הספציפיים לכל תאריך מאפשרים שליטה מדויקת על עומס המערכת.</p>
+                <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>אילוץ הבקשות בסגירת קול קורא מאפשר שליטה על עומס המערכת בתאריך זה.</p>
                 <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>לאחר שינוי ההגדרות, הריצו מחדש את התזמון האוטומטי לבדיקת התוצאות.</p>
                 <p class="mb-0"><i class="bi bi-star text-warning me-1"></i>הגדרות ההמלצות משפיעות על הציון שכל ועדה מקבלת במערכת ההמלצות.</p>
             </div>
