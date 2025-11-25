@@ -894,6 +894,15 @@ function filterTable() {
     const minRequestsFilter = document.getElementById('filterMinRequests').value;
     const maxRequestsFilter = document.getElementById('filterMaxRequests').value;
     
+    // Check which view is active
+    const eventsViewRadio = document.getElementById('eventsView');
+    const committeesViewRadio = document.getElementById('committeesView');
+    
+    if (committeesViewRadio && committeesViewRadio.checked) {
+        filterCommitteeTable(hativaFilter, committeeTypeFilter, eventTypeFilter, dateFromFilter, dateToFilter, textFilter, minRequestsFilter, maxRequestsFilter);
+        return;
+    }
+    
     const rows = document.querySelectorAll('#eventsTable tbody tr');
     let visibleCount = 0;
     let visibleRequests = 0;
@@ -995,6 +1004,105 @@ function filterTable() {
 
     // Re-apply sorting after filtering
     applyCurrentSort();
+}
+
+function filterCommitteeTable(hativaFilter, committeeTypeFilter, eventTypeFilter, dateFromFilter, dateToFilter, textFilter, minRequestsFilter, maxRequestsFilter) {
+    const rows = document.querySelectorAll('#committeeTableBody .committee-row');
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        let show = true;
+        
+        // Filter by hativa
+        if (hativaFilter) {
+            const rowHativaId = (row.dataset.hativaId || '').toString();
+            if (rowHativaId !== hativaFilter) {
+                show = false;
+            }
+        }
+        
+        // Filter by committee type
+        if (committeeTypeFilter) {
+            const rowCommitteeType = (row.dataset.committeeType || '').toString();
+            if (rowCommitteeType !== committeeTypeFilter) {
+                show = false;
+            }
+        }
+        
+        // Filter by event type - check if any event in the committee matches
+        if (eventTypeFilter) {
+            const eventTypesStr = row.dataset.eventTypes || '';
+            if (eventTypesStr) {
+                const eventTypes = eventTypesStr.split(',').filter(t => t.trim());
+                if (!eventTypes.includes(eventTypeFilter)) {
+                    show = false;
+                }
+            } else {
+                // No event types means no events match
+                show = false;
+            }
+        }
+        
+        // Filter by date range
+        if (dateFromFilter || dateToFilter) {
+            const committeeDate = row.dataset.committeeDate;
+            if (committeeDate) {
+                if (dateFromFilter && committeeDate < dateFromFilter) {
+                    show = false;
+                }
+                if (dateToFilter && committeeDate > dateToFilter) {
+                    show = false;
+                }
+            }
+        }
+        
+        // Filter by text - search in committee name and hativa name
+        if (textFilter) {
+            const searchFields = [
+                row.dataset.committeeName || '',
+                row.dataset.hativaName || ''
+            ];
+            const found = searchFields.some(field => field.toLowerCase().includes(textFilter));
+            if (!found) {
+                show = false;
+            }
+        }
+        
+        // Filter by requests range
+        if (minRequestsFilter || maxRequestsFilter) {
+            const totalRequests = parseInt(row.dataset.totalRequests) || 0;
+            if (minRequestsFilter) {
+                const minRequests = parseInt(minRequestsFilter) || 0;
+                if (totalRequests < minRequests) {
+                    show = false;
+                }
+            }
+            if (maxRequestsFilter) {
+                const maxRequests = parseInt(maxRequestsFilter) || 0;
+                if (totalRequests > maxRequests) {
+                    show = false;
+                }
+            }
+        }
+        
+        // Show/hide row and its events row
+        row.style.display = show ? '' : 'none';
+        const eventsRow = document.getElementById(`events-${row.dataset.committeeId}`);
+        if (eventsRow) {
+            // Keep events row hidden unless expanded, but hide it if committee row is hidden
+            if (!show) {
+                eventsRow.style.display = 'none';
+            } else {
+                // Keep current state (expanded/collapsed)
+                const isExpanded = row.querySelector('.expand-button')?.dataset.expanded === 'true';
+                eventsRow.style.display = isExpanded ? '' : 'none';
+            }
+        }
+        
+        if (show) {
+            visibleCount++;
+        }
+    });
 }
 
 function updateMaslulFilter() {
@@ -1197,6 +1305,8 @@ async function loadCommitteeView() {
 
         if (data.success) {
             renderCommitteeTable(data.events_by_committee);
+            // Apply filters after rendering
+            filterTable();
         } else {
             container.innerHTML = `<tr><td colspan="9" class="text-center">
                 <div class="no-committees">
@@ -1240,8 +1350,23 @@ function renderCommitteeTable(committees) {
                 return `<span class="badge bg-secondary">${type}</span>`;
             }).join(' ') : '<span class="text-muted">אין סוגים</span>';
 
+        // Get hativa_id and committee_type_id from committee info
+        const hativaId = (committee.committee_info.hativa_id || '').toString();
+        const committeeTypeId = (committee.committee_info.committee_type_id || '').toString();
+        const vaadaDate = committee.committee_info.vaada_date || '';
+        const committeeName = (committee.committee_info.committee_name || '').toLowerCase();
+        const hativaName = (committee.committee_info.hativa_name || '').toLowerCase();
+        
         html += `
-            <tr class="committee-row" data-committee-id="${committee.committee_info.vaadot_id}">
+            <tr class="committee-row" 
+                data-committee-id="${committee.committee_info.vaadot_id}"
+                data-hativa-id="${hativaId}"
+                data-committee-type="${committeeTypeId}"
+                data-committee-date="${vaadaDate}"
+                data-committee-name="${committeeName}"
+                data-hativa-name="${hativaName}"
+                data-total-requests="${committee.summary.total_expected_requests || 0}"
+                data-event-types="${committee.summary.event_types.join(',')}">
                 <td>
                     <input type="checkbox" class="committee-select" value="${committee.committee_info.vaadot_id}" onchange="onSelectionChanged()">
                 </td>

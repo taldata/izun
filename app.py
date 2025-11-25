@@ -3544,8 +3544,10 @@ def get_events_by_committee():
                             'vaadot_id': vaadot_id,
                             'committee_name': event.get('committee_name', ''),
                             'hativa_name': event.get('hativa_name', ''),
+                            'hativa_id': event.get('maslul_hativa_id') or event.get('hativa_id'),
                             'vaada_date': event.get('vaada_date', ''),
-                            'committee_type': event.get('committee_type_name', '')
+                            'committee_type': event.get('committee_type_name', ''),
+                            'committee_type_id': event.get('committee_type_id')
                         },
                         'events': [],
                         'summary': {
@@ -3576,8 +3578,10 @@ def get_events_by_committee():
                             'vaadot_id': vid,
                             'committee_name': c.get('committee_name', ''),
                             'hativa_name': c.get('hativa_name', ''),
+                            'hativa_id': c.get('hativa_id'),
                             'vaada_date': c.get('vaada_date', ''),
-                            'committee_type': ''
+                            'committee_type': '',
+                            'committee_type_id': c.get('committee_type_id')
                         },
                         'events': [],
                         'summary': {
