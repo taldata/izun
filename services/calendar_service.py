@@ -337,10 +337,11 @@ class CalendarService:
             # Check if sync record exists
             sync_record = self.db.get_calendar_sync_record('vaadot', vaadot_id, None, self.calendar_email)
 
-            if sync_record and sync_record['calendar_event_id'] and sync_record['sync_status'] == 'synced':
-                # Update existing event
+            if sync_record and sync_record.get('calendar_event_id'):
+                # Update existing event (even if status is pending/failed, we have an event ID)
+                calendar_event_id = sync_record['calendar_event_id']
                 success, message = self.update_calendar_event(
-                    event_id=sync_record['calendar_event_id'],
+                    event_id=calendar_event_id,
                     subject=subject,
                     start_date=vaada_date,
                     body=body,
@@ -348,13 +349,14 @@ class CalendarService:
                 )
 
                 if success:
-                    self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced')
+                    self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', calendar_event_id)
                     return True, f"Committee updated in calendar"
                 else:
-                    self.db.update_calendar_sync_status(sync_record['sync_id'], 'failed', error_message=message)
+                    # If update fails, keep the existing calendar_event_id but mark as failed
+                    self.db.update_calendar_sync_status(sync_record['sync_id'], 'failed', calendar_event_id, error_message=message)
                     return False, message
             else:
-                # Create new event
+                # Create new event (no sync record or no calendar_event_id)
                 success, event_id, message = self.create_calendar_event(
                     subject=subject,
                     start_date=vaada_date,
@@ -364,12 +366,20 @@ class CalendarService:
 
                 if success:
                     # Create or update sync record
-                    sync_id = self.db.create_calendar_sync_record('vaadot', vaadot_id, None, self.calendar_email, event_id)
-                    self.db.update_calendar_sync_status(sync_id, 'synced', event_id)
+                    if sync_record:
+                        # Update existing sync record with new event ID
+                        self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', event_id)
+                    else:
+                        # Create new sync record
+                        sync_id = self.db.create_calendar_sync_record('vaadot', vaadot_id, None, self.calendar_email, event_id)
+                        self.db.update_calendar_sync_status(sync_id, 'synced', event_id)
                     return True, f"Committee created in calendar with ID: {event_id}"
                 else:
-                    sync_id = self.db.create_calendar_sync_record('vaadot', vaadot_id, None, self.calendar_email)
-                    self.db.update_calendar_sync_status(sync_id, 'failed', error_message=message)
+                    if sync_record:
+                        self.db.update_calendar_sync_status(sync_record['sync_id'], 'failed', error_message=message)
+                    else:
+                        sync_id = self.db.create_calendar_sync_record('vaadot', vaadot_id, None, self.calendar_email)
+                        self.db.update_calendar_sync_status(sync_id, 'failed', error_message=message)
                     return False, message
 
         except Exception as e:
@@ -455,10 +465,11 @@ class CalendarService:
                 sync_record = self.db.get_calendar_sync_record('event_deadline', event_id, field_name, self.calendar_email)
 
                 try:
-                    if sync_record and sync_record['calendar_event_id'] and sync_record['sync_status'] == 'synced':
-                        # Update existing event
+                    if sync_record and sync_record.get('calendar_event_id'):
+                        # Update existing event (even if status is pending/failed, we have an event ID)
+                        calendar_event_id = sync_record['calendar_event_id']
                         success, message = self.update_calendar_event(
-                            event_id=sync_record['calendar_event_id'],
+                            event_id=calendar_event_id,
                             subject=subject,
                             start_date=deadline_date,
                             body=body,
@@ -466,13 +477,14 @@ class CalendarService:
                         )
 
                         if success:
-                            self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced')
+                            self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', calendar_event_id)
                             synced_count += 1
                         else:
-                            self.db.update_calendar_sync_status(sync_record['sync_id'], 'failed', error_message=message)
+                            # If update fails, keep the existing calendar_event_id but mark as failed
+                            self.db.update_calendar_sync_status(sync_record['sync_id'], 'failed', calendar_event_id, error_message=message)
                             failed_count += 1
                     else:
-                        # Create new event
+                        # Create new event (no sync record or no calendar_event_id)
                         success, cal_event_id, message = self.create_calendar_event(
                             subject=subject,
                             start_date=deadline_date,
@@ -481,12 +493,20 @@ class CalendarService:
                         )
 
                         if success:
-                            sync_id = self.db.create_calendar_sync_record('event_deadline', event_id, field_name, self.calendar_email, cal_event_id)
-                            self.db.update_calendar_sync_status(sync_id, 'synced', cal_event_id)
+                            if sync_record:
+                                # Update existing sync record with new event ID
+                                self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', cal_event_id)
+                            else:
+                                # Create new sync record
+                                sync_id = self.db.create_calendar_sync_record('event_deadline', event_id, field_name, self.calendar_email, cal_event_id)
+                                self.db.update_calendar_sync_status(sync_id, 'synced', cal_event_id)
                             synced_count += 1
                         else:
-                            sync_id = self.db.create_calendar_sync_record('event_deadline', event_id, field_name, self.calendar_email)
-                            self.db.update_calendar_sync_status(sync_id, 'failed', error_message=message)
+                            if sync_record:
+                                self.db.update_calendar_sync_status(sync_record['sync_id'], 'failed', error_message=message)
+                            else:
+                                sync_id = self.db.create_calendar_sync_record('event_deadline', event_id, field_name, self.calendar_email)
+                                self.db.update_calendar_sync_status(sync_id, 'failed', error_message=message)
                             failed_count += 1
                 except Exception as deadline_error:
                     logger.error(f"Error syncing deadline {field_name} for event {event_id}: {deadline_error}")
@@ -579,4 +599,82 @@ class CalendarService:
                 'committees_synced': committees_synced,
                 'events_synced': events_synced,
                 'failures': failures
+            }
+
+    def delete_all_calendar_events_and_reset(self) -> Dict[str, any]:
+        """
+        Delete all calendar events created by the system and reset sync records
+        Then perform a full sync to recreate all events
+
+        Returns:
+            Dictionary with operation statistics
+        """
+        if not self.is_enabled():
+            return {
+                'success': False,
+                'message': 'Calendar sync is disabled',
+                'events_deleted': 0,
+                'records_cleared': 0,
+                'committees_synced': 0,
+                'events_synced': 0,
+                'failures': 0
+            }
+
+        logger.info("Starting deletion of all calendar events and reset...")
+
+        events_deleted = 0
+        deletion_failures = 0
+        records_cleared = 0
+
+        try:
+            # Get all synced calendar events
+            sync_records = self.db.get_all_synced_calendar_events(self.calendar_email)
+
+            logger.info(f"Found {len(sync_records)} calendar events to delete")
+
+            # Delete each calendar event
+            for record in sync_records:
+                calendar_event_id = record.get('calendar_event_id')
+                if calendar_event_id:
+                    try:
+                        success, message = self.delete_calendar_event(calendar_event_id)
+                        if success:
+                            events_deleted += 1
+                        else:
+                            logger.warning(f"Failed to delete calendar event {calendar_event_id}: {message}")
+                            deletion_failures += 1
+                    except Exception as e:
+                        logger.error(f"Error deleting calendar event {calendar_event_id}: {e}")
+                        deletion_failures += 1
+
+            # Clear all sync records
+            records_cleared = self.db.clear_all_calendar_sync_records(self.calendar_email)
+            logger.info(f"Cleared {records_cleared} sync records from database")
+
+            # Now perform full sync to recreate all events
+            logger.info("Starting full sync to recreate all events...")
+            sync_result = self.sync_all()
+
+            return {
+                'success': True,
+                'message': f'Reset complete: Deleted {events_deleted} events, cleared {records_cleared} records. Re-synced: {sync_result["committees_synced"]} committees, {sync_result["events_synced"]} events',
+                'events_deleted': events_deleted,
+                'deletion_failures': deletion_failures,
+                'records_cleared': records_cleared,
+                'committees_synced': sync_result.get('committees_synced', 0),
+                'events_synced': sync_result.get('events_synced', 0),
+                'failures': sync_result.get('failures', 0) + deletion_failures
+            }
+
+        except Exception as e:
+            logger.error(f"Error in delete_all_calendar_events_and_reset: {e}", exc_info=True)
+            return {
+                'success': False,
+                'message': str(e),
+                'events_deleted': events_deleted,
+                'deletion_failures': deletion_failures,
+                'records_cleared': records_cleared,
+                'committees_synced': 0,
+                'events_synced': 0,
+                'failures': deletion_failures
             }

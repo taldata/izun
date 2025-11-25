@@ -1071,7 +1071,7 @@ class DatabaseManager:
     
     def update_vaada(self, vaadot_id: int, committee_type_id: int, hativa_id: int,
                      vaada_date: date,
-                     exception_date_id: Optional[int] = None, notes: str = "") -> bool:
+                     exception_date_id: Optional[int] = None, notes: str = "", user_role: Optional[str] = None) -> bool:
         """Update committee meeting details including date, type, division, and notes"""
         conn = None
         try:
@@ -1088,6 +1088,15 @@ class DatabaseManager:
                 raise ValueError("סוג הועדה לא נמצא")
             if ct_row[0] != hativa_id:
                 raise ValueError("סוג הועדה שנבחר אינו שייך לחטיבה שנבחרה")
+
+            # Check if the date is allowed for this division based on day constraints (only for non-admin users)
+            is_admin = user_role == 'admin'
+            if not is_admin and not self.is_day_allowed_for_hativa(hativa_id, vaada_date):
+                day_names = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון']
+                day_name = day_names[vaada_date.weekday()]
+                allowed_days = self.get_hativa_allowed_days(hativa_id)
+                allowed_day_names = [day_names[d] for d in sorted(allowed_days)]
+                raise ValueError(f'התאריך {vaada_date} ({day_name}) אינו יום מותר לקביעת ועדות עבור חטיבה זו. הימים המותרים: {", ".join(allowed_day_names)}')
 
             # Check constraints (per-day and per-week limits) excluding current meeting
             constraint_settings = self.get_constraint_settings()
@@ -1144,6 +1153,20 @@ class DatabaseManager:
 
             conn = self.get_connection()
             cursor = conn.cursor()
+
+            # Get hativa_id for this committee to check day constraints
+            cursor.execute('SELECT hativa_id FROM vaadot WHERE vaadot_id = ?', (vaadot_id,))
+            hativa_row = cursor.fetchone()
+            if hativa_row:
+                hativa_id = hativa_row[0]
+                # Check if the date is allowed for this division based on day constraints (only for non-admin users)
+                is_admin = user_role == 'admin'
+                if not is_admin and not self.is_day_allowed_for_hativa(hativa_id, vaada_date):
+                    day_names = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון']
+                    day_name = day_names[vaada_date.weekday()]
+                    allowed_days = self.get_hativa_allowed_days(hativa_id)
+                    allowed_day_names = [day_names[d] for d in sorted(allowed_days)]
+                    raise ValueError(f'התאריך {vaada_date} ({day_name}) אינו יום מותר לקביעת ועדות עבור חטיבה זו. הימים המותרים: {", ".join(allowed_day_names)}')
 
             # Enforce daily limit excluding the current meeting
             constraint_settings = self.get_constraint_settings()
@@ -3532,3 +3555,44 @@ class DatabaseManager:
             }
             for row in rows
         ]
+
+    def get_all_synced_calendar_events(self, calendar_email: str = 'plan@innovationisrael.org.il') -> List[Dict]:
+        """Get all calendar sync records that have been synced (have calendar_event_id)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT sync_id, source_type, source_id, deadline_type, calendar_event_id, calendar_email,
+                   last_synced, sync_status, error_message, created_at, updated_at
+            FROM calendar_sync_events
+            WHERE calendar_email = ? AND calendar_event_id IS NOT NULL AND calendar_event_id != ''
+            ORDER BY created_at ASC
+        ''', (calendar_email,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [
+            {
+                'sync_id': row[0], 'source_type': row[1], 'source_id': row[2],
+                'deadline_type': row[3], 'calendar_event_id': row[4], 'calendar_email': row[5],
+                'last_synced': row[6], 'sync_status': row[7], 'error_message': row[8],
+                'created_at': row[9], 'updated_at': row[10]
+            } for row in rows
+        ]
+
+    def clear_all_calendar_sync_records(self, calendar_email: str = 'plan@innovationisrael.org.il') -> int:
+        """Delete all calendar sync records for a calendar (used when resetting sync)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            DELETE FROM calendar_sync_events
+            WHERE calendar_email = ?
+        ''', (calendar_email,))
+
+        deleted_count = cursor.rowcount
+        conn.commit()
+        conn.close()
+
+        return deleted_count
