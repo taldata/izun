@@ -621,6 +621,16 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         
+        # Check if maslul is used in any events (including deleted ones)
+        cursor.execute('''
+            SELECT COUNT(*) FROM events WHERE maslul_id = ?
+        ''', (maslul_id,))
+        events_count = cursor.fetchone()[0]
+        
+        if events_count > 0:
+            conn.close()
+            raise ValueError(f'לא ניתן למחוק מסלול המשויך ל-{events_count} אירועים. יש למחוק תחילה את האירועים הקשורים.')
+        
         cursor.execute('DELETE FROM maslulim WHERE maslul_id = ?', (maslul_id,))
         
         success = cursor.rowcount > 0
