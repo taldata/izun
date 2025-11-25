@@ -1111,26 +1111,38 @@ function updateMaslulFilter() {
     const currentMaslul = maslulSelect.value;
     let currentMaslulStillVisible = false;
     
-    // Show/hide maslul options based on hativa selection
-    Array.from(maslulSelect.options).forEach(option => {
-        if (option.value === '') {
+    // Enable/disable maslul filter based on hativa selection
+    if (!hativaFilter) {
+        // No hativa selected - show all maslulim but disable filter
+        maslulSelect.disabled = false;
+        Array.from(maslulSelect.options).forEach(option => {
             option.style.display = '';
-            return;
-        }
+        });
+    } else {
+        // Hativa selected - show only maslulim from that hativa
+        maslulSelect.disabled = false;
         
-        if (!hativaFilter || option.dataset.hativa === hativaFilter) {
-            option.style.display = '';
-            if (option.value === currentMaslul) {
-                currentMaslulStillVisible = true;
+        // Show/hide maslul options based on hativa selection
+        Array.from(maslulSelect.options).forEach(option => {
+            if (option.value === '') {
+                option.style.display = '';
+                return;
             }
-        } else {
-            option.style.display = 'none';
+            
+            if (option.dataset.hativa === hativaFilter) {
+                option.style.display = '';
+                if (option.value === currentMaslul) {
+                    currentMaslulStillVisible = true;
+                }
+            } else {
+                option.style.display = 'none';
+            }
+        });
+        
+        // If current maslul is not visible anymore, clear the selection
+        if (currentMaslul && !currentMaslulStillVisible) {
+            maslulSelect.value = '';
         }
-    });
-    
-    // If current maslul is not visible anymore, clear the selection
-    if (currentMaslul && !currentMaslulStillVisible) {
-        maslulSelect.value = '';
     }
 }
 
@@ -1236,6 +1248,9 @@ function exportToCSV() {
 
 // Initialize filters on page load
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize maslul filter state
+    updateMaslulFilter();
+    
     // Initialize committee type filter state
     updateCommitteeTypeFilter();
     
