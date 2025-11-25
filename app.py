@@ -642,6 +642,17 @@ def bulk_delete_events():
                     continue
         deleted = db.delete_events_bulk(event_ids, user['user_id'])
 
+        # Delete calendar events for each deleted event
+        try:
+            for eid in event_ids:
+                try:
+                    eid_int = int(eid)
+                    calendar_service.sync_event_deadlines_to_calendar(eid_int)
+                except Exception as cal_error:
+                    app.logger.warning(f"Failed to delete calendar events for event {eid}: {cal_error}")
+        except Exception as cal_error:
+            app.logger.warning(f"Failed to delete calendar events in bulk: {cal_error}")
+
         # Audit: summary
         audit_logger.log_success(
             audit_logger.ACTION_DELETE,
@@ -710,6 +721,23 @@ def bulk_delete_committees():
                 except (ValueError, KeyError):
                     continue
         deleted_committees, affected_events = db.delete_vaadot_bulk(vaadot_ids, user['user_id'])
+
+        # Delete calendar events for each deleted committee
+        try:
+            for vid in vaadot_ids:
+                try:
+                    vid_int = int(vid)
+                    calendar_service.sync_committee_to_calendar(vid_int)
+                    
+                    # Also sync related events to delete their calendar entries
+                    events = db.get_all_events(include_deleted=True)
+                    related_events = [e for e in events if e.get('vaadot_id') == vid_int]
+                    for event in related_events:
+                        calendar_service.sync_event_deadlines_to_calendar(event['event_id'])
+                except Exception as cal_error:
+                    app.logger.warning(f"Failed to delete calendar events for committee {vid}: {cal_error}")
+        except Exception as cal_error:
+            app.logger.warning(f"Failed to delete calendar events in bulk: {cal_error}")
 
         # Audit: summary
         audit_logger.log_success(
@@ -1857,6 +1885,18 @@ def delete_committee_meeting(vaadot_id):
         success = db.delete_vaada(vaadot_id, user_id)
         if success:
             audit_logger.log_vaada_deleted(vaadot_id, committee_name)
+            
+            # Delete calendar events for this committee and its events
+            try:
+                # Sync deleted committee to calendar (will delete the calendar event)
+                calendar_service.sync_committee_to_calendar(vaadot_id)
+                
+                # Sync deleted events to calendar (will delete calendar events)
+                for event in related_events:
+                    calendar_service.sync_event_deadlines_to_calendar(event['event_id'])
+            except Exception as cal_error:
+                app.logger.warning(f"Failed to delete calendar events for committee {vaadot_id}: {cal_error}")
+            
             flash(f'ישיבת הועדה ו-{len(related_events)} אירועים הועברו לסל המחזור בהצלחה', 'success')
         else:
             flash('שגיאה במחיקת הישיבה', 'error')
@@ -2051,6 +2091,13 @@ def delete_event_route(event_id):
         success = db.delete_event(event_id, user['user_id'])
         if success:
             audit_logger.log_event_deleted(event_id, event['name'])
+            
+            # Delete calendar events for this event's deadlines
+            try:
+                calendar_service.sync_event_deadlines_to_calendar(event_id)
+            except Exception as cal_error:
+                app.logger.warning(f"Failed to delete calendar events for event {event_id}: {cal_error}")
+            
             flash(f'אירוע "{event["name"]}" הועבר לסל המחזור בהצלחה', 'success')
         else:
             flash('שגיאה במחיקת האירוע', 'error')
@@ -3858,6 +3905,65 @@ def trigger_calendar_sync():
     except Exception as e:
         app.logger.error(f"Error in manual calendar sync: {e}", exc_info=True)
         audit_logger.log_error('calendar_sync', 'calendar', str(e))
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/calendar/delete_all', methods=['POST'])
+@login_required
+@admin_required
+def delete_all_calendar_events():
+    """Delete all calendar events without re-syncing"""
+    try:
+        app.logger.info(f"Calendar delete all triggered by user {session.get('username')}")
+
+        calendar_email = calendar_service.calendar_email
+        
+        # Get all synced calendar events
+        sync_records = db.get_all_synced_calendar_events(calendar_email)
+        app.logger.info(f"Found {len(sync_records)} calendar events to delete")
+
+        events_deleted = 0
+        deletion_failures = 0
+
+        # Delete each calendar event
+        for record in sync_records:
+            calendar_event_id = record.get('calendar_event_id')
+            if calendar_event_id:
+                try:
+                    success, message = calendar_service.delete_calendar_event(calendar_event_id)
+                    if success:
+                        events_deleted += 1
+                    else:
+                        app.logger.warning(f"Failed to delete calendar event {calendar_event_id}: {message}")
+                        deletion_failures += 1
+                except Exception as e:
+                    app.logger.error(f"Error deleting calendar event {calendar_event_id}: {e}")
+                    deletion_failures += 1
+
+        # Clear sync records from database
+        records_cleared = db.clear_all_calendar_sync_records(calendar_email)
+        app.logger.info(f"Cleared {records_cleared} sync records from database")
+
+        # Log to audit
+        audit_logger.log(
+            action='calendar_delete_all',
+            entity_type='calendar',
+            entity_id=None,
+            entity_name='delete_all',
+            details=f"Deleted {events_deleted} events, {deletion_failures} failures, cleared {records_cleared} records",
+            status='success' if deletion_failures == 0 else 'warning'
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f'נמחקו {events_deleted} אירועים מהיומן, נוקו {records_cleared} רשומות',
+            'events_deleted': events_deleted,
+            'deletion_failures': deletion_failures,
+            'records_cleared': records_cleared
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error in delete all calendar events: {e}", exc_info=True)
+        audit_logger.log_error('calendar_delete_all', 'calendar', str(e))
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/calendar/sync/reset', methods=['POST'])
