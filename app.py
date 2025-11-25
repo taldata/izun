@@ -1744,8 +1744,12 @@ def add_committee_meeting():
             audit_logger.log_error(audit_logger.ACTION_CREATE, audit_logger.ENTITY_VAADA, str(e), details=f'תאריך: {vaada_date}')
             flash(str(e), 'error')
     except Exception as e:
-        audit_logger.log_error(audit_logger.ACTION_CREATE, audit_logger.ENTITY_VAADA, str(e), details=f'תאריך: {vaada_date}')
-        flash(f'שגיאה בהוספת הישיבה: {str(e)}', 'error')
+        error_msg = str(e)
+        # Handle database constraint errors with user-friendly messages
+        if 'UNIQUE constraint failed' in error_msg and 'vaadot' in error_msg:
+            error_msg = 'כבר קיימת ועדה מאותו סוג באותה חטיבה באותו תאריך. לא ניתן ליצור ועדה כפולה.'
+        audit_logger.log_error(audit_logger.ACTION_CREATE, audit_logger.ENTITY_VAADA, error_msg, details=f'תאריך: {vaada_date}')
+        flash(f'שגיאה בהוספת הישיבה: {error_msg}', 'error')
     
     return redirect(url_for('index'))
 

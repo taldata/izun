@@ -422,7 +422,11 @@
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">מספר בקשות מ-</label>
-                                <input type="number" class="form-control form-control-sm" id="filterMinRequests" placeholder="0" onchange="filterTable()">
+                                <input type="number" class="form-control form-control-sm" id="filterMinRequests" placeholder="0" min="0" onchange="filterTable()">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">מספר בקשות עד</label>
+                                <input type="number" class="form-control form-control-sm" id="filterMaxRequests" placeholder="ללא הגבלה" min="0" onchange="filterTable()">
                             </div>
                         </div>
                     </div>
@@ -829,6 +833,7 @@ function filterTable() {
     const dateToFilter = document.getElementById('filterDateTo').value;
     const textFilter = document.getElementById('filterText').value.toLowerCase().trim();
     const minRequestsFilter = document.getElementById('filterMinRequests').value;
+    const maxRequestsFilter = document.getElementById('filterMaxRequests').value;
     
     const rows = document.querySelectorAll('#eventsTable tbody tr');
     let visibleCount = 0;
@@ -898,12 +903,20 @@ function filterTable() {
             }
         }
         
-        // Filter by minimum requests
-        if (minRequestsFilter) {
+        // Filter by requests range
+        if (minRequestsFilter || maxRequestsFilter) {
             const requests = parseInt(row.dataset.expectedRequests) || 0;
-            const minRequests = parseInt(minRequestsFilter) || 0;
-            if (requests < minRequests) {
-                show = false;
+            if (minRequestsFilter) {
+                const minRequests = parseInt(minRequestsFilter) || 0;
+                if (requests < minRequests) {
+                    show = false;
+                }
+            }
+            if (maxRequestsFilter) {
+                const maxRequests = parseInt(maxRequestsFilter) || 0;
+                if (requests > maxRequests) {
+                    show = false;
+                }
             }
         }
         
@@ -963,6 +976,7 @@ function clearAllFilters() {
     document.getElementById('filterDateTo').value = '';
     document.getElementById('filterText').value = '';
     document.getElementById('filterMinRequests').value = '';
+    document.getElementById('filterMaxRequests').value = '';
     
     filterTable();
 }

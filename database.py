@@ -900,12 +900,30 @@ class DatabaseManager:
             week_start, week_end = self._get_week_bounds(vaada_date)
             weekly_count = self._count_meetings_in_week(cursor, week_start, week_end)
             weekly_limit = self._get_weekly_limit(vaada_date, constraint_settings)
+            is_third_week = self._is_third_week_of_month(vaada_date)
+            week_type = "שבוע שלישי" if is_third_week else "שבוע רגיל"
             if weekly_count >= weekly_limit:
+                new_count = weekly_count + 1
                 if override_constraints:
-                    warning_message += f'\n⚠️ אזהרה: השבוע של {vaada_date} כבר מכיל {weekly_count} ועדות (המגבלה היא {weekly_limit}).'
+                    warning_message += f'\n⚠️ אזהרה: השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. הוספת ועדה נוספת תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit}).'
+
+            # Check if a committee meeting with the same type, division, and date already exists
+            cursor.execute('''
+                SELECT vaadot_id, ct.name as committee_name, h.name as hativa_name
+                FROM vaadot v
+                JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+                JOIN hativot h ON v.hativa_id = h.hativa_id
+                WHERE v.committee_type_id = ? AND v.hativa_id = ? AND v.vaada_date = ?
+            ''', (committee_type_id, hativa_id, vaada_date))
+            existing = cursor.fetchone()
+            
+            if existing:
+                existing_id, existing_name, existing_hativa = existing
+                if override_constraints:
+                    warning_message += f'\n⚠️ אזהרה: כבר קיימת ועדה מסוג "{existing_name}" בחטיבת "{existing_hativa}" בתאריך {vaada_date}. מנהל מערכת יכול לעקוף אילוץ זה.'
                 else:
                     conn.close()
-                    raise ValueError(f"השבוע של {vaada_date} כבר מכיל {weekly_count} ועדות (המגבלה היא {weekly_limit})")
+                    raise ValueError(f'כבר קיימת ועדה מסוג "{existing_name}" בחטיבת "{existing_hativa}" בתאריך {vaada_date}. לא ניתן ליצור ועדה נוספת מאותו סוג באותה חטיבה באותו תאריך.')
 
             cursor.execute('''
                 INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, notes)
@@ -1078,8 +1096,11 @@ class DatabaseManager:
             week_start, week_end = self._get_week_bounds(vaada_date)
             weekly_count = self._count_meetings_in_week(cursor, week_start, week_end, exclude_vaada_id=vaadot_id)
             weekly_limit = self._get_weekly_limit(vaada_date, constraint_settings)
+            is_third_week = self._is_third_week_of_month(vaada_date)
+            week_type = "שבוע שלישי" if is_third_week else "שבוע רגיל"
             if weekly_count >= weekly_limit:
-                raise ValueError(f"השבוע של {vaada_date} כבר מכיל {weekly_count} ועדות (המגבלה היא {weekly_limit})")
+                new_count = weekly_count + 1
+                raise ValueError(f"השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. העברת הועדה תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit})")
 
             cursor.execute('''
                 UPDATE vaadot
@@ -1128,8 +1149,11 @@ class DatabaseManager:
             week_start, week_end = self._get_week_bounds(vaada_date)
             weekly_count = self._count_meetings_in_week(cursor, week_start, week_end, exclude_vaada_id=vaadot_id)
             weekly_limit = self._get_weekly_limit(vaada_date, constraint_settings)
+            is_third_week = self._is_third_week_of_month(vaada_date)
+            week_type = "שבוע שלישי" if is_third_week else "שבוע רגיל"
             if weekly_count >= weekly_limit:
-                raise ValueError(f"השבוע של {vaada_date} כבר מכיל {weekly_count} ועדות (המגבלה היא {weekly_limit})")
+                new_count = weekly_count + 1
+                raise ValueError(f"השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. העברת הועדה תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit})")
 
             # Check constraints on derived dates for all events in this committee
             cursor.execute('''
