@@ -70,6 +70,19 @@
         border: 1px solid #ffeaa7;
     }
     
+    .date-call-manual {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+        position: relative;
+    }
+    
+    .manual-indicator {
+        font-size: 0.7rem;
+        margin-right: 0.25rem;
+        vertical-align: middle;
+    }
+    
     .date-intake {
         background-color: #d1ecf1;
         color: #0c5460;
@@ -559,7 +572,14 @@
                                 </td>
                                 <td>
                                     {% if event.call_deadline_date %}
-                                        <span class="date-badge date-call">{{ event.call_deadline_date }}</span>
+                                        {% set is_manual = event.get('is_call_deadline_manual') == 1 or event.get('is_call_deadline_manual') == True %}
+                                        <span class="date-badge {% if is_manual %}date-call-manual{% else %}date-call{% endif %}" 
+                                              {% if is_manual %}title="תאריך זה שונה ידנית"{% endif %}>
+                                            {% if is_manual %}
+                                                <i class="bi bi-pencil-square manual-indicator" title="תאריך שונה ידנית"></i>
+                                            {% endif %}
+                                            {{ event.call_deadline_date }}
+                                        </span>
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
@@ -1171,7 +1191,7 @@ function renderCommitteeTable(committees) {
                                 </div>
                                 <div class="event-details mt-2">
                                     <strong>תאריכים:</strong>
-                                    ${event.call_deadline_date ? `סיום קול קורא: ${formatDate(event.call_deadline_date)} • ` : ''}
+                                    ${event.call_deadline_date ? `סיום קול קורא: ${(event.is_call_deadline_manual == 1 || event.is_call_deadline_manual === true) ? '<i class="bi bi-pencil-square" style="font-size: 0.75rem; color: #721c24;" title="תאריך שונה ידנית"></i> ' : ''}${formatDate(event.call_deadline_date)} • ` : ''}
                                     ${event.intake_deadline_date ? `סיום קליטה: ${formatDate(event.intake_deadline_date)} • ` : ''}
                                     ${event.review_deadline_date ? `סיום בדיקה: ${formatDate(event.review_deadline_date)}` : ''}
                                 </div>
