@@ -1523,9 +1523,17 @@ def edit_maslul(maslul_id):
 def delete_maslul(maslul_id):
     """Delete route with safety checks"""
     try:
-        # Check if maslul is used in any events
-        events = db.get_all_events()
-        maslul_events = [e for e in events if e['maslul_id'] == maslul_id]
+        # Get maslul name before deletion
+        maslulim = db.get_maslulim()
+        maslul = next((m for m in maslulim if m['maslul_id'] == maslul_id), None)
+        
+        if not maslul:
+            flash('המסלול לא נמצא במערכת', 'error')
+            return redirect(url_for('maslulim'))
+        
+        # Check if maslul is used in any events (including deleted ones) and get examples
+        events = db.get_all_events(include_deleted=True)
+        maslul_events = [e for e in events if e.get('maslul_id') == maslul_id]
         
         if maslul_events:
             # Create examples list (up to 5 events) with dates
@@ -1556,14 +1564,6 @@ def delete_maslul(maslul_id):
             flash(f'לא ניתן למחוק מסלול המשויך ל-{len(maslul_events)} אירועים. יש למחוק תחילה את האירועים הקשורים. דוגמאות לאירועים: {examples_text}.', 'error')
             return redirect(url_for('maslulim'))
         
-        # Get maslul name before deletion
-        maslulim = db.get_maslulim()
-        maslul = next((m for m in maslulim if m['maslul_id'] == maslul_id), None)
-        
-        if not maslul:
-            flash('המסלול לא נמצא במערכת', 'error')
-            return redirect(url_for('maslulim'))
-        
         # Delete the maslul
         success = db.delete_maslul(maslul_id)
         if success:
@@ -1571,6 +1571,9 @@ def delete_maslul(maslul_id):
         else:
             flash('שגיאה במחיקת המסלול', 'error')
             
+    except ValueError as ve:
+        # This is our custom error from delete_maslul
+        flash(str(ve), 'error')
     except Exception as e:
         flash(f'שגיאה במחיקת המסלול: {str(e)}', 'error')
     

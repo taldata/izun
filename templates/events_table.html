@@ -397,12 +397,13 @@
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">סוג ועדה</label>
-                                <select class="form-select form-select-sm" id="filterCommitteeType" onchange="filterTable()">
+                                <select class="form-select form-select-sm" id="filterCommitteeType" onchange="filterTable()" disabled>
                                     <option value="">כל סוגי הועדות</option>
                                     {% for committee_type in committee_types %}
-                                        <option value="{{ committee_type.committee_type_id }}">{{ committee_type.name }}</option>
+                                        <option value="{{ committee_type.committee_type_id }}" data-hativa="{{ committee_type.hativa_id }}">{{ committee_type.name }}</option>
                                     {% endfor %}
                                 </select>
+                                <small class="form-text text-muted">יש לבחור חטיבה תחילה</small>
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">סוג אירוע</label>
@@ -841,7 +842,45 @@ function updateSortIndicators() {
 
 function onHativaFilterChange() {
     updateMaslulFilter();
+    updateCommitteeTypeFilter();
     filterTable();
+}
+
+function updateCommitteeTypeFilter() {
+    const hativaFilter = document.getElementById('filterHativa').value;
+    const committeeTypeSelect = document.getElementById('filterCommitteeType');
+    const currentCommitteeType = committeeTypeSelect.value;
+    let currentCommitteeTypeStillVisible = false;
+    
+    // Enable/disable based on hativa selection
+    if (!hativaFilter) {
+        committeeTypeSelect.disabled = true;
+        committeeTypeSelect.value = '';
+    } else {
+        committeeTypeSelect.disabled = false;
+    }
+    
+    // Show/hide committee type options based on hativa selection
+    Array.from(committeeTypeSelect.options).forEach(option => {
+        if (option.value === '') {
+            option.style.display = '';
+            return;
+        }
+        
+        if (!hativaFilter || option.dataset.hativa === hativaFilter) {
+            option.style.display = '';
+            if (option.value === currentCommitteeType) {
+                currentCommitteeTypeStillVisible = true;
+            }
+        } else {
+            option.style.display = 'none';
+        }
+    });
+    
+    // If current committee type is not visible anymore, clear the selection
+    if (currentCommitteeType && !currentCommitteeTypeStillVisible) {
+        committeeTypeSelect.value = '';
+    }
 }
 
 function filterTable() {
@@ -987,6 +1026,43 @@ function updateMaslulFilter() {
     }
 }
 
+function updateCommitteeTypeFilter() {
+    const hativaFilter = document.getElementById('filterHativa').value;
+    const committeeTypeSelect = document.getElementById('filterCommitteeType');
+    const currentCommitteeType = committeeTypeSelect.value;
+    let currentCommitteeTypeStillVisible = false;
+    
+    // Enable/disable based on hativa selection
+    if (!hativaFilter) {
+        committeeTypeSelect.disabled = true;
+        committeeTypeSelect.value = '';
+    } else {
+        committeeTypeSelect.disabled = false;
+    }
+    
+    // Show/hide committee type options based on hativa selection
+    Array.from(committeeTypeSelect.options).forEach(option => {
+        if (option.value === '') {
+            option.style.display = '';
+            return;
+        }
+        
+        if (!hativaFilter || option.dataset.hativa === hativaFilter) {
+            option.style.display = '';
+            if (option.value === currentCommitteeType) {
+                currentCommitteeTypeStillVisible = true;
+            }
+        } else {
+            option.style.display = 'none';
+        }
+    });
+    
+    // If current committee type is not visible anymore, clear the selection
+    if (currentCommitteeType && !currentCommitteeTypeStillVisible) {
+        committeeTypeSelect.value = '';
+    }
+}
+
 function clearAllFilters() {
     document.getElementById('filterHativa').value = '';
     document.getElementById('filterMaslul').value = '';
@@ -998,6 +1074,9 @@ function clearAllFilters() {
     document.getElementById('filterMinRequests').value = '';
     document.getElementById('filterMaxRequests').value = '';
     
+    // Update dependent filters
+    updateMaslulFilter();
+    updateCommitteeTypeFilter();
     filterTable();
 }
 
@@ -1049,6 +1128,9 @@ function exportToCSV() {
 
 // Initialize filters on page load
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize committee type filter state
+    updateCommitteeTypeFilter();
+    
     filterTable();
 
     // Initialize view toggle
