@@ -63,15 +63,9 @@
 
                     <div class="mb-4">
                         <h6 class="text-primary fw-bold mb-3">
-                            <i class="bi bi-calendar-check me-2"></i>אילוצי בקשות לפי סוג תאריך
+                            <i class="bi bi-calendar-check me-2"></i>אילוצי בקשות
                         </h6>
                         <div class="row g-3">
-                            <div class="col-12">
-                                <div class="alert alert-info">
-                                    <i class="bi bi-info-circle me-2"></i>
-                                    הגדר מגבלות נפרדות לכל סוג תאריך. כל תאריך יכול לקבל עומס שונה בהתאם ליכולת העיבוד.
-                                </div>
-                            </div>
                             <div class="col-12 col-md-6">
                                 <label class="form-label">
                                     <i class="bi bi-people me-1"></i>מקסימום בקשות ביום ועדה
@@ -81,16 +75,6 @@
                                 <div class="invalid-feedback d-block">{{ errors.get('max_requests_committee_date') }}</div>
                                 {% endif %}
                                 <small class="form-text text-muted">בתאריך ישיבת הועדה</small>
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <label class="form-label">
-                                    <i class="bi bi-megaphone me-1"></i>מקסימום בקשות בסגירת קול קורא
-                                </label>
-                                <input type="number" min="1" max="1000" class="form-control {% if errors and errors.get('max_requests_call_deadline') %}is-invalid{% endif %}" name="max_requests_call_deadline" value="{{ settings.limits.max_requests_call_deadline }}">
-                                {% if errors and errors.get('max_requests_call_deadline') %}
-                                <div class="invalid-feedback d-block">{{ errors.get('max_requests_call_deadline') }}</div>
-                                {% endif %}
-                                <small class="form-text text-muted">בתאריך סגירת קול קורא</small>
                             </div>
                         </div>
                     </div>
@@ -306,10 +290,6 @@
                         <span class="text-muted">יום ועדה:</span>
                         <span class="fw-semibold">{{ settings.limits.max_requests_committee_date }}</span>
                     </li>
-                    <li class="mb-2">
-                        <span class="text-muted">סגירת קול קורא:</span>
-                        <span class="fw-semibold">{{ settings.limits.max_requests_call_deadline }}</span>
-                    </li>
                     <li class="mb-0">
                         <hr class="my-2">
                         <strong class="text-primary"><i class="bi bi-lightbulb me-1"></i>הגדרות המלצות</strong>
@@ -336,7 +316,6 @@
             </div>
             <div class="card-body small text-muted">
                 <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>הקפידו על התאמה בין מכסות יומיות ושבועיות כדי למנוע חסימות מיותרות.</p>
-                <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>אילוץ הבקשות בסגירת קול קורא מאפשר שליטה על עומס המערכת בתאריך זה.</p>
                 <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i>לאחר שינוי ההגדרות, הריצו מחדש את התזמון האוטומטי לבדיקת התוצאות.</p>
                 <p class="mb-0"><i class="bi bi-star text-warning me-1"></i>הגדרות ההמלצות משפיעות על הציון שכל ועדה מקבלת במערכת ההמלצות.</p>
             </div>

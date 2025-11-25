@@ -1899,8 +1899,9 @@ def add_event():
             'call_publication_date': call_publication_date
         }
         
+        user_role = session.get('role')
         event_id = db.add_event(int(vaadot_id), int(maslul_id), name, event_type, expected_requests, actual_submissions, call_publication_date,
-                                 is_call_deadline_manual, manual_call_deadline_date)
+                                 is_call_deadline_manual, manual_call_deadline_date, user_role=user_role)
         
         # Get committee name for logging
         vaada = db.get_vaada_by_id(int(vaadot_id))
@@ -1969,8 +1970,9 @@ def edit_event(event_id):
             flash(f'שגיאה: המסלול "{maslul["name"]}" מחטיבת "{maslul["hativa_name"]}" אינו יכול להיות משויך לועדה מחטיבת "{vaada["hativa_name"]}"', 'error')
             return redirect(url_for('index'))
         
+        user_role = session.get('role')
         success = db.update_event(event_id, int(vaadot_id), int(maslul_id), name, event_type, expected_requests, actual_submissions, call_publication_date,
-                                   is_call_deadline_manual, manual_call_deadline_date)
+                                   is_call_deadline_manual, manual_call_deadline_date, user_role=user_role)
         if success:
             audit_logger.log_event_updated(event_id, name)
             flash(f'אירוע "{name}" עודכן בהצלחה', 'success')
@@ -3300,7 +3302,8 @@ def move_committee():
         
         # Update committee meeting date
         try:
-            success = db.update_vaada_date(vaada_id, new_date_obj)
+            user_role = session.get('role')
+            success = db.update_vaada_date(vaada_id, new_date_obj, user_role=user_role)
         except ValueError as ve:
             audit_logger.log_error(
                 audit_logger.ACTION_MOVE,
@@ -3446,7 +3449,8 @@ def move_event():
         source_committee_name = source_vaada['committee_name'] if source_vaada else 'Unknown'
         
         # Update event's committee meeting (includes max requests validation)
-        success = db.update_event_vaada(event_id, target_vaada_id)
+        user_role = session.get('role')
+        success = db.update_event_vaada(event_id, target_vaada_id, user_role=user_role)
         
         if success:
             # Log successful move
