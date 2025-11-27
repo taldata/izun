@@ -388,12 +388,13 @@
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">מסלול</label>
-                                <select class="form-select form-select-sm" id="filterMaslul" onchange="filterTable()">
+                                <select class="form-select form-select-sm" id="filterMaslul" onchange="filterTable()" disabled>
                                     <option value="">כל המסלולים</option>
                                     {% for maslul in maslulim %}
                                         <option value="{{ maslul.maslul_id }}" data-hativa="{{ maslul.hativa_id }}">{{ maslul.name }}</option>
                                     {% endfor %}
                                 </select>
+                                <small class="form-text text-muted">יש לבחור חטיבה תחילה</small>
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">סוג ועדה</label>
@@ -431,20 +432,16 @@
                                 <input type="date" class="form-control form-control-sm" id="filterDateTo" onchange="filterTable()">
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label">חיפוש טקסט</label>
+                                <label class="form-label">חיפוש טקסט בשם האירוע</label>
                                 <input type="text" class="form-control form-control-sm" id="filterText" placeholder="שם אירוע..." onkeyup="filterTable()">
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">מספר בקשות</label>
-                                <div class="d-flex gap-2 align-items-end">
-                                    <div class="flex-fill">
-                                        <label class="form-label small text-muted mb-1" for="filterMinRequests">מ-</label>
-                                        <input type="number" class="form-control form-control-sm" id="filterMinRequests" placeholder="0" min="0" onchange="filterTable()">
-                                    </div>
-                                    <div class="flex-fill">
-                                        <label class="form-label small text-muted mb-1" for="filterMaxRequests">עד</label>
-                                        <input type="number" class="form-control form-control-sm" id="filterMaxRequests" placeholder="ללא הגבלה" min="0" onchange="filterTable()">
-                                    </div>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-light">מ-</span>
+                                    <input type="number" class="form-control" id="filterMinRequests" placeholder="0" min="0" onchange="filterTable()">
+                                    <span class="input-group-text bg-light">עד</span>
+                                    <input type="number" class="form-control" id="filterMaxRequests" placeholder="ללא הגבלה" min="0" onchange="filterTable()">
                                 </div>
                             </div>
                         </div>
