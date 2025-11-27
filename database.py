@@ -3449,10 +3449,10 @@ class DatabaseManager:
                 ''', (status, calendar_event_id, error_message, content_hash, sync_id))
             else:
                 cursor.execute('''
-                    UPDATE calendar_sync_events
-                    SET sync_status = ?, calendar_event_id = ?, error_message = ?,
-                        last_synced = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                    WHERE sync_id = ?
+                UPDATE calendar_sync_events
+                SET sync_status = ?, calendar_event_id = ?, error_message = ?,
+                    last_synced = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE sync_id = ?
                 ''', (status, calendar_event_id, error_message, sync_id))
         else:
             cursor.execute('''
