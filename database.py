@@ -240,6 +240,12 @@ class DatabaseManager:
             CREATE INDEX IF NOT EXISTS idx_calendar_sync_calendar_id ON calendar_sync_events (calendar_event_id)
         ''')
 
+        # Add content_hash column if it doesn't exist (for change detection)
+        try:
+            cursor.execute('ALTER TABLE calendar_sync_events ADD COLUMN content_hash TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         cursor.execute('''
             INSERT OR IGNORE INTO system_settings (setting_key, setting_value, description)
             VALUES 
@@ -3428,18 +3434,26 @@ class DatabaseManager:
             conn.close()
 
     def update_calendar_sync_status(self, sync_id: int, status: str, calendar_event_id: str = None,
-                                      error_message: str = None) -> bool:
+                                      error_message: str = None, content_hash: str = None) -> bool:
         """Update calendar sync status"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
         if calendar_event_id:
-            cursor.execute('''
-                UPDATE calendar_sync_events
-                SET sync_status = ?, calendar_event_id = ?, error_message = ?,
-                    last_synced = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                WHERE sync_id = ?
-            ''', (status, calendar_event_id, error_message, sync_id))
+            if content_hash:
+                cursor.execute('''
+                    UPDATE calendar_sync_events
+                    SET sync_status = ?, calendar_event_id = ?, error_message = ?, content_hash = ?,
+                        last_synced = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                    WHERE sync_id = ?
+                ''', (status, calendar_event_id, error_message, content_hash, sync_id))
+            else:
+                cursor.execute('''
+                    UPDATE calendar_sync_events
+                    SET sync_status = ?, calendar_event_id = ?, error_message = ?,
+                        last_synced = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                    WHERE sync_id = ?
+                ''', (status, calendar_event_id, error_message, sync_id))
         else:
             cursor.execute('''
                 UPDATE calendar_sync_events
@@ -3461,7 +3475,7 @@ class DatabaseManager:
 
         cursor.execute('''
             SELECT sync_id, source_type, source_id, deadline_type, calendar_event_id, calendar_email,
-                   last_synced, sync_status, error_message, created_at, updated_at
+                   last_synced, sync_status, error_message, created_at, updated_at, content_hash
             FROM calendar_sync_events
             WHERE source_type = ? AND source_id = ? AND deadline_type IS ? AND calendar_email = ?
         ''', (source_type, source_id, deadline_type, calendar_email))
@@ -3474,7 +3488,7 @@ class DatabaseManager:
                 'sync_id': row[0], 'source_type': row[1], 'source_id': row[2],
                 'deadline_type': row[3], 'calendar_event_id': row[4], 'calendar_email': row[5],
                 'last_synced': row[6], 'sync_status': row[7], 'error_message': row[8],
-                'created_at': row[9], 'updated_at': row[10]
+                'created_at': row[9], 'updated_at': row[10], 'content_hash': row[11] if len(row) > 11 else None
             }
         return None
 
