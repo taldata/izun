@@ -80,18 +80,6 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                         </div>
 
-                        <!-- Large View Toggle -->
-                        <div class="control-group options-group">
-                            <div class="control-header">
-                                <i class="bi bi-aspect-ratio me-1"></i>
-                                <span>תצוגה</span>
-                            </div>
-                            <div class="form-check form-switch mt-1">
-                                <input class="form-check-input" type="checkbox" id="toggleLargeCalendarView">
-                                <label class="form-check-label" for="toggleLargeCalendarView">תצוגה גדולה</label>
-                            </div>
-                        </div>
-
                         <!-- Display Options Group -->
                         <div class="control-group options-group">
                             <div class="control-header">
@@ -358,7 +346,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3" id="add_actual_group">
-                                <label for="actual_submissions" class="form-label">בקשות בפועל</label>
+                                <label for="actual_submissions" class="form-label">הגשות בפועל</label>
                                 <input type="number" class="form-control" name="actual_submissions" id="actual_submissions" min="0" value="0">
                             </div>
                         </div>
@@ -557,7 +545,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3" id="edit_actual_group">
-                                <label for="edit_actual_submissions" class="form-label">בקשות בפועל</label>
+                                <label for="edit_actual_submissions" class="form-label">הגשות בפועל</label>
                                 <input type="number" class="form-control" name="actual_submissions" id="edit_actual_submissions" min="0" value="0">
                             </div>
                         </div>
@@ -724,7 +712,6 @@ document.addEventListener('DOMContentLoaded', function() {
 let currentDate = new Date();
 let monthsToShow = 1; // Default to showing 1 month
 let calendarSearchQuery = '';
-let isLargeCalendarView = false;
 const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
                    'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
@@ -935,7 +922,7 @@ function createMonthCalendar(year, month, isCompact = false) {
                 cell.style.cursor = 'not-allowed';
             }
             
-            cell.style.height = isLargeCalendarView ? (isCompact ? '85px' : '120px') : (isCompact ? '55px' : '70px');
+            cell.style.height = isCompact ? '55px' : '70px';
             cell.style.verticalAlign = 'top';
             
             if (week === 0 && day < startingDayOfWeek) {
@@ -1000,7 +987,7 @@ function createMonthCalendar(year, month, isCompact = false) {
                     const hativaColor = getHativaColor(committee.hativa_id);
                     
                     committeeDiv.className = 'badge text-white mb-1 d-block text-truncate position-relative committee-badge';
-                    committeeDiv.style.fontSize = isLargeCalendarView ? (isCompact ? '0.8rem' : '1rem') : (isCompact ? '0.6rem' : '0.7rem');
+                    committeeDiv.style.fontSize = isCompact ? '0.6rem' : '0.7rem';
                     committeeDiv.style.cursor = 'pointer';
                     committeeDiv.style.backgroundColor = committee.is_operational ? '#495057' : hativaColor;
                     committeeDiv.style.borderRadius = '6px';
@@ -1081,7 +1068,7 @@ function createMonthCalendar(year, month, isCompact = false) {
                         if (!isCompact) {
                             const eventsHeader = document.createElement('div');
                             eventsHeader.className = 'text-muted';
-                            eventsHeader.style.fontSize = isLargeCalendarView ? '0.8rem' : '0.55rem';
+                            eventsHeader.style.fontSize = '0.55rem';
                             eventsHeader.style.marginBottom = '3px';
                             eventsHeader.style.paddingRight = '4px';
                             eventsHeader.innerHTML = `<i class="bi bi-calendar-event me-1"></i>אירועים בועדה:`;
@@ -1101,14 +1088,14 @@ function createMonthCalendar(year, month, isCompact = false) {
                             const hativaColorLight = getHativaColorLight(committee.hativa_id);
                             
                             eventDiv.className = 'event-badge mb-1 d-block text-truncate position-relative';
-                            eventDiv.style.fontSize = isLargeCalendarView ? (isCompact ? '0.75rem' : '0.9rem') : (isCompact ? '0.5rem' : '0.6rem');
+                            eventDiv.style.fontSize = isCompact ? '0.5rem' : '0.6rem';
                             eventDiv.style.cursor = 'pointer';
                             eventDiv.style.backgroundColor = hativaColorLight;
                             eventDiv.style.color = hativaColor;
                             eventDiv.style.border = `1px solid ${hativaColor}60`;
                             eventDiv.style.borderRadius = '6px';
                             eventDiv.style.fontWeight = '500';
-                            eventDiv.style.padding = isLargeCalendarView ? (isCompact ? '4px 6px' : '6px 10px') : (isCompact ? '2px 4px' : '3px 6px');
+                            eventDiv.style.padding = isCompact ? '2px 4px' : '3px 6px';
                             eventDiv.style.boxShadow = `0 1px 3px rgba(0,0,0,0.1)`;
                             eventDiv.style.transition = 'all 0.2s ease';
                             eventDiv.style.marginRight = '4px';
@@ -1476,10 +1463,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     setupAvailableDatesFinder();
 
-    // Initialize calendar search and large view toggle
+    // Initialize calendar search
     const searchInput = document.getElementById('calendarSearchInput');
     const clearSearchBtn = document.getElementById('clearCalendarSearch');
-    const largeViewToggle = document.getElementById('toggleLargeCalendarView');
     if (searchInput) {
         let searchDebounce;
         searchInput.addEventListener('input', function() {
@@ -1495,17 +1481,6 @@ document.addEventListener('DOMContentLoaded', function() {
         clearSearchBtn.addEventListener('click', function() {
             searchInput.value = '';
             calendarSearchQuery = '';
-            renderCalendar();
-            setTimeout(initializeDragAndDrop, 50);
-        });
-    }
-    if (largeViewToggle) {
-        largeViewToggle.addEventListener('change', function() {
-            isLargeCalendarView = !!this.checked;
-            const container = document.getElementById('calendarContainer');
-            if (container) {
-                container.classList.toggle('calendar-large-view', isLargeCalendarView);
-            }
             renderCalendar();
             setTimeout(initializeDragAndDrop, 50);
         });

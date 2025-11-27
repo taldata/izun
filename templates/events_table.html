@@ -431,16 +431,16 @@
                                 <input type="date" class="form-control form-control-sm" id="filterDateTo" onchange="filterTable()">
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label">חיפוש טקסט בשם האירוע</label>
-                                <input type="text" class="form-control form-control-sm" id="filterText" placeholder="הקלד טקסט לחיפוש..." onkeyup="filterTable()">
+                                <label class="form-label">חיפוש טקסט</label>
+                                <input type="text" class="form-control form-control-sm" id="filterText" placeholder="שם אירוע..." onkeyup="filterTable()">
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label">מספר בקשות צפויות</label>
-                                <div class="d-flex gap-2 align-items-center">
-                                    <input type="number" class="form-control form-control-sm" id="filterMinRequests" placeholder="מינימום" min="0" onchange="filterTable()" style="width: 45%;">
-                                    <span class="text-muted">-</span>
-                                    <input type="number" class="form-control form-control-sm" id="filterMaxRequests" placeholder="מקסימום" min="0" onchange="filterTable()" style="width: 45%;">
-                                </div>
+                                <label class="form-label">מספר בקשות מ-</label>
+                                <input type="number" class="form-control form-control-sm" id="filterMinRequests" placeholder="0" min="0" onchange="filterTable()">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">מספר בקשות עד</label>
+                                <input type="number" class="form-control form-control-sm" id="filterMaxRequests" placeholder="ללא הגבלה" min="0" onchange="filterTable()">
                             </div>
                         </div>
                     </div>
@@ -1866,6 +1866,7 @@ function exportEventsViewToExcel() {
 
     // Apply formats for date and number columns
     // Find the header row (first row with headers)
+    const activeFilters = getActiveFilters();
     const filterRowsCount = activeFilters.length > 0 ? activeFilters.length + 2 : 0; // +1 for "פילטרים פעילים:" row, +1 for empty row
     const dataStartRow = filterRowsCount + 1; // +1 for header row
     
