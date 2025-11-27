@@ -618,9 +618,9 @@ def bulk_delete_events():
         if not user:
             return jsonify({'success': False, 'message': 'נדרשת התחברות'}), 401
         
-        # Check permissions: Viewers cannot delete events
-        if user['role'] == 'viewer':
-            return jsonify({'success': False, 'message': 'צופים לא יכולים למחוק אירועים - נדרשות הרשאות עורך'}), 403
+        # Check permissions: Users cannot delete events
+        if user['role'] == 'user':
+            return jsonify({'success': False, 'message': 'משתמשים רגילים לא יכולים למחוק אירועים'}), 403
         
         # Pre-fetch names for audit per item (best-effort)
         events_map = {e['event_id']: e for e in db.get_all_events()}
@@ -641,17 +641,6 @@ def bulk_delete_events():
                 except (ValueError, KeyError):
                     continue
         deleted = db.delete_events_bulk(event_ids, user['user_id'])
-
-        # Delete calendar events for each deleted event
-        try:
-            for eid in event_ids:
-                try:
-                    eid_int = int(eid)
-                    calendar_service.sync_event_deadlines_to_calendar(eid_int)
-                except Exception as cal_error:
-                    app.logger.warning(f"Failed to delete calendar events for event {eid}: {cal_error}")
-        except Exception as cal_error:
-            app.logger.warning(f"Failed to delete calendar events in bulk: {cal_error}")
 
         # Audit: summary
         audit_logger.log_success(
@@ -698,9 +687,9 @@ def bulk_delete_committees():
         if not user:
             return jsonify({'success': False, 'message': 'נדרשת התחברות'}), 401
         
-        # Check permissions: Viewers cannot delete committees
-        if user['role'] == 'viewer':
-            return jsonify({'success': False, 'message': 'צופים לא יכולים למחוק ועדות - נדרשות הרשאות עורך'}), 403
+        # Check permissions: Users cannot delete committees
+        if user['role'] == 'user':
+            return jsonify({'success': False, 'message': 'משתמשים רגילים לא יכולים למחוק ועדות'}), 403
         
         # Pre-fetch names for audit per item (best-effort)
         vaadot_map = {v['vaadot_id']: v for v in db.get_vaadot()}
@@ -721,23 +710,6 @@ def bulk_delete_committees():
                 except (ValueError, KeyError):
                     continue
         deleted_committees, affected_events = db.delete_vaadot_bulk(vaadot_ids, user['user_id'])
-
-        # Delete calendar events for each deleted committee
-        try:
-            for vid in vaadot_ids:
-                try:
-                    vid_int = int(vid)
-                    calendar_service.sync_committee_to_calendar(vid_int)
-                    
-                    # Also sync related events to delete their calendar entries
-                    events = db.get_all_events(include_deleted=True)
-                    related_events = [e for e in events if e.get('vaadot_id') == vid_int]
-                    for event in related_events:
-                        calendar_service.sync_event_deadlines_to_calendar(event['event_id'])
-                except Exception as cal_error:
-                    app.logger.warning(f"Failed to delete calendar events for committee {vid}: {cal_error}")
-        except Exception as cal_error:
-            app.logger.warning(f"Failed to delete calendar events in bulk: {cal_error}")
 
         # Audit: summary
         audit_logger.log_success(
@@ -1102,50 +1074,33 @@ def index():
 
 @app.route('/dashboard')
 @login_required
-@admin_required
 def dashboard():
-    """Admin analytics dashboard"""
+    """Analytics Dashboard"""
+    from datetime import datetime, timedelta
     from collections import defaultdict
-
-    # Date range parameters (default last 12 months)
-    today = date.today()
-    default_end = today.replace(day=1) + timedelta(days=32)
-    default_end = default_end.replace(day=1) - timedelta(days=1)
-    default_start = (today.replace(day=1) - timedelta(days=365))
-
-    start_str = request.args.get('start_date')
-    end_str = request.args.get('end_date')
-
-    try:
-        start_date = datetime.strptime(start_str, '%Y-%m-%d').date() if start_str else default_start
-    except ValueError:
-        start_date = default_start
-
-    try:
-        end_date = datetime.strptime(end_str, '%Y-%m-%d').date() if end_str else default_end
-    except ValueError:
-        end_date = default_end
-
-    if start_date > end_date:
-        start_date, end_date = end_date, start_date
-
-    # Fetch data
+    
+    # Get all data
     hativot = db.get_hativot()
     maslulim = db.get_maslulim()
     committee_types = db.get_committee_types()
     committees = db.get_vaadot()
     events = db.get_all_events()
-
-    # Stats by division
+    
+    # Current date
+    today = date.today()
+    current_month = today.month
+    current_year = today.year
+    
+    # === Statistics by Division ===
     stats_by_hativa = {}
     for hativa in hativot:
         hativa_id = hativa['hativa_id']
         hativa_events = [e for e in events if e.get('hativa_id') == hativa_id]
         hativa_committees = [c for c in committees if c.get('hativa_id') == hativa_id]
-
+        
         total_expected = sum([e.get('expected_requests', 0) or 0 for e in hativa_events])
         total_actual = sum([e.get('actual_submissions', 0) or 0 for e in hativa_events])
-
+        
         stats_by_hativa[hativa_id] = {
             'name': hativa['name'],
             'color': hativa.get('color', '#007bff'),
@@ -1155,51 +1110,56 @@ def dashboard():
             'actual_submissions': total_actual,
             'fulfillment_rate': round((total_actual / total_expected * 100) if total_expected > 0 else 0, 1)
         }
-
-    # Events by type
+    
+    # === Events by Type ===
     events_by_type = defaultdict(int)
     for event in events:
         event_type = event.get('event_type', 'אחר')
         events_by_type[event_type] += 1
-
-    # Aggregated analytics within date range
-    committees_by_month = db.get_committees_count_by_month_and_hativa(start_date, end_date)
-    requests_by_maslul = db.get_requests_by_maslul_per_month(start_date, end_date)
-    expected_by_submission = db.get_expected_requests_by_submission_month(start_date, end_date)
-
-    # Prepare chart-friendly structures
-    committees_chart = defaultdict(dict)
-    for entry in committees_by_month:
-        committees_chart[entry['month']][entry['hativa_name']] = {
-            'count': entry['total_committees'],
-            'color': entry.get('hativa_color') or '#007bff'
+    
+    # === Monthly Trend (last 6 months) ===
+    monthly_data = {}
+    for i in range(6):
+        month_date = today - timedelta(days=30 * i)
+        month_key = f"{month_date.year}-{month_date.month:02d}"
+        monthly_data[month_key] = {
+            'committees': 0,
+            'events': 0,
+            'expected_requests': 0,
+            'actual_submissions': 0
         }
-
-    maslul_chart = defaultdict(dict)
-    for entry in requests_by_maslul:
-        maslul_chart[entry['month']][entry['maslul_name']] = {
-            'expected': entry['expected_requests'],
-            'actual': entry['actual_submissions'],
-            'hativa_name': entry['hativa_name']
-        }
-
-    expected_submission_chart = {entry['month']: entry['expected_requests'] for entry in expected_by_submission}
-
-    committees_chart_dict = {month: data for month, data in committees_chart.items()}
-    maslul_chart_dict = {month: data for month, data in maslul_chart.items()}
-
-    maslul_totals = defaultdict(int)
-    for month_data in maslul_chart_dict.values():
-        for maslul_name, stats in month_data.items():
-            maslul_totals[maslul_name] += stats['expected']
-
-    top_maslul_names = [name for name, _ in sorted(maslul_totals.items(), key=lambda x: x[1], reverse=True)[:5]]
-    maslul_chart_top = {
-        month: {maslul: stats for maslul, stats in month_data.items() if maslul in top_maslul_names}
-        for month, month_data in maslul_chart_dict.items()
-    }
-
-    # Top maslulim ranking
+    
+    for committee in committees:
+        if committee.get('vaada_date'):
+            try:
+                if isinstance(committee['vaada_date'], str):
+                    vaada_date = datetime.strptime(committee['vaada_date'], '%Y-%m-%d').date()
+                else:
+                    vaada_date = committee['vaada_date']
+                
+                month_key = f"{vaada_date.year}-{vaada_date.month:02d}"
+                if month_key in monthly_data:
+                    monthly_data[month_key]['committees'] += 1
+            except:
+                pass
+    
+    for event in events:
+        if event.get('committee_date'):
+            try:
+                if isinstance(event['committee_date'], str):
+                    event_date = datetime.strptime(event['committee_date'], '%Y-%m-%d').date()
+                else:
+                    event_date = event['committee_date']
+                
+                month_key = f"{event_date.year}-{event_date.month:02d}"
+                if month_key in monthly_data:
+                    monthly_data[month_key]['events'] += 1
+                    monthly_data[month_key]['expected_requests'] += event.get('expected_requests', 0) or 0
+                    monthly_data[month_key]['actual_submissions'] += event.get('actual_submissions', 0) or 0
+            except:
+                pass
+    
+    # === Top Routes by Events ===
     maslul_stats = defaultdict(lambda: {'count': 0, 'expected': 0, 'actual': 0})
     for event in events:
         maslul_id = event.get('maslul_id')
@@ -1207,7 +1167,8 @@ def dashboard():
             maslul_stats[maslul_id]['count'] += 1
             maslul_stats[maslul_id]['expected'] += event.get('expected_requests', 0) or 0
             maslul_stats[maslul_id]['actual'] += event.get('actual_submissions', 0) or 0
-
+    
+    # Add maslul names
     maslul_rankings = []
     for maslul in maslulim:
         maslul_id = maslul['maslul_id']
@@ -1221,29 +1182,33 @@ def dashboard():
                 'actual_submissions': stats['actual'],
                 'fulfillment_rate': round((stats['actual'] / stats['expected'] * 100) if stats['expected'] > 0 else 0, 1)
             })
-
+    
     maslul_rankings.sort(key=lambda x: x['events_count'], reverse=True)
     top_maslulim = maslul_rankings[:10]
-
-    # Upcoming events (30 days)
+    
+    # === Upcoming Events (next 30 days) ===
     upcoming_events = []
     future_date = today + timedelta(days=30)
     for event in events:
         if event.get('vaada_date'):
             try:
-                event_date = datetime.strptime(event['vaada_date'], '%Y-%m-%d').date() if isinstance(event['vaada_date'], str) else event['vaada_date']
+                if isinstance(event['vaada_date'], str):
+                    event_date = datetime.strptime(event['vaada_date'], '%Y-%m-%d').date()
+                else:
+                    event_date = event['vaada_date']
+                
                 if today <= event_date <= future_date:
                     upcoming_events.append(event)
-            except Exception:
-                continue
-
+            except:
+                pass
+    
     upcoming_events.sort(key=lambda x: x.get('vaada_date', ''))
-
-    # Overall statistics
+    
+    # === Overall Statistics ===
     total_expected = sum([e.get('expected_requests', 0) or 0 for e in events])
     total_actual = sum([e.get('actual_submissions', 0) or 0 for e in events])
     overall_fulfillment = round((total_actual / total_expected * 100) if total_expected > 0 else 0, 1)
-
+    
     stats = {
         'total_hativot': len(hativot),
         'total_maslulim': len(maslulim),
@@ -1256,23 +1221,17 @@ def dashboard():
         'kokok_count': events_by_type.get('kokok', 0),
         'shotef_count': events_by_type.get('shotef', 0)
     }
-
+    
     current_user = auth_manager.get_current_user()
-
-    return render_template(
-        'dashboard.html',
-        stats=stats,
-        stats_by_hativa=stats_by_hativa,
-        events_by_type=dict(events_by_type),
-        committees_chart=committees_chart_dict,
-        maslul_chart=maslul_chart_top,
-        expected_submission_chart=expected_submission_chart,
-        top_maslulim=top_maslulim,
-        upcoming_events=upcoming_events[:10],
-        current_user=current_user,
-        start_date=start_date,
-        end_date=end_date
-    )
+    
+    return render_template('dashboard.html',
+                         stats=stats,
+                         stats_by_hativa=stats_by_hativa,
+                         events_by_type=dict(events_by_type),
+                         monthly_data=monthly_data,
+                         top_maslulim=top_maslulim,
+                         upcoming_events=upcoming_events[:10],
+                         current_user=current_user)
 
 @app.route('/hativot')
 @login_required
@@ -1750,7 +1709,6 @@ def delete_exception_date(date_id):
 
 
 @app.route('/committees/add', methods=['POST'])
-@editor_required
 def add_committee_meeting():
     """Add new committee meeting"""
     committee_type_id = request.form.get('committee_type_id')
@@ -1824,7 +1782,6 @@ def add_committee_meeting():
     return redirect(url_for('index'))
 
 @app.route('/committees/edit/<int:vaadot_id>', methods=['POST'])
-@editor_required
 def edit_committee_meeting(vaadot_id):
     """Edit existing committee meeting"""
     committee_type_id = request.form.get('committee_type_id')
@@ -1874,7 +1831,6 @@ def edit_committee_meeting(vaadot_id):
     return redirect(url_for('index'))
 
 @app.route('/committees/delete/<int:vaadot_id>', methods=['POST'])
-@editor_required
 def delete_committee_meeting(vaadot_id):
     """Delete committee meeting and its events"""
     try:
@@ -1898,18 +1854,6 @@ def delete_committee_meeting(vaadot_id):
         success = db.delete_vaada(vaadot_id, user_id)
         if success:
             audit_logger.log_vaada_deleted(vaadot_id, committee_name)
-            
-            # Delete calendar events for this committee and its events
-            try:
-                # Sync deleted committee to calendar (will delete the calendar event)
-                calendar_service.sync_committee_to_calendar(vaadot_id)
-                
-                # Sync deleted events to calendar (will delete calendar events)
-                for event in related_events:
-                    calendar_service.sync_event_deadlines_to_calendar(event['event_id'])
-            except Exception as cal_error:
-                app.logger.warning(f"Failed to delete calendar events for committee {vaadot_id}: {cal_error}")
-            
             flash(f'ישיבת הועדה ו-{len(related_events)} אירועים הועברו לסל המחזור בהצלחה', 'success')
         else:
             flash('שגיאה במחיקת הישיבה', 'error')
@@ -1921,7 +1865,6 @@ def delete_committee_meeting(vaadot_id):
 
 
 @app.route('/events/add', methods=['POST'])
-@editor_required
 def add_event():
     """Add new event"""
     vaadot_id = request.form.get('vaadot_id')
@@ -2008,7 +1951,6 @@ def add_event():
     return redirect(url_for('index'))
 
 @app.route('/events/edit/<int:event_id>', methods=['POST'])
-@editor_required
 def edit_event(event_id):
     """Edit existing event"""
     vaadot_id = request.form.get('vaadot_id')
@@ -2077,7 +2019,7 @@ def edit_event(event_id):
     return redirect(url_for('index'))
 
 @app.route('/events/delete/<int:event_id>', methods=['POST'])
-@editor_required
+@login_required
 def delete_event_route(event_id):
     """Delete event"""
     try:
@@ -2086,6 +2028,11 @@ def delete_event_route(event_id):
         if not user:
             flash('נדרשת התחברות', 'error')
             return redirect(url_for('login'))
+        
+        # Check permissions: Users cannot delete events
+        if user['role'] == 'user':
+            flash('משתמשים רגילים לא יכולים למחוק אירועים', 'error')
+            return redirect(url_for('index'))
         
         # Get event name before deletion
         events = db.get_all_events()
@@ -2104,13 +2051,6 @@ def delete_event_route(event_id):
         success = db.delete_event(event_id, user['user_id'])
         if success:
             audit_logger.log_event_deleted(event_id, event['name'])
-            
-            # Delete calendar events for this event's deadlines
-            try:
-                calendar_service.sync_event_deadlines_to_calendar(event_id)
-            except Exception as cal_error:
-                app.logger.warning(f"Failed to delete calendar events for event {event_id}: {cal_error}")
-            
             flash(f'אירוע "{event["name"]}" הועבר לסל המחזור בהצלחה', 'success')
         else:
             flash('שגיאה במחיקת האירוע', 'error')
@@ -3342,7 +3282,7 @@ def sync_ad_user():
 
 # Drag & Drop API endpoints
 @app.route('/api/move_committee', methods=['POST'])
-@editor_required
+@login_required
 def move_committee():
     """Move committee meeting to a different date"""
     try:
@@ -3362,6 +3302,10 @@ def move_committee():
         vaada = db.get_vaada_by_id(vaada_id)
         if not vaada:
             return jsonify({'success': False, 'message': 'ועדה לא נמצאה'}), 404
+        
+        # Check permissions: Only managers and admins can move committees
+        if user['role'] == 'user':
+            return jsonify({'success': False, 'message': 'רק מנהלים ומנהלי מערכת יכולים להזיז ועדות'}), 403
         
         # Manager can only move committees in their division
         if user['role'] == 'manager':
@@ -3430,7 +3374,7 @@ def move_committee():
         return jsonify({'success': False, 'message': f'שגיאה: {str(e)}'}), 500
 
 @app.route('/api/duplicate_committee', methods=['POST'])
-@editor_required
+@login_required
 def duplicate_committee():
     """Duplicate a committee (vaada) with all its events to a new date"""
     try:
@@ -3460,7 +3404,9 @@ def duplicate_committee():
         if not source_vaada:
             return jsonify({'success': False, 'message': 'ועדה מקורית לא נמצאה'}), 404
 
-        # Permissions: managers only within their division; admins allowed
+        # Permissions: user cannot duplicate; managers only within their division; admins allowed
+        if user['role'] == 'user':
+            return jsonify({'success': False, 'message': 'רק מנהלים ומנהלי מערכת יכולים לשכפל ועדות'}), 403
         if user['role'] == 'manager' and source_vaada['hativa_id'] != user.get('hativa_id'):
             return jsonify({'success': False, 'message': 'מנהל יכול לשכפל רק ועדות בחטיבה שלו'}), 403
 
@@ -3496,7 +3442,8 @@ def duplicate_committee():
         return jsonify({'success': False, 'message': f'שגיאה: {str(e)}'}), 500
 
 @app.route('/api/move_event', methods=['POST'])
-@editor_required
+@login_required
+@editing_permission_required
 def move_event():
     """Move event to a different committee meeting"""
     try:
@@ -3918,65 +3865,6 @@ def trigger_calendar_sync():
     except Exception as e:
         app.logger.error(f"Error in manual calendar sync: {e}", exc_info=True)
         audit_logger.log_error('calendar_sync', 'calendar', str(e))
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-@app.route('/api/calendar/delete_all', methods=['POST'])
-@login_required
-@admin_required
-def delete_all_calendar_events():
-    """Delete all calendar events without re-syncing"""
-    try:
-        app.logger.info(f"Calendar delete all triggered by user {session.get('username')}")
-
-        calendar_email = calendar_service.calendar_email
-        
-        # Get all synced calendar events
-        sync_records = db.get_all_synced_calendar_events(calendar_email)
-        app.logger.info(f"Found {len(sync_records)} calendar events to delete")
-
-        events_deleted = 0
-        deletion_failures = 0
-
-        # Delete each calendar event
-        for record in sync_records:
-            calendar_event_id = record.get('calendar_event_id')
-            if calendar_event_id:
-                try:
-                    success, message = calendar_service.delete_calendar_event(calendar_event_id)
-                    if success:
-                        events_deleted += 1
-                    else:
-                        app.logger.warning(f"Failed to delete calendar event {calendar_event_id}: {message}")
-                        deletion_failures += 1
-                except Exception as e:
-                    app.logger.error(f"Error deleting calendar event {calendar_event_id}: {e}")
-                    deletion_failures += 1
-
-        # Clear sync records from database
-        records_cleared = db.clear_all_calendar_sync_records(calendar_email)
-        app.logger.info(f"Cleared {records_cleared} sync records from database")
-
-        # Log to audit
-        audit_logger.log(
-            action='calendar_delete_all',
-            entity_type='calendar',
-            entity_id=None,
-            entity_name='delete_all',
-            details=f"Deleted {events_deleted} events, {deletion_failures} failures, cleared {records_cleared} records",
-            status='success' if deletion_failures == 0 else 'warning'
-        )
-
-        return jsonify({
-            'success': True,
-            'message': f'נמחקו {events_deleted} אירועים מהיומן, נוקו {records_cleared} רשומות',
-            'events_deleted': events_deleted,
-            'deletion_failures': deletion_failures,
-            'records_cleared': records_cleared
-        })
-
-    except Exception as e:
-        app.logger.error(f"Error in delete all calendar events: {e}", exc_info=True)
-        audit_logger.log_error('calendar_delete_all', 'calendar', str(e))
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/calendar/sync/reset', methods=['POST'])
