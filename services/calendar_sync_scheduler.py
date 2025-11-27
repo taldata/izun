@@ -9,7 +9,8 @@ Handles automatic periodic synchronization of committee meetings and events to c
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from datetime import datetime
+from apscheduler.triggers.date import DateTrigger
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
@@ -71,9 +72,15 @@ class CalendarSyncScheduler:
 
             logger.info(f"Calendar sync scheduler started - running every {interval_hours} hour(s)")
 
-            # Run initial sync
-            logger.info("Running initial calendar sync...")
-            self._sync_job()
+            # Run initial sync after a short delay to ensure Azure AD credentials are loaded
+            # Use scheduler to run initial sync after 5 seconds instead of immediately
+            logger.info("Scheduling initial calendar sync in 5 seconds...")
+            self.scheduler.add_job(
+                func=self._sync_job,
+                trigger=DateTrigger(run_date=datetime.now(ISRAEL_TZ) + timedelta(seconds=5)),
+                id='initial_calendar_sync',
+                replace_existing=True
+            )
 
         except Exception as e:
             logger.error(f"Error starting calendar sync scheduler: {e}", exc_info=True)

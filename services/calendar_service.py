@@ -9,6 +9,8 @@ Uses Microsoft Graph API with app-only authentication
 
 import requests
 import logging
+import hashlib
+import json
 from typing import Optional, Dict, List, Tuple
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
@@ -334,11 +336,25 @@ class CalendarService:
 
             body = "\n".join(body_parts)
 
+            # Calculate content hash to check if anything changed
+            content_data = {
+                'subject': subject,
+                'start_date': str(vaada_date),
+                'body': body
+            }
+            content_hash = hashlib.md5(json.dumps(content_data, sort_keys=True).encode('utf-8')).hexdigest()
+
             # Check if sync record exists
             sync_record = self.db.get_calendar_sync_record('vaadot', vaadot_id, None, self.calendar_email)
 
             if sync_record and sync_record.get('calendar_event_id'):
-                # Update existing event (even if status is pending/failed, we have an event ID)
+                # Check if content changed by comparing hash
+                stored_hash = sync_record.get('content_hash')
+                if stored_hash == content_hash and sync_record.get('sync_status') == 'synced':
+                    # Content hasn't changed, skip update
+                    return True, "Committee already synced (no changes)"
+                
+                # Update existing event (content changed or status is pending/failed)
                 calendar_event_id = sync_record['calendar_event_id']
                 success, message = self.update_calendar_event(
                     event_id=calendar_event_id,
@@ -349,7 +365,7 @@ class CalendarService:
                 )
 
                 if success:
-                    self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', calendar_event_id)
+                    self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', calendar_event_id, content_hash=content_hash)
                     return True, f"Committee updated in calendar"
                 else:
                     # If update fails, keep the existing calendar_event_id but mark as failed
@@ -368,11 +384,11 @@ class CalendarService:
                     # Create or update sync record
                     if sync_record:
                         # Update existing sync record with new event ID
-                        self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', event_id)
+                        self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', event_id, content_hash=content_hash)
                     else:
                         # Create new sync record
                         sync_id = self.db.create_calendar_sync_record('vaadot', vaadot_id, None, self.calendar_email, event_id)
-                        self.db.update_calendar_sync_status(sync_id, 'synced', event_id)
+                        self.db.update_calendar_sync_status(sync_id, 'synced', event_id, content_hash=content_hash)
                     return True, f"Committee created in calendar with ID: {event_id}"
                 else:
                     if sync_record:
@@ -461,12 +477,27 @@ class CalendarService:
 
                 body = "\n".join(body_parts)
 
+                # Calculate content hash to check if anything changed
+                content_data = {
+                    'subject': subject,
+                    'start_date': str(deadline_date),
+                    'body': body
+                }
+                content_hash = hashlib.md5(json.dumps(content_data, sort_keys=True).encode('utf-8')).hexdigest()
+
                 # Check if sync record exists for this deadline
                 sync_record = self.db.get_calendar_sync_record('event_deadline', event_id, field_name, self.calendar_email)
 
                 try:
                     if sync_record and sync_record.get('calendar_event_id'):
-                        # Update existing event (even if status is pending/failed, we have an event ID)
+                        # Check if content changed by comparing hash
+                        stored_hash = sync_record.get('content_hash')
+                        if stored_hash == content_hash and sync_record.get('sync_status') == 'synced':
+                            # Content hasn't changed, skip update
+                            synced_count += 1
+                            continue
+                        
+                        # Update existing event (content changed or status is pending/failed)
                         calendar_event_id = sync_record['calendar_event_id']
                         success, message = self.update_calendar_event(
                             event_id=calendar_event_id,
@@ -477,7 +508,7 @@ class CalendarService:
                         )
 
                         if success:
-                            self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', calendar_event_id)
+                            self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', calendar_event_id, content_hash=content_hash)
                             synced_count += 1
                         else:
                             # If update fails, keep the existing calendar_event_id but mark as failed
@@ -495,11 +526,11 @@ class CalendarService:
                         if success:
                             if sync_record:
                                 # Update existing sync record with new event ID
-                                self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', cal_event_id)
+                                self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', cal_event_id, content_hash=content_hash)
                             else:
                                 # Create new sync record
                                 sync_id = self.db.create_calendar_sync_record('event_deadline', event_id, field_name, self.calendar_email, cal_event_id)
-                                self.db.update_calendar_sync_status(sync_id, 'synced', cal_event_id)
+                                self.db.update_calendar_sync_status(sync_id, 'synced', cal_event_id, content_hash=content_hash)
                             synced_count += 1
                         else:
                             if sync_record:
