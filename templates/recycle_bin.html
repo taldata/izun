@@ -81,7 +81,18 @@
                             <td>{{ vaada.vaada_date }}</td>
                             <td>{{ vaada.committee_name }}</td>
                             <td>{{ vaada.hativa_name }}</td>
-                            <td>{{ vaada.deleted_by_name or 'לא ידוע' }}</td>
+                            <td>
+                                {% if vaada.deleted_by_name %}
+                                    <div>{{ vaada.deleted_by_name }}</div>
+                                    {% if vaada.deleted_by_username %}
+                                        <small class="text-muted">{{ vaada.deleted_by_username }}</small>
+                                    {% endif %}
+                                {% elif vaada.deleted_by_username %}
+                                    {{ vaada.deleted_by_username }}
+                                {% else %}
+                                    <span class="text-muted">לא ידוע</span>
+                                {% endif %}
+                            </td>
                             <td>{{ vaada.deleted_at }}</td>
                             <td>
                                 {% if current_user.role != 'viewer' %}
@@ -151,7 +162,18 @@
                             <td>{{ event.maslul_name }}</td>
                             <td>{{ event.vaada_date }}</td>
                             <td>{{ event.committee_name }}</td>
-                            <td>{{ event.deleted_by_name or 'לא ידוע' }}</td>
+                            <td>
+                                {% if event.deleted_by_name %}
+                                    <div>{{ event.deleted_by_name }}</div>
+                                    {% if event.deleted_by_username %}
+                                        <small class="text-muted">{{ event.deleted_by_username }}</small>
+                                    {% endif %}
+                                {% elif event.deleted_by_username %}
+                                    {{ event.deleted_by_username }}
+                                {% else %}
+                                    <span class="text-muted">לא ידוע</span>
+                                {% endif %}
+                            </td>
                             <td>{{ event.deleted_at }}</td>
                             <td>
                                 {% if current_user.role != 'viewer' %}
