@@ -847,6 +847,7 @@ function onHativaFilterChange() {
     updateCommitteeTypeFilter();
     filterTable();
 }
+window.onHativaFilterChange = onHativaFilterChange;
 
 function updateCommitteeTypeFilter() {
     const hativaFilter = document.getElementById('filterHativa').value;
@@ -1592,7 +1593,11 @@ function exportToPDF() {
     }
 }
 
-function getActiveFilters() {
+if (!window.eventsTableUtils) {
+    window.eventsTableUtils = {};
+}
+
+window.eventsTableUtils.getActiveFilters = function getActiveFilters() {
     const filters = [];
     
     const hativaFilter = document.getElementById('filterHativa');
@@ -1652,6 +1657,10 @@ function getActiveFilters() {
     }
     
     return filters;
+};
+
+function getActiveFilters() {
+    return window.eventsTableUtils.getActiveFilters();
 }
 
 function exportEventsViewToPDF() {
@@ -1868,9 +1877,7 @@ function exportEventsViewToExcel() {
         { wch: 18 }  // נוצר
     ];
 
-    // Apply formats for date and number columns
-    // Find the header row (first row with headers)
-    const activeFilters = getActiveFilters();
+    // Apply formats for date and number columns using previously captured filters
     const filterRowsCount = activeFilters.length > 0 ? activeFilters.length + 2 : 0; // +1 for "פילטרים פעילים:" row, +1 for empty row
     const dataStartRow = filterRowsCount + 1; // +1 for header row
     

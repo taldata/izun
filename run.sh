@@ -18,6 +18,7 @@ PORT=${PORT:-5001}
 PYTHON_CMD=${PYTHON_CMD:-python3}
 VENV_DIR="venv"
 DB_FILE="committee_system.db"
+CURRENT_SCRIPT_PID=$$
 
 # Functions
 log_info() {
@@ -79,23 +80,71 @@ init_database() {
     fi
 }
 
+# Kill processes that match pattern (excluding this script)
+kill_processes_by_pattern() {
+    local pattern=$1
+    local description=$2
+    local pids=$(pgrep -f "$pattern" 2>/dev/null || true)
+    local kill_list=()
+
+    if [ -n "$pids" ]; then
+        for pid in $pids; do
+            if [ "$pid" = "$CURRENT_SCRIPT_PID" ]; then
+                continue
+            fi
+            kill_list+=("$pid")
+        done
+    fi
+
+    if [ ${#kill_list[@]} -eq 0 ]; then
+        return 1
+    fi
+
+    local label=${description:-"processes matching '$pattern'"}
+    log_warning "Stopping $label: ${kill_list[*]}"
+    kill "${kill_list[@]}" 2>/dev/null || true
+    sleep 1
+
+    local still_running=()
+    for pid in "${kill_list[@]}"; do
+        if kill -0 "$pid" 2>/dev/null; then
+            still_running+=("$pid")
+        fi
+    done
+
+    if [ ${#still_running[@]} -gt 0 ]; then
+        log_warning "Force killing stubborn $label: ${still_running[*]}"
+        kill -9 "${still_running[@]}" 2>/dev/null || true
+    fi
+
+    return 0
+}
+
 # Clean up existing processes
 cleanup_processes() {
-    log_info "Checking for existing Flask processes..."
-    local pids=$(pgrep -f "python.*app.py" 2>/dev/null || true)
-    
-    if [ -n "$pids" ]; then
-        log_warning "Found existing Flask processes: $pids"
-        pkill -f "python.*app.py" 2>/dev/null || true
-        sleep 2
-        
-        # Force kill if still running
-        local remaining=$(pgrep -f "python.*app.py" 2>/dev/null || true)
-        if [ -n "$remaining" ]; then
-            log_warning "Force killing remaining processes: $remaining"
-            pkill -9 -f "python.*app.py" 2>/dev/null || true
+    log_info "Terminating existing application processes before start..."
+
+    local patterns=(
+        "python.*app.py::Flask app (python app.py)"
+        "flask .*app.py::Flask development server"
+        "gunicorn.*app::Gunicorn workers"
+        "celery .*app::Celery workers"
+        "apscheduler.*CalendarSyncScheduler::Scheduler jobs"
+    )
+
+    local killed_any=false
+    for entry in "${patterns[@]}"; do
+        local pattern="${entry%%::*}"
+        local label="${entry##*::}"
+        if kill_processes_by_pattern "$pattern" "$label"; then
+            killed_any=true
         fi
+    done
+
+    if [ "$killed_any" = true ]; then
         log_success "Existing processes cleaned up"
+    else
+        log_info "No matching application processes found"
     fi
 }
 
