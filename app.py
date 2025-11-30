@@ -1715,14 +1715,30 @@ def add_committee_meeting():
     hativa_id = request.form.get('hativa_id')
     vaada_date = request.form.get('vaada_date')
     notes = request.form.get('notes', '').strip()
-    
+
     if not all([committee_type_id, hativa_id, vaada_date]):
         flash('סוג ועדה, חטיבה ותאריך הם שדות חובה', 'error')
         return redirect(url_for('index'))
-    
+
+    current_user = auth_manager.get_current_user()
+    if not current_user:
+        flash('נדרשת התחברות', 'error')
+        return redirect(url_for('login'))
+
+    try:
+        target_hativa_id = int(hativa_id)
+    except (TypeError, ValueError):
+        flash('חטיבה לא תקינה', 'error')
+        return redirect(url_for('index'))
+
+    can_edit, reason = auth_manager.can_edit(target_hativa_id)
+    if not can_edit:
+        flash(reason, 'error')
+        return redirect(url_for('index'))
+
     # Debug logging
     print(f"DEBUG: Received date value: '{vaada_date}' (type: {type(vaada_date).__name__})")
-    
+
     try:
         # Try multiple date formats to handle different browser formats
         meeting_date = None
@@ -1739,8 +1755,7 @@ def add_committee_meeting():
             raise ValueError(f'פורמט תאריך לא תקין: {vaada_date}. נא להזין תאריך בפורמט YYYY-MM-DD')
         
         # Check if user is admin for constraint override
-        current_user = auth_manager.get_current_user()
-        is_admin = current_user and current_user.get('role') == 'admin'
+        is_admin = current_user.get('role') == 'admin'
         
         # Try to add meeting (admins get warnings instead of errors)
         vaadot_id, warning_message = db.add_vaada(
@@ -1788,11 +1803,27 @@ def edit_committee_meeting(vaadot_id):
     hativa_id = request.form.get('hativa_id')
     vaada_date = request.form.get('vaada_date')
     notes = request.form.get('notes', '').strip()
-    
+
     if not all([committee_type_id, hativa_id, vaada_date]):
         flash('סוג ועדה, חטיבה ותאריך הם שדות חובה', 'error')
         return redirect(url_for('index'))
-    
+
+    current_user = auth_manager.get_current_user()
+    if not current_user:
+        flash('נדרשת התחברות', 'error')
+        return redirect(url_for('login'))
+
+    try:
+        target_hativa_id = int(hativa_id)
+    except (TypeError, ValueError):
+        flash('חטיבה לא תקינה', 'error')
+        return redirect(url_for('index'))
+
+    can_edit, reason = auth_manager.can_edit(target_hativa_id)
+    if not can_edit:
+        flash(reason, 'error')
+        return redirect(url_for('index'))
+
     try:
         # Try multiple date formats to handle different browser formats
         meeting_date = None
@@ -1810,7 +1841,7 @@ def edit_committee_meeting(vaadot_id):
         
         # Get user role for constraint checking
         user_role = session.get('role')
-        success = db.update_vaada(vaadot_id, int(committee_type_id), int(hativa_id), meeting_date, notes=notes, user_role=user_role)
+        success = db.update_vaada(vaadot_id, int(committee_type_id), target_hativa_id, meeting_date, notes=notes, user_role=user_role)
         if success:
             # Get committee name for logging
             committee_types = db.get_committee_types()
@@ -1837,10 +1868,28 @@ def delete_committee_meeting(vaadot_id):
         # Get committee details before deletion for logging
         vaada = db.get_vaada_by_id(vaadot_id)
         committee_name = vaada['committee_name'] if vaada else 'Unknown'
-        
+
+        if not vaada:
+            flash('ישיבת הועדה לא נמצאה', 'error')
+            return redirect(url_for('index'))
+
+        current_user = auth_manager.get_current_user()
+        if not current_user:
+            flash('נדרשת התחברות', 'error')
+            return redirect(url_for('login'))
+
+        target_hativa_id = vaada.get('hativa_id')
+        if target_hativa_id is None:
+            flash('לא ניתן לאמת את חטיבת הועדה', 'error')
+            return redirect(url_for('index'))
+
+        can_edit, reason = auth_manager.can_edit(int(target_hativa_id))
+        if not can_edit:
+            flash(reason, 'error')
+            return redirect(url_for('index'))
+
         # Get current user
-        user = auth_manager.get_current_user()
-        user_id = user['user_id'] if user else None
+        user_id = current_user['user_id']
         
         # First delete all related events
         events = db.get_all_events()
