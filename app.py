@@ -1221,17 +1221,37 @@ def dashboard():
         'kokok_count': events_by_type.get('kokok', 0),
         'shotef_count': events_by_type.get('shotef', 0)
     }
+
+    # === Chart Data for Dashboard Template ===
+    # The dashboard template expects these structures and serializes them to JSON.
+    # Keep them defined even if empty so Jinja's |tojson won't fail.
+
+    # Committees by month & hativa - not yet implemented, use empty dict so chart shows "no data".
+    committees_chart = {}
+
+    # Maslul requests chart - also not yet implemented per-month; keep empty for now.
+    maslul_chart = {}
+
+    # Expected submissions per month (for the area chart)
+    expected_submission_chart = {
+        month_key: data.get('expected_requests', 0) or 0
+        for month_key, data in monthly_data.items()
+    }
     
     current_user = auth_manager.get_current_user()
     
-    return render_template('dashboard.html',
-                         stats=stats,
-                         stats_by_hativa=stats_by_hativa,
-                         events_by_type=dict(events_by_type),
-                         monthly_data=monthly_data,
-                         top_maslulim=top_maslulim,
-                         upcoming_events=upcoming_events[:10],
-                         current_user=current_user)
+    return render_template(
+        'dashboard.html',
+        stats=stats,
+        stats_by_hativa=stats_by_hativa,
+        events_by_type=dict(events_by_type),
+        committees_chart=committees_chart,
+        maslul_chart=maslul_chart,
+        expected_submission_chart=expected_submission_chart,
+        top_maslulim=top_maslulim,
+        upcoming_events=upcoming_events[:10],
+        current_user=current_user,
+    )
 
 @app.route('/hativot')
 @login_required
