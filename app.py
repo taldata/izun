@@ -625,18 +625,18 @@ def bulk_delete_events():
         # Pre-fetch names for audit per item (best-effort)
         events_map = {e['event_id']: e for e in db.get_all_events()}
         
-        # For managers, verify all events are in their division
-        if user['role'] == 'manager':
+        # For managers and editors, verify all events are in their division
+        if user['role'] in ['manager', 'editor'] and user.get('hativa_id') is not None:
             for event_id in event_ids:
                 try:
                     event_id_int = int(event_id)
                     if event_id_int in events_map:
                         event = events_map[event_id_int]
-                        # Check if event belongs to manager's division
+                        # Check if event belongs to user's division
                         if event.get('maslul_hativa_id') != user['hativa_id']:
                             return jsonify({
                                 'success': False, 
-                                'message': f'מנהל יכול למחוק רק אירועים בחטיבה שלו. אירוע {event.get("name", event_id)} לא בחטיבה שלך'
+                                'message': f'ניתן למחוק רק אירועים בחטיבה שלך. אירוע {event.get("name", event_id)} לא בחטיבה שלך'
                             }), 403
                 except (ValueError, KeyError):
                     continue
@@ -2111,10 +2111,10 @@ def delete_event_route(event_id):
             flash('האירוע לא נמצא במערכת', 'error')
             return redirect(url_for('index'))
         
-        # For managers, verify event is in their division
-        if user['role'] == 'manager':
+        # For managers and editors, verify event is in their division
+        if user['role'] in ['manager', 'editor'] and user.get('hativa_id') is not None:
             if event.get('maslul_hativa_id') != user['hativa_id']:
-                flash('מנהל יכול למחוק רק אירועים בחטיבה שלו', 'error')
+                flash('ניתן למחוק רק אירועים בחטיבה שלך', 'error')
                 return redirect(url_for('index'))
         
         success = db.delete_event(event_id, user['user_id'])
@@ -3705,9 +3705,9 @@ def recycle_bin():
     try:
         current_user = auth_manager.get_current_user()
         
-        # Managers can only see their division's deleted items
+        # Managers and editors can only see their division's deleted items
         hativa_id = None
-        if current_user['role'] == 'manager':
+        if current_user['role'] in ['manager', 'editor'] and current_user.get('hativa_id'):
             hativa_id = current_user['hativa_id']
         
         deleted_vaadot = db.get_deleted_vaadot(hativa_id)
@@ -3734,16 +3734,16 @@ def restore_vaada_route(vaadot_id):
         if user['role'] == 'user':
             return jsonify({'success': False, 'message': 'משתמשים רגילים לא יכולים לשחזר פריטים'}), 403
         
-        # Get the vaada to check permissions for managers
+        # Get the vaada to check permissions for managers/editors
         deleted_vaadot = db.get_deleted_vaadot()
         vaada = next((v for v in deleted_vaadot if v['vaadot_id'] == vaadot_id), None)
         
         if not vaada:
             return jsonify({'success': False, 'message': 'ועדה לא נמצאה בסל המחזור'}), 404
         
-        # Check manager permissions
-        if user['role'] == 'manager' and vaada['hativa_id'] != user['hativa_id']:
-            return jsonify({'success': False, 'message': 'מנהל יכול לשחזר רק ועדות מהחטיבה שלו'}), 403
+        # Check division permissions for managers/editors
+        if user['role'] in ['manager', 'editor'] and vaada['hativa_id'] != user.get('hativa_id'):
+            return jsonify({'success': False, 'message': 'ניתן לשחזר רק ועדות מהחטיבה שלך'}), 403
         
         success = db.restore_vaada(vaadot_id)
         if success:
@@ -3771,16 +3771,16 @@ def restore_event_route(event_id):
         if user['role'] == 'user':
             return jsonify({'success': False, 'message': 'משתמשים רגילים לא יכולים לשחזר פריטים'}), 403
         
-        # Get the event to check permissions for managers
+        # Get the event to check permissions for managers/editors
         deleted_events = db.get_deleted_events()
         event = next((e for e in deleted_events if e['event_id'] == event_id), None)
         
         if not event:
             return jsonify({'success': False, 'message': 'אירוע לא נמצא בסל המחזור'}), 404
         
-        # Check manager permissions
-        if user['role'] == 'manager' and event['maslul_hativa_id'] != user['hativa_id']:
-            return jsonify({'success': False, 'message': 'מנהל יכול לשחזר רק אירועים מהחטיבה שלו'}), 403
+        # Check division permissions for managers/editors
+        if user['role'] in ['manager', 'editor'] and event['maslul_hativa_id'] != user.get('hativa_id'):
+            return jsonify({'success': False, 'message': 'ניתן לשחזר רק אירועים מהחטיבה שלך'}), 403
         
         success = db.restore_event(event_id)
         if success:
