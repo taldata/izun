@@ -409,16 +409,26 @@ function formatDate(dateString, locale = 'he-IL') {
 
     function showPopover(targetEl, content) {
         hidePopover();
+        // Safety check: ensure element still exists in DOM
+        if (!targetEl || !document.body.contains(targetEl)) {
+            return;
+        }
         activeEl = targetEl;
-        activePopover = new bootstrap.Popover(targetEl, {
-            container: 'body',
-            trigger: 'manual',
-            html: true,
-            placement: 'auto',
-            customClass: 'committee-summary-popover',
-            content: content
-        });
-        activePopover.show();
+        try {
+            activePopover = new bootstrap.Popover(targetEl, {
+                container: 'body',
+                trigger: 'manual',
+                html: true,
+                placement: 'auto',
+                customClass: 'committee-summary-popover',
+                content: content
+            });
+            activePopover.show();
+        } catch (e) {
+            console.warn('Failed to show popover:', e);
+            activePopover = null;
+            activeEl = null;
+        }
     }
 
     function hidePopover() {
@@ -553,16 +563,26 @@ function formatDate(dateString, locale = 'he-IL') {
 
     function showPopover(targetEl, content) {
         hidePopover();
+        // Safety check: ensure element still exists in DOM
+        if (!targetEl || !document.body.contains(targetEl)) {
+            return;
+        }
         activeEl = targetEl;
-        activePopover = new bootstrap.Popover(targetEl, {
-            container: 'body',
-            trigger: 'manual',
-            html: true,
-            placement: 'auto',
-            customClass: 'committee-summary-popover',
-            content: content
-        });
-        activePopover.show();
+        try {
+            activePopover = new bootstrap.Popover(targetEl, {
+                container: 'body',
+                trigger: 'manual',
+                html: true,
+                placement: 'auto',
+                customClass: 'committee-summary-popover',
+                content: content
+            });
+            activePopover.show();
+        } catch (e) {
+            console.warn('Failed to show popover:', e);
+            activePopover = null;
+            activeEl = null;
+        }
     }
 
     function hidePopover() {
