@@ -1079,17 +1079,62 @@ def dashboard():
     from datetime import datetime, timedelta
     from collections import defaultdict
     
+    # Get date filters from request
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+    start_date = None
+    end_date = None
+    
+    # Default to last 6 months if no date provided
+    today = date.today()
+    
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except:
+            pass
+    else:
+        start_date = today - timedelta(days=180)
+    
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except:
+            pass
+    else:
+        end_date = today
+    
     # Get all data
     hativot = db.get_hativot()
     maslulim = db.get_maslulim()
     committee_types = db.get_committee_types()
-    committees = db.get_vaadot()
-    events = db.get_all_events()
+    committees = db.get_vaadot(start_date=start_date, end_date=end_date)
+    all_events = db.get_all_events()
     
-    # Current date
-    today = date.today()
-    current_month = today.month
-    current_year = today.year
+    # Filter events by date range
+    events = []
+    for event in all_events:
+        event_date = None
+        # Try to get date from vaada_date
+        if event.get('vaada_date'):
+            if isinstance(event['vaada_date'], str):
+                try:
+                    event_date = datetime.strptime(event['vaada_date'], '%Y-%m-%d').date()
+                except:
+                    pass
+            else:
+                event_date = event['vaada_date']
+        
+        # If we have a date, check if it's in range
+        if event_date:
+            if start_date and event_date < start_date:
+                continue
+            if end_date and event_date > end_date:
+                continue
+            events.append(event)
+        elif not start_date and not end_date:
+            # If no filter, include everything
+            events.append(event)
     
     # === Statistics by Division ===
     stats_by_hativa = {}
@@ -1116,48 +1161,6 @@ def dashboard():
     for event in events:
         event_type = event.get('event_type', 'אחר')
         events_by_type[event_type] += 1
-    
-    # === Monthly Trend (last 6 months) ===
-    monthly_data = {}
-    for i in range(6):
-        month_date = today - timedelta(days=30 * i)
-        month_key = f"{month_date.year}-{month_date.month:02d}"
-        monthly_data[month_key] = {
-            'committees': 0,
-            'events': 0,
-            'expected_requests': 0,
-            'actual_submissions': 0
-        }
-    
-    for committee in committees:
-        if committee.get('vaada_date'):
-            try:
-                if isinstance(committee['vaada_date'], str):
-                    vaada_date = datetime.strptime(committee['vaada_date'], '%Y-%m-%d').date()
-                else:
-                    vaada_date = committee['vaada_date']
-                
-                month_key = f"{vaada_date.year}-{vaada_date.month:02d}"
-                if month_key in monthly_data:
-                    monthly_data[month_key]['committees'] += 1
-            except:
-                pass
-    
-    for event in events:
-        if event.get('committee_date'):
-            try:
-                if isinstance(event['committee_date'], str):
-                    event_date = datetime.strptime(event['committee_date'], '%Y-%m-%d').date()
-                else:
-                    event_date = event['committee_date']
-                
-                month_key = f"{event_date.year}-{event_date.month:02d}"
-                if month_key in monthly_data:
-                    monthly_data[month_key]['events'] += 1
-                    monthly_data[month_key]['expected_requests'] += event.get('expected_requests', 0) or 0
-                    monthly_data[month_key]['actual_submissions'] += event.get('actual_submissions', 0) or 0
-            except:
-                pass
     
     # === Top Routes by Events ===
     maslul_stats = defaultdict(lambda: {'count': 0, 'expected': 0, 'actual': 0})
@@ -1186,10 +1189,10 @@ def dashboard():
     maslul_rankings.sort(key=lambda x: x['events_count'], reverse=True)
     top_maslulim = maslul_rankings[:10]
     
-    # === Upcoming Events (next 30 days) ===
+    # === Upcoming Events (next 30 days) - Uses ALL events, not filtered ===
     upcoming_events = []
     future_date = today + timedelta(days=30)
-    for event in events:
+    for event in all_events:
         if event.get('vaada_date'):
             try:
                 if isinstance(event['vaada_date'], str):
@@ -1218,25 +1221,85 @@ def dashboard():
         'total_expected_requests': total_expected,
         'total_actual_submissions': total_actual,
         'overall_fulfillment_rate': overall_fulfillment,
-        'kokok_count': events_by_type.get('kokok', 0),
-        'shotef_count': events_by_type.get('shotef', 0)
+        'kokok_count': events_by_type.get('קול קורא', 0),
+        'shotef_count': events_by_type.get('שוטף', 0)
     }
 
     # === Chart Data for Dashboard Template ===
-    # The dashboard template expects these structures and serializes them to JSON.
-    # Keep them defined even if empty so Jinja's |tojson won't fail.
+    
+    # 1. Committees by month & hativa
+    committees_chart = defaultdict(lambda: defaultdict(lambda: {'count': 0, 'color': None}))
+    hativa_map = {h['hativa_id']: {'name': h['name'], 'color': h.get('color', '#007bff')} for h in hativot}
+    
+    for committee in committees:
+        if committee.get('vaada_date') and committee.get('hativa_id'):
+            try:
+                if isinstance(committee['vaada_date'], str):
+                    vaada_date = datetime.strptime(committee['vaada_date'], '%Y-%m-%d').date()
+                else:
+                    vaada_date = committee['vaada_date']
+                
+                month_key = f"{vaada_date.year}-{vaada_date.month:02d}"
+                hativa_id = committee['hativa_id']
+                if hativa_id in hativa_map:
+                    hativa_name = hativa_map[hativa_id]['name']
+                    hativa_color = hativa_map[hativa_id]['color']
+                    committees_chart[month_key][hativa_name]['count'] += 1
+                    committees_chart[month_key][hativa_name]['color'] = hativa_color
+            except:
+                pass
+    
+    # Convert to dict
+    committees_chart = {m: {h: d for h, d in hd.items()} for m, hd in committees_chart.items()}
 
-    # Committees by month & hativa - not yet implemented, use empty dict so chart shows "no data".
-    committees_chart = {}
+    # 2. Maslul requests by month (Expected vs Actual)
+    maslul_chart = defaultdict(lambda: defaultdict(lambda: {'expected': 0, 'actual': 0}))
+    
+    for event in events:
+        if event.get('vaada_date') and event.get('maslul_name'):
+            try:
+                if isinstance(event['vaada_date'], str):
+                    event_date = datetime.strptime(event['vaada_date'], '%Y-%m-%d').date()
+                else:
+                    event_date = event['vaada_date']
+                
+                month_key = f"{event_date.year}-{event_date.month:02d}"
+                maslul_name = event['maslul_name']
+                
+                maslul_chart[month_key][maslul_name]['expected'] += event.get('expected_requests', 0) or 0
+                maslul_chart[month_key][maslul_name]['actual'] += event.get('actual_submissions', 0) or 0
+            except:
+                pass
+                
+    # Convert to dict
+    maslul_chart = {m: {mas: d for mas, d in md.items()} for m, md in maslul_chart.items()}
 
-    # Maslul requests chart - also not yet implemented per-month; keep empty for now.
-    maslul_chart = {}
-
-    # Expected submissions per month (for the area chart)
-    expected_submission_chart = {
-        month_key: data.get('expected_requests', 0) or 0
-        for month_key, data in monthly_data.items()
-    }
+    # 3. Expected requests by submission month
+    expected_submission_chart = defaultdict(int)
+    
+    for event in events:
+        # Use call_deadline_date if available, otherwise vaada_date
+        submission_date = None
+        if event.get('call_deadline_date'):
+            date_val = event['call_deadline_date']
+        else:
+            date_val = event.get('vaada_date')
+            
+        if date_val:
+            try:
+                if isinstance(date_val, str):
+                    submission_date = datetime.strptime(date_val, '%Y-%m-%d').date()
+                else:
+                    submission_date = date_val
+                
+                if submission_date:
+                    month_key = f"{submission_date.year}-{submission_date.month:02d}"
+                    expected_submission_chart[month_key] += event.get('expected_requests', 0) or 0
+            except:
+                pass
+    
+    # Convert to dict
+    expected_submission_chart = dict(expected_submission_chart)
     
     current_user = auth_manager.get_current_user()
     
@@ -1244,13 +1307,18 @@ def dashboard():
         'dashboard.html',
         stats=stats,
         stats_by_hativa=stats_by_hativa,
-        events_by_type=dict(events_by_type),
+        events_by_type={
+            'kokok': events_by_type.get('קול קורא', 0),
+            'shotef': events_by_type.get('שוטף', 0)
+        },
         committees_chart=committees_chart,
         maslul_chart=maslul_chart,
         expected_submission_chart=expected_submission_chart,
         top_maslulim=top_maslulim,
         upcoming_events=upcoming_events[:10],
         current_user=current_user,
+        start_date=start_date,
+        end_date=end_date,
     )
 
 @app.route('/hativot')
