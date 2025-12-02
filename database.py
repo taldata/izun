@@ -3239,7 +3239,12 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         query = '''
-            SELECT e.*, m.name as maslul_name, m.hativa_id as maslul_hativa_id,
+            SELECT e.event_id, e.vaadot_id, e.maslul_id, e.name, e.event_type, 
+                   e.expected_requests, e.call_publication_date, e.created_at,
+                   e.call_deadline_date, e.intake_deadline_date, e.review_deadline_date, 
+                   e.response_deadline_date, e.actual_submissions, e.scheduled_date, 
+                   e.status, e.is_deleted, e.deleted_at, e.deleted_by,
+                   m.name as maslul_name, m.hativa_id as maslul_hativa_id,
                    v.vaada_date, ct.name as committee_name, h.name as hativa_name,
                    u.full_name as deleted_by_name, u.username as deleted_by_username
             FROM events e
@@ -3271,8 +3276,7 @@ class DatabaseManager:
                 'status': row[14], 'is_deleted': row[15], 'deleted_at': row[16],
                 'deleted_by': row[17], 'maslul_name': row[18], 'maslul_hativa_id': row[19],
                 'vaada_date': row[20], 'committee_name': row[21], 'hativa_name': row[22],
-                'deleted_by_name': row[23] if len(row) > 23 else None,
-                'deleted_by_username': row[24] if len(row) > 24 else None} for row in rows]
+                'deleted_by_name': row[23], 'deleted_by_username': row[24]} for row in rows]
     
     def restore_vaada(self, vaadot_id: int) -> bool:
         """Restore a deleted committee meeting"""
