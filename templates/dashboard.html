@@ -125,35 +125,17 @@
         <!-- Header -->
         <div class="dashboard-header">
             <div class="row g-3 align-items-center">
-                <div class="col-lg-4">
+                <div class="col">
                     <h4 class="mb-1">
                         <i class="bi bi-graph-up-arrow me-2"></i>
                         דשבורד נתונים למנהלים
                     </h4>
                     <p class="mb-0 opacity-75 small">פילוחים מתקדמים לפי חטיבות, מסלולים ומועדי הגשה</p>
                 </div>
-                <div class="col-lg-5">
-                    <form class="row g-2" method="get" action="{{ url_for('dashboard') }}">
-                        <div class="col-md-6">
-                            <label class="form-label mb-1 text-white-50 small">מתאריך</label>
-                            <input type="date" class="form-control form-control-sm" name="start_date"
-                                   value="{{ start_date.strftime('%Y-%m-%d') if start_date else '' }}">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label mb-1 text-white-50 small">עד תאריך</label>
-                            <div class="d-flex gap-2">
-                                <input type="date" class="form-control form-control-sm" name="end_date"
-                                       value="{{ end_date.strftime('%Y-%m-%d') if end_date else '' }}">
-                                <button type="submit" class="btn btn-light btn-sm fw-bold">עדכן</button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-                <div class="col-lg-3 text-lg-end">
+                <div class="col-auto">
                     <button type="button" class="btn btn-outline-light btn-lg no-print" onclick="exportDashboardToPDF()">
                         <i class="bi bi-file-earmark-pdf me-2"></i>ייצא דוח PDF
                     </button>
-                    <p class="small mb-0 mt-2 text-white-50">כולל כל התרשימים והנתונים בדף</p>
                 </div>
             </div>
         </div>
@@ -198,9 +180,9 @@
             </div>
         </div>
 
-        <!-- Charts Row -->
+        <!-- Committees Chart -->
         <div class="row g-3 mb-3">
-            <div class="col-lg-7">
+            <div class="col-12">
                 <div class="chart-card">
                     <div class="chart-title">
                         <i class="bi bi-bar-chart-fill"></i>
@@ -209,76 +191,64 @@
                     <div id="committeesByMonthChart"></div>
                 </div>
             </div>
-            <div class="col-lg-5">
-                <div class="chart-card">
-                    <div class="chart-title">
-                        <i class="bi bi-pie-chart-fill"></i>
-                        <strong>התפלגות לפי סוג אירוע</strong>
-                    </div>
-                    <div id="eventTypesChart"></div>
-                </div>
-            </div>
         </div>
 
-        <!-- Maslul Requests Chart -->
+        <!-- Expected Submissions Chart -->
         <div class="row g-3 mb-3">
             <div class="col-12">
                 <div class="chart-card">
                     <div class="chart-title">
-                        <i class="bi bi-columns-gap"></i>
-                        <strong>בקשות לפי מסלולים - צפוי מול בפועל</strong>
-                    </div>
-                    <div id="maslulRequestsChart"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Expected submissions & upcoming events -->
-        <div class="row g-3 mb-3">
-            <div class="col-lg-7">
-                <div class="chart-card">
-                    <div class="chart-title">
                         <i class="bi bi-graph-up"></i>
-                        <strong>בקשות צפויות לפי חודש הגשה</strong>
+                        <strong>כמות בקשות צפויות לפי חודש הגשה</strong>
                     </div>
                     <div id="expectedSubmissionChart"></div>
                 </div>
             </div>
-            <div class="col-lg-5">
+        </div>
+
+        <!-- Maslul Monthly Stats Table -->
+        <div class="row g-3 mb-3">
+            <div class="col-12">
                 <div class="table-card">
                     <div class="chart-title mb-3">
-                        <i class="bi bi-calendar-check-fill"></i>
-                        <strong>אירועים קרובים (30 ימים)</strong>
+                        <i class="bi bi-table"></i>
+                        <strong>בקשות לפי מסלולים לכל חודש (צפויות מול בפועל)</strong>
                     </div>
-                    <div style="max-height: 320px; overflow-y: auto;">
-                        {% if upcoming_events %}
-                            {% for event in upcoming_events[:6] %}
-                            <div class="mb-2 p-2" style="background: #f8f9fa; border-radius: 8px; border-right: 4px solid #667eea;">
-                                <h6 class="mb-1">{{ event.name }}</h6>
-                                <small class="text-muted">
-                                    <i class="bi bi-calendar3"></i> {{ event.vaada_date }}
-                                    <span class="badge {% if event.event_type == 'קול קורא' %}bg-danger{% else %}bg-success{% endif %} ms-2">
-                                        {{ event.event_type }}
-                                    </span>
-                                </small>
-                                <br>
-                                <small class="text-muted">
-                                    <i class="bi bi-building"></i> {{ event.committee_name }} - {{ event.hativa_name }}
-                                </small>
-                            </div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="text-center text-muted py-5">
-                                <i class="bi bi-inbox" style="font-size: 3rem;"></i>
-                                <p class="mt-2">אין אירועים קרובים</p>
-                            </div>
-                        {% endif %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>חודש</th>
+                                    <th>מסלול</th>
+                                    <th>חטיבה</th>
+                                    <th class="text-center">צפי</th>
+                                    <th class="text-center">בפועל</th>
+                                    <th class="text-center">פער</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in maslul_monthly_stats %}
+                                <tr>
+                                    <td>{{ row.month }}</td>
+                                    <td>{{ row.maslul_name }}</td>
+                                    <td><span class="badge bg-light text-dark">{{ row.hativa_name }}</span></td>
+                                    <td class="text-center">{{ row.expected }}</td>
+                                    <td class="text-center">{{ row.actual }}</td>
+                                    <td class="text-center">
+                                        <span class="badge {% if row.gap > 0 %}bg-danger{% elif row.gap < 0 %}bg-success{% else %}bg-secondary{% endif %}">
+                                            {{ row.gap }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Bottom Row -->
+        <!-- Top Routes Table -->
         <div class="row g-3">
             <div class="col-12">
                 <div class="table-card">
@@ -339,10 +309,7 @@ Highcharts.setOptions({
 });
 
 // Prepare data
-const hativotData = {{ stats_by_hativa | tojson | safe }};
-const eventTypesData = {{ events_by_type | tojson | safe }};
 const committeesChartData = {{ committees_chart | tojson | safe }};
-const maslulChartData = {{ maslul_chart | tojson | safe }};
 const expectedSubmissionData = {{ expected_submission_chart | tojson | safe }};
 
 const formatMonthLabel = (monthStr) => {
@@ -361,7 +328,7 @@ const renderEmptyState = (containerId, message) => {
 // Committees by month chart
 const committeesMonths = Object.keys(committeesChartData || {}).sort();
 if (committeesMonths.length === 0) {
-    renderEmptyState('committeesByMonthChart', 'אין נתונים לטווח שנבחר');
+    renderEmptyState('committeesByMonthChart', 'אין נתונים להצגה');
 } else {
     const committeeCategories = committeesMonths.map(formatMonthLabel);
     const committeeSeriesMap = {};
@@ -410,171 +377,10 @@ if (committeesMonths.length === 0) {
     });
 }
 
-// Event Types Pie Chart - 3D
-Highcharts.chart('eventTypesChart', {
-    chart: {
-        type: 'pie',
-        height: 300,
-        backgroundColor: 'transparent',
-        options3d: {
-            enabled: true,
-            alpha: 45,
-            beta: 0
-        }
-    },
-    title: {
-        text: null
-    },
-    tooltip: {
-        pointFormat: '{series.name}: <b>{point.y}</b> ({point.percentage:.1f}%)',
-        backgroundColor: 'rgba(0, 0, 0, 0.85)',
-        borderColor: 'rgba(255, 255, 255, 0.2)',
-        style: {
-            color: '#ffffff'
-        }
-    },
-    accessibility: {
-        point: {
-            valueSuffix: '%'
-        }
-    },
-    plotOptions: {
-        pie: {
-            innerSize: 100,
-            depth: 45,
-            allowPointSelect: true,
-            cursor: 'pointer',
-            dataLabels: {
-                enabled: true,
-                format: '<b>{point.name}</b><br>{point.percentage:.1f} %',
-                distance: 20,
-                style: {
-                    fontSize: '13px',
-                    fontWeight: 'bold'
-                }
-            },
-            showInLegend: true
-        }
-    },
-    series: [{
-        name: 'אירועים',
-        colorByPoint: true,
-        data: [{
-            name: 'קו"ק',
-            y: eventTypesData.kokok || 0,
-            color: {
-                radialGradient: { cx: 0.5, cy: 0.3, r: 0.7 },
-                stops: [
-                    [0, '#ff7a8a'],
-                    [1, '#f5576c']
-                ]
-            },
-            sliced: true,
-            selected: true
-        }, {
-            name: 'שוטף',
-            y: eventTypesData.shotef || 0,
-            color: {
-                radialGradient: { cx: 0.5, cy: 0.3, r: 0.7 },
-                stops: [
-                    [0, '#5bffa0'],
-                    [1, '#43e97b']
-                ]
-            }
-        }]
-    }],
-    credits: {
-        enabled: false
-    },
-    exporting: {
-        enabled: true,
-        buttons: {
-            contextButton: {
-                menuItems: ['downloadPNG', 'downloadJPEG', 'downloadPDF', 'downloadSVG']
-            }
-        }
-    }
-});
-
-// Maslul requests chart
-const maslulMonths = Object.keys(maslulChartData || {}).sort();
-if (maslulMonths.length === 0) {
-    renderEmptyState('maslulRequestsChart', 'אין נתונים למסלולים בטווח שנבחר');
-} else {
-    const maslulCategories = maslulMonths.map(formatMonthLabel);
-    const maslulNames = [];
-    maslulMonths.forEach(month => {
-        Object.keys(maslulChartData[month]).forEach(name => {
-            if (!maslulNames.includes(name)) {
-                maslulNames.push(name);
-            }
-        });
-    });
-
-    const palette = ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd'];
-    const lightenColor = (hex, opacity) => {
-        const c = hex.replace('#','');
-        const r = parseInt(c.substring(0,2), 16);
-        const g = parseInt(c.substring(2,4), 16);
-        const b = parseInt(c.substring(4,6), 16);
-        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-    };
-
-    const maslulSeries = [];
-    maslulNames.forEach((name, idx) => {
-        const baseColor = palette[idx % palette.length];
-        const expectedData = [];
-        const actualData = [];
-        maslulMonths.forEach(month => {
-            const monthEntry = maslulChartData[month] && maslulChartData[month][name];
-            expectedData.push(monthEntry ? monthEntry.expected : 0);
-            actualData.push(monthEntry ? monthEntry.actual : 0);
-        });
-        maslulSeries.push({
-            name: `${name} - בקשות צפויות`,
-            type: 'column',
-            data: expectedData,
-            color: baseColor
-        });
-        maslulSeries.push({
-            name: `${name} - בקשות בפועל`,
-            type: 'spline',
-            data: actualData,
-            color: lightenColor(baseColor, 0.7),
-            marker: { symbol: 'circle' }
-        });
-    });
-
-    Highcharts.chart('maslulRequestsChart', {
-        chart: {
-            height: 360,
-            scrollablePlotArea: { minWidth: 600 }
-        },
-        title: { text: null },
-        xAxis: {
-            categories: maslulCategories,
-            tickmarkPlacement: 'on'
-        },
-        yAxis: {
-            min: 0,
-            title: { text: 'מספר בקשות' }
-        },
-        tooltip: {
-            shared: true,
-            valueSuffix: ' בקשות'
-        },
-        plotOptions: {
-            column: { borderRadius: 4, grouping: false, pointPadding: 0.05 }
-        },
-        series: maslulSeries,
-        credits: { enabled: false }
-    });
-}
-
 // Expected submissions chart
 const submissionMonths = Object.keys(expectedSubmissionData || {}).sort();
 if (submissionMonths.length === 0) {
-    renderEmptyState('expectedSubmissionChart', 'אין נתונים למועדי הגשה בטווח שנבחר');
+    renderEmptyState('expectedSubmissionChart', 'אין נתונים להצגה');
 } else {
     Highcharts.chart('expectedSubmissionChart', {
         chart: {
