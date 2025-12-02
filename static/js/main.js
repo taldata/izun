@@ -413,6 +413,15 @@ function formatDate(dateString, locale = 'he-IL') {
         if (!targetEl || !document.body.contains(targetEl)) {
             return;
         }
+
+        // Check for and dispose of any existing instance on this element
+        try {
+            var existingInstance = bootstrap.Popover.getInstance(targetEl);
+            if (existingInstance) {
+                existingInstance.dispose();
+            }
+        } catch (e) { }
+
         activeEl = targetEl;
         try {
             activePopover = new bootstrap.Popover(targetEl, {
@@ -460,12 +469,17 @@ function formatDate(dateString, locale = 'he-IL') {
             if (!committeeId) return;
             // hover intent delay
             hoverTimer = setTimeout(function () {
+                // Verify element still exists and is in DOM before showing
+                if (!row || !document.body.contains(row)) return;
+
                 // loading placeholder
                 showPopover(row, '<div class="small text-muted">טוען...</div>');
 
                 var entry = cache.get(committeeId);
                 if (isCacheFresh(entry)) {
-                    showPopover(row, buildPopoverContent(entry.data));
+                    if (document.body.contains(row)) {
+                        showPopover(row, buildPopoverContent(entry.data));
+                    }
                     return;
                 }
 
@@ -474,12 +488,12 @@ function formatDate(dateString, locale = 'he-IL') {
                     .then(function (data) {
                         cache.set(committeeId, { data: data, timestamp: Date.now() });
                         // still hovered?
-                        if (activeEl === row) {
+                        if (activeEl === row && document.body.contains(row)) {
                             showPopover(row, buildPopoverContent(data));
                         }
                     })
                     .catch(function () {
-                        if (activeEl === row) {
+                        if (activeEl === row && document.body.contains(row)) {
                             showPopover(row, '<div class="text-danger small">שגיאה בטעינה</div>');
                         }
                     });
@@ -567,6 +581,15 @@ function formatDate(dateString, locale = 'he-IL') {
         if (!targetEl || !document.body.contains(targetEl)) {
             return;
         }
+
+        // Check for and dispose of any existing instance on this element
+        try {
+            var existingInstance = bootstrap.Popover.getInstance(targetEl);
+            if (existingInstance) {
+                existingInstance.dispose();
+            }
+        } catch (e) { }
+
         activeEl = targetEl;
         try {
             activePopover = new bootstrap.Popover(targetEl, {
@@ -618,11 +641,16 @@ function formatDate(dateString, locale = 'he-IL') {
             var committeeId = getCommitteeIdFromEl(el);
             if (!committeeId) return;
             hoverTimer = setTimeout(function () {
+                // Verify element still exists and is in DOM before showing
+                if (!el || !document.body.contains(el)) return;
+
                 showPopover(el, '<div class="small text-muted">טוען...</div>');
 
                 var entry = cache.get(committeeId);
                 if (isCacheFresh(entry)) {
-                    showPopover(el, buildPopoverContent(entry.data));
+                    if (document.body.contains(el)) {
+                        showPopover(el, buildPopoverContent(entry.data));
+                    }
                     return;
                 }
 
@@ -630,12 +658,12 @@ function formatDate(dateString, locale = 'he-IL') {
                     .then(function (r) { return r.json(); })
                     .then(function (data) {
                         cache.set(committeeId, { data: data, timestamp: Date.now() });
-                        if (activeEl === el) {
+                        if (activeEl === el && document.body.contains(el)) {
                             showPopover(el, buildPopoverContent(data));
                         }
                     })
                     .catch(function () {
-                        if (activeEl === el) {
+                        if (activeEl === el && document.body.contains(el)) {
                             showPopover(el, '<div class="text-danger small">שגיאה בטעינה</div>');
                         }
                     });
