@@ -254,19 +254,6 @@ def auth_azure():
 
     return redirect(auth_url)
 
-@app.route('/bypass_auth')
-def bypass_auth():
-    """Temporary bypass for Azure AD authentication (development only)"""
-    # Create a temporary admin user for testing
-    session['user_id'] = 1
-    session['username'] = 'admin'
-    session['role'] = 'admin'
-    session['hativa_id'] = None
-    session['full_name'] = 'מנהל מערכת (בדיקה)'
-    session['auth_source'] = 'bypass'
-
-    flash('התחברת באמצעות bypass - זה למטרות בדיקה בלבד', 'warning')
-    return redirect(url_for('index'))
 
 @app.route('/auth/callback')
 def auth_callback():
