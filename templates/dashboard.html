@@ -10,112 +10,114 @@
 <script src="https://code.highcharts.com/modules/accessibility.js"></script>
 
 <style>
-.dashboard-page {
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    min-height: 100vh;
-    padding: 1.5rem 0;
-}
+    .dashboard-page {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        min-height: 100vh;
+        padding: 1.5rem 0;
+    }
 
-.dashboard-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-    border-radius: 15px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-}
+    .dashboard-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
 
-.stat-card {
-    background: white;
-    border-radius: 12px;
-    padding: 1.5rem;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-    height: 100%;
-    transition: transform 0.3s;
-}
+    .stat-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        height: 100%;
+        transition: transform 0.3s;
+    }
 
-.stat-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
-}
+    .stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    }
 
-.stat-icon {
-    width: 50px;
-    height: 50px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    margin-bottom: 0.75rem;
-}
+    .stat-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-bottom: 0.75rem;
+    }
 
-.stat-value {
-    font-size: 2rem;
-    font-weight: 700;
-    margin-bottom: 0.25rem;
-    line-height: 1;
-}
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+        line-height: 1;
+    }
 
-.stat-label {
-    color: #6c757d;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-}
+    .stat-label {
+        color: #6c757d;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
 
-.chart-card {
-    background: white;
-    border-radius: 12px;
-    padding: 1.5rem;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-    margin-bottom: 1.5rem;
-}
+    .chart-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        margin-bottom: 1.5rem;
+    }
 
-.chart-title {
-    font-size: 1.1rem;
-    font-weight: 600;
-    margin-bottom: 1rem;
-    color: #2d3748;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
+    .chart-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: #2d3748;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
 
-.chart-title i {
-    color: #667eea;
-}
+    .chart-title i {
+        color: #667eea;
+    }
 
-.table-card {
-    background: white;
-    border-radius: 12px;
-    padding: 1.5rem;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-    margin-bottom: 1.5rem;
-}
+    .table-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        margin-bottom: 1.5rem;
+    }
 
-.highcharts-container {
-    font-family: 'Heebo', sans-serif !important;
-}
+    .highcharts-container {
+        font-family: 'Heebo', sans-serif !important;
+    }
 
-.no-print {
-    display: inline-flex;
-}
-
-@media print {
     .no-print {
-        display: none !important;
+        display: inline-flex;
     }
-    body.print-mode .dashboard-page {
-        background: #fff;
+
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+
+        body.print-mode .dashboard-page {
+            background: #fff;
+        }
+
+        body.print-mode .chart-card,
+        body.print-mode .table-card,
+        body.print-mode .stat-card {
+            box-shadow: none !important;
+        }
     }
-    body.print-mode .chart-card,
-    body.print-mode .table-card,
-    body.print-mode .stat-card {
-        box-shadow: none !important;
-    }
-}
 </style>
 {% endblock %}
 
@@ -133,7 +135,8 @@
                     <p class="mb-0 opacity-75 small">פילוחים מתקדמים לפי חטיבות, מסלולים ומועדי הגשה</p>
                 </div>
                 <div class="col-auto">
-                    <button type="button" class="btn btn-outline-light btn-lg no-print" onclick="exportDashboardToPDF()">
+                    <button type="button" class="btn btn-outline-light btn-lg no-print"
+                        onclick="exportDashboardToPDF()">
                         <i class="bi bi-file-earmark-pdf me-2"></i>ייצא דוח PDF
                     </button>
                 </div>
@@ -144,7 +147,8 @@
         <div class="row g-3 mb-3">
             <div class="col-md-3">
                 <div class="stat-card">
-                    <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                    <div class="stat-icon"
+                        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
                         <i class="bi bi-calendar-event"></i>
                     </div>
                     <div class="stat-value text-primary">{{ stats.total_events }}</div>
@@ -153,7 +157,8 @@
             </div>
             <div class="col-md-3">
                 <div class="stat-card">
-                    <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+                    <div class="stat-icon"
+                        style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
                         <i class="bi bi-people"></i>
                     </div>
                     <div class="stat-value" style="color: #f5576c;">{{ stats.total_committees }}</div>
@@ -162,7 +167,8 @@
             </div>
             <div class="col-md-3">
                 <div class="stat-card">
-                    <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
+                    <div class="stat-icon"
+                        style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
                         <i class="bi bi-inbox"></i>
                     </div>
                     <div class="stat-value" style="color: #00f2fe;">{{ stats.total_expected_requests }}</div>
@@ -171,7 +177,8 @@
             </div>
             <div class="col-md-3">
                 <div class="stat-card">
-                    <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white;">
+                    <div class="stat-icon"
+                        style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white;">
                         <i class="bi bi-check-circle"></i>
                     </div>
                     <div class="stat-value" style="color: #43e97b;">{{ stats.total_actual_submissions }}</div>
@@ -212,34 +219,64 @@
                 <div class="table-card">
                     <div class="chart-title mb-3">
                         <i class="bi bi-table"></i>
-                        <strong>בקשות לפי מסלולים לכל חודש (צפויות מול בפועל)</strong>
+                        <strong>בקשות לפי חטיבות לכל חודש (צפויות מול בפועל)</strong>
                     </div>
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover mb-0" id="hativaMonthlyTable">
                             <thead>
                                 <tr>
+                                    <th style="width: 30px;"></th>
                                     <th>חודש</th>
-                                    <th>מסלול</th>
-                                    <th>חטיבה</th>
+                                    <th>חטיבה / מסלול</th>
                                     <th class="text-center">צפי</th>
                                     <th class="text-center">בפועל</th>
                                     <th class="text-center">פער</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for row in maslul_monthly_stats %}
-                                <tr>
-                                    <td>{{ row.month }}</td>
-                                    <td>{{ row.maslul_name }}</td>
-                                    <td><span class="badge bg-light text-dark">{{ row.hativa_name }}</span></td>
-                                    <td class="text-center">{{ row.expected }}</td>
-                                    <td class="text-center">{{ row.actual }}</td>
+                                {% for hativa_row in hativa_monthly_stats %}
+                                <tr class="hativa-row" data-month="{{ hativa_row.month }}"
+                                    data-hativa="{{ hativa_row.hativa_name }}"
+                                    style="cursor: pointer; font-weight: 600;">
                                     <td class="text-center">
-                                        <span class="badge {% if row.gap > 0 %}bg-danger{% elif row.gap < 0 %}bg-success{% else %}bg-secondary{% endif %}">
-                                            {{ row.gap }}
+                                        <i class="bi bi-chevron-left expand-icon"></i>
+                                    </td>
+                                    <td>{{ hativa_row.month }}</td>
+                                    <td>
+                                        <span class="badge bg-primary">{{ hativa_row.hativa_name }}</span>
+                                    </td>
+                                    <td class="text-center">{{ hativa_row.expected }}</td>
+                                    <td class="text-center">{{ hativa_row.actual }}</td>
+                                    <td class="text-center">
+                                        <span
+                                            class="badge {% if hativa_row.gap > 0 %}bg-danger{% elif hativa_row.gap < 0 %}bg-success{% else %}bg-secondary{% endif %}">
+                                            {{ hativa_row.gap }}
                                         </span>
                                     </td>
                                 </tr>
+                                {% for maslul_row in maslul_monthly_stats %}
+                                {% if maslul_row.month == hativa_row.month and maslul_row.hativa_name ==
+                                hativa_row.hativa_name %}
+                                <tr class="maslul-detail-row" data-parent-month="{{ hativa_row.month }}"
+                                    data-parent-hativa="{{ hativa_row.hativa_name }}"
+                                    style="display: none; background-color: #f8f9fa;">
+                                    <td></td>
+                                    <td></td>
+                                    <td style="padding-left: 2rem;">
+                                        <i class="bi bi-arrow-return-left me-2 text-muted"></i>
+                                        {{ maslul_row.maslul_name }}
+                                    </td>
+                                    <td class="text-center">{{ maslul_row.expected }}</td>
+                                    <td class="text-center">{{ maslul_row.actual }}</td>
+                                    <td class="text-center">
+                                        <span
+                                            class="badge {% if maslul_row.gap > 0 %}bg-danger{% elif maslul_row.gap < 0 %}bg-success{% else %}bg-secondary{% endif %}">
+                                            {{ maslul_row.gap }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                                {% endfor %}
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -247,6 +284,37 @@
                 </div>
             </div>
         </div>
+
+        <script>
+            // Expandable hativa rows
+            document.addEventListener('DOMContentLoaded', function () {
+                const hativaRows = document.querySelectorAll('.hativa-row');
+
+                hativaRows.forEach(row => {
+                    row.addEventListener('click', function () {
+                        const month = this.dataset.month;
+                        const hativa = this.dataset.hativa;
+                        const icon = this.querySelector('.expand-icon');
+                        const childRows = document.querySelectorAll(`.maslul-detail-row[data-parent-month="${month}"][data-parent-hativa="${hativa}"]`);
+
+                        // Toggle visibility
+                        const isExpanded = childRows[0]?.style.display !== 'none';
+                        childRows.forEach(childRow => {
+                            childRow.style.display = isExpanded ? 'none' : 'table-row';
+                        });
+
+                        // Toggle icon
+                        if (isExpanded) {
+                            icon.classList.remove('bi-chevron-down');
+                            icon.classList.add('bi-chevron-left');
+                        } else {
+                            icon.classList.remove('bi-chevron-left');
+                            icon.classList.add('bi-chevron-down');
+                        }
+                    });
+                });
+            });
+        </script>
 
         <!-- Top Routes Table -->
         <div class="row g-3">
@@ -275,7 +343,8 @@
                                     <td><span class="badge bg-light text-dark">{{ maslul.hativa_name }}</span></td>
                                     <td class="text-center"><strong>{{ maslul.events_count }}</strong></td>
                                     <td class="text-center">
-                                        <span class="badge {% if maslul.fulfillment_rate >= 80 %}bg-success{% elif maslul.fulfillment_rate >= 50 %}bg-warning{% else %}bg-danger{% endif %}">
+                                        <span
+                                            class="badge {% if maslul.fulfillment_rate >= 80 %}bg-success{% elif maslul.fulfillment_rate >= 50 %}bg-warning{% else %}bg-danger{% endif %}">
                                             {{ maslul.fulfillment_rate }}%
                                         </span>
                                     </td>
@@ -291,129 +360,129 @@
 </div>
 
 <script>
-// Highcharts Global Configuration
-Highcharts.setOptions({
-    lang: {
-        downloadPNG: 'הורד PNG',
-        downloadJPEG: 'הורד JPEG',
-        downloadPDF: 'הורד PDF',
-        downloadSVG: 'הורד SVG',
-        printChart: 'הדפס תרשים',
-        viewFullscreen: 'מסך מלא'
-    },
-    chart: {
-        style: {
-            fontFamily: 'Heebo, sans-serif'
+    // Highcharts Global Configuration
+    Highcharts.setOptions({
+        lang: {
+            downloadPNG: 'הורד PNG',
+            downloadJPEG: 'הורד JPEG',
+            downloadPDF: 'הורד PDF',
+            downloadSVG: 'הורד SVG',
+            printChart: 'הדפס תרשים',
+            viewFullscreen: 'מסך מלא'
+        },
+        chart: {
+            style: {
+                fontFamily: 'Heebo, sans-serif'
+            }
         }
-    }
-});
+    });
 
-// Prepare data
-const committeesChartData = {{ committees_chart | tojson | safe }};
-const expectedSubmissionData = {{ expected_submission_chart | tojson | safe }};
+    // Prepare data
+    const committeesChartData = {{ committees_chart | tojson | safe }};
+    const expectedSubmissionData = {{ expected_submission_chart | tojson | safe }};
 
-const formatMonthLabel = (monthStr) => {
-    if (!monthStr) return '';
-    const [y, m] = monthStr.split('-');
-    return `${m}/${y}`;
-};
+    const formatMonthLabel = (monthStr) => {
+        if (!monthStr) return '';
+        const [y, m] = monthStr.split('-');
+        return `${m}/${y}`;
+    };
 
-const renderEmptyState = (containerId, message) => {
-    const el = document.getElementById(containerId);
-    if (el) {
-        el.innerHTML = `<div class="text-center text-muted py-5">${message}</div>`;
-    }
-};
+    const renderEmptyState = (containerId, message) => {
+        const el = document.getElementById(containerId);
+        if (el) {
+            el.innerHTML = `<div class="text-center text-muted py-5">${message}</div>`;
+        }
+    };
 
-// Committees by month chart
-const committeesMonths = Object.keys(committeesChartData || {}).sort();
-if (committeesMonths.length === 0) {
-    renderEmptyState('committeesByMonthChart', 'אין נתונים להצגה');
-} else {
-    const committeeCategories = committeesMonths.map(formatMonthLabel);
-    const committeeSeriesMap = {};
+    // Committees by month chart
+    const committeesMonths = Object.keys(committeesChartData || {}).sort();
+    if (committeesMonths.length === 0) {
+        renderEmptyState('committeesByMonthChart', 'אין נתונים להצגה');
+    } else {
+        const committeeCategories = committeesMonths.map(formatMonthLabel);
+        const committeeSeriesMap = {};
 
-    committeesMonths.forEach((month, monthIdx) => {
-        const monthData = committeesChartData[month] || {};
-        Object.keys(monthData).forEach(hativaName => {
-            if (!committeeSeriesMap[hativaName]) {
-                committeeSeriesMap[hativaName] = {
-                    name: hativaName,
-                    data: new Array(committeesMonths.length).fill(0),
-                    color: monthData[hativaName].color || undefined
-                };
-            }
-            committeeSeriesMap[hativaName].data[monthIdx] = monthData[hativaName].count || 0;
+        committeesMonths.forEach((month, monthIdx) => {
+            const monthData = committeesChartData[month] || {};
+            Object.keys(monthData).forEach(hativaName => {
+                if (!committeeSeriesMap[hativaName]) {
+                    committeeSeriesMap[hativaName] = {
+                        name: hativaName,
+                        data: new Array(committeesMonths.length).fill(0),
+                        color: monthData[hativaName].color || undefined
+                    };
+                }
+                committeeSeriesMap[hativaName].data[monthIdx] = monthData[hativaName].count || 0;
+            });
         });
-    });
 
-    Highcharts.chart('committeesByMonthChart', {
-        chart: {
-            type: 'column',
-            height: 340,
-            backgroundColor: 'transparent'
-        },
-        title: { text: null },
-        xAxis: {
-            categories: committeeCategories,
-            crosshair: true
-        },
-        yAxis: {
-            min: 0,
-            title: { text: 'מספר ועדות' }
-        },
-        tooltip: {
-            shared: true,
-            valueSuffix: ' ועדות'
-        },
-        plotOptions: {
-            column: {
-                stacking: 'normal',
-                borderRadius: 4
-            }
-        },
-        series: Object.values(committeeSeriesMap),
-        credits: { enabled: false }
-    });
-}
+        Highcharts.chart('committeesByMonthChart', {
+            chart: {
+                type: 'column',
+                height: 340,
+                backgroundColor: 'transparent'
+            },
+            title: { text: null },
+            xAxis: {
+                categories: committeeCategories,
+                crosshair: true
+            },
+            yAxis: {
+                min: 0,
+                title: { text: 'מספר ועדות' }
+            },
+            tooltip: {
+                shared: true,
+                valueSuffix: ' ועדות'
+            },
+            plotOptions: {
+                column: {
+                    stacking: 'normal',
+                    borderRadius: 4
+                }
+            },
+            series: Object.values(committeeSeriesMap),
+            credits: { enabled: false }
+        });
+    }
 
-// Expected submissions chart
-const submissionMonths = Object.keys(expectedSubmissionData || {}).sort();
-if (submissionMonths.length === 0) {
-    renderEmptyState('expectedSubmissionChart', 'אין נתונים להצגה');
-} else {
-    Highcharts.chart('expectedSubmissionChart', {
-        chart: {
-            type: 'areaspline',
-            height: 320
-        },
-        title: { text: null },
-        xAxis: {
-            categories: submissionMonths.map(formatMonthLabel),
-            tickmarkPlacement: 'on'
-        },
-        yAxis: {
-            min: 0,
-            title: { text: 'בקשות צפויות' }
-        },
-        tooltip: {
-            shared: true,
-            valueSuffix: ' בקשות'
-        },
-        series: [{
-            name: 'בקשות צפויות',
-            data: submissionMonths.map(month => expectedSubmissionData[month] || 0),
-            color: '#764ba2',
-            fillOpacity: 0.3
-        }],
-        credits: { enabled: false }
-    });
-}
+    // Expected submissions chart
+    const submissionMonths = Object.keys(expectedSubmissionData || {}).sort();
+    if (submissionMonths.length === 0) {
+        renderEmptyState('expectedSubmissionChart', 'אין נתונים להצגה');
+    } else {
+        Highcharts.chart('expectedSubmissionChart', {
+            chart: {
+                type: 'areaspline',
+                height: 320
+            },
+            title: { text: null },
+            xAxis: {
+                categories: submissionMonths.map(formatMonthLabel),
+                tickmarkPlacement: 'on'
+            },
+            yAxis: {
+                min: 0,
+                title: { text: 'בקשות צפויות' }
+            },
+            tooltip: {
+                shared: true,
+                valueSuffix: ' בקשות'
+            },
+            series: [{
+                name: 'בקשות צפויות',
+                data: submissionMonths.map(month => expectedSubmissionData[month] || 0),
+                color: '#764ba2',
+                fillOpacity: 0.3
+            }],
+            credits: { enabled: false }
+        });
+    }
 
-function exportDashboardToPDF() {
-    document.body.classList.add('print-mode');
-    window.print();
-    setTimeout(() => document.body.classList.remove('print-mode'), 500);
-}
+    function exportDashboardToPDF() {
+        document.body.classList.add('print-mode');
+        window.print();
+        setTimeout(() => document.body.classList.remove('print-mode'), 500);
+    }
 </script>
 {% endblock %}
