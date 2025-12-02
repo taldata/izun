@@ -93,7 +93,7 @@
                                 <span class="text-muted">לא ידוע</span>
                                 {% endif %}
                             </td>
-                            <td>{{ vaada.deleted_at }}</td>
+                            <td>{{ vaada.deleted_at|format_datetime }}</td>
                             <td>
                                 {% if current_user.role != 'viewer' %}
                                 <button class="btn btn-sm btn-success me-2"
@@ -172,7 +172,7 @@
                                 <span class="text-muted">לא ידוע</span>
                                 {% endif %}
                             </td>
-                            <td>{{ event.deleted_at }}</td>
+                            <td>{{ event.deleted_at|format_datetime }}</td>
                             <td>
                                 {% if current_user.role != 'viewer' %}
                                 <button class="btn btn-sm btn-success me-2" onclick="restoreEvent({{ event.event_id }})"

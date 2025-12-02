@@ -49,6 +49,22 @@ calendar_sync_scheduler = CalendarSyncScheduler(calendar_service, db, audit_logg
 # Start calendar sync scheduler
 calendar_sync_scheduler.start()
 
+# Template filters
+@app.template_filter('format_datetime')
+def format_datetime_filter(value):
+    """Format datetime to display without seconds"""
+    if value is None:
+        return ''
+    if isinstance(value, str):
+        try:
+            # Parse ISO format datetime string
+            value = datetime.fromisoformat(value.replace('+00:00', '').replace('Z', ''))
+        except:
+            return value
+    if isinstance(value, datetime):
+        return value.strftime('%Y-%m-%d %H:%M')
+    return str(value)
+
 # Mobile device detection middleware
 def is_mobile_device():
     """Detect if the request is from a mobile device"""
