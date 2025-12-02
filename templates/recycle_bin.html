@@ -83,30 +83,28 @@
                             <td>{{ vaada.hativa_name }}</td>
                             <td>
                                 {% if vaada.deleted_by_name %}
-                                    <div>{{ vaada.deleted_by_name }}</div>
-                                    {% if vaada.deleted_by_username %}
-                                        <small class="text-muted">{{ vaada.deleted_by_username }}</small>
-                                    {% endif %}
+                                <div>{{ vaada.deleted_by_name }}</div>
+                                {% if vaada.deleted_by_username %}
+                                <small class="text-muted">{{ vaada.deleted_by_username }}</small>
+                                {% endif %}
                                 {% elif vaada.deleted_by_username %}
-                                    {{ vaada.deleted_by_username }}
+                                {{ vaada.deleted_by_username }}
                                 {% else %}
-                                    <span class="text-muted">לא ידוע</span>
+                                <span class="text-muted">לא ידוע</span>
                                 {% endif %}
                             </td>
                             <td>{{ vaada.deleted_at }}</td>
                             <td>
                                 {% if current_user.role != 'viewer' %}
                                 <button class="btn btn-sm btn-success me-2"
-                                        onclick="restoreVaada({{ vaada.vaadot_id }})"
-                                        title="שחזר ועדה">
+                                    onclick="restoreVaada({{ vaada.vaadot_id }})" title="שחזר ועדה">
                                     <i class="bi bi-arrow-counterclockwise me-1"></i>
                                     שחזר
                                 </button>
                                 {% endif %}
                                 {% if current_user.role == 'admin' %}
                                 <button class="btn btn-sm btn-danger"
-                                        onclick="permanentDeleteVaada({{ vaada.vaadot_id }})"
-                                        title="מחק לצמיתות">
+                                    onclick="permanentDeleteVaada({{ vaada.vaadot_id }})" title="מחק לצמיתות">
                                     <i class="bi bi-trash3 me-1"></i>
                                     מחק
                                 </button>
@@ -156,7 +154,7 @@
                             <td>{{ event.name }}</td>
                             <td>
                                 <span class="badge bg-{{ 'primary' if event.event_type == 'kokok' else 'secondary' }}">
-                                    {{ 'קו קו' if event.event_type == 'kokok' else 'שותף' }}
+                                    {{ 'קו"ק' if event.event_type == 'kokok' else 'שוטף' }}
                                 </span>
                             </td>
                             <td>{{ event.maslul_name }}</td>
@@ -164,30 +162,28 @@
                             <td>{{ event.committee_name }}</td>
                             <td>
                                 {% if event.deleted_by_name %}
-                                    <div>{{ event.deleted_by_name }}</div>
-                                    {% if event.deleted_by_username %}
-                                        <small class="text-muted">{{ event.deleted_by_username }}</small>
-                                    {% endif %}
+                                <div>{{ event.deleted_by_name }}</div>
+                                {% if event.deleted_by_username %}
+                                <small class="text-muted">{{ event.deleted_by_username }}</small>
+                                {% endif %}
                                 {% elif event.deleted_by_username %}
-                                    {{ event.deleted_by_username }}
+                                {{ event.deleted_by_username }}
                                 {% else %}
-                                    <span class="text-muted">לא ידוע</span>
+                                <span class="text-muted">לא ידוע</span>
                                 {% endif %}
                             </td>
                             <td>{{ event.deleted_at }}</td>
                             <td>
                                 {% if current_user.role != 'viewer' %}
-                                <button class="btn btn-sm btn-success me-2"
-                                        onclick="restoreEvent({{ event.event_id }})"
-                                        title="שחזר אירוע">
+                                <button class="btn btn-sm btn-success me-2" onclick="restoreEvent({{ event.event_id }})"
+                                    title="שחזר אירוע">
                                     <i class="bi bi-arrow-counterclockwise me-1"></i>
                                     שחזר
                                 </button>
                                 {% endif %}
                                 {% if current_user.role == 'admin' %}
                                 <button class="btn btn-sm btn-danger"
-                                        onclick="permanentDeleteEvent({{ event.event_id }})"
-                                        title="מחק לצמיתות">
+                                    onclick="permanentDeleteEvent({{ event.event_id }})" title="מחק לצמיתות">
                                     <i class="bi bi-trash3 me-1"></i>
                                     מחק
                                 </button>
@@ -209,143 +205,142 @@
 </div>
 
 <script>
-function restoreVaada(vaadotId) {
-    if (!confirm('האם אתה בטוח שברצונך לשחזר ועדה זו?')) {
-        return;
-    }
-    
-    fetch(`/api/recycle_bin/restore_vaada/${vaadotId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
+    function restoreVaada(vaadotId) {
+        if (!confirm('האם אתה בטוח שברצונך לשחזר ועדה זו?')) {
+            return;
         }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message);
-            // Remove row from table
-            document.getElementById(`vaada-${vaadotId}`).remove();
-            location.reload();
-        } else {
-            alert('שגיאה: ' + data.message);
-        }
-    })
-    .catch(error => {
-        alert('שגיאה בשחזור הועדה');
-        console.error('Error:', error);
-    });
-}
 
-function restoreEvent(eventId) {
-    if (!confirm('האם אתה בטוח שברצונך לשחזר אירוע זה?')) {
-        return;
+        fetch(`/api/recycle_bin/restore_vaada/${vaadotId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    // Remove row from table
+                    document.getElementById(`vaada-${vaadotId}`).remove();
+                    location.reload();
+                } else {
+                    alert('שגיאה: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('שגיאה בשחזור הועדה');
+                console.error('Error:', error);
+            });
     }
-    
-    fetch(`/api/recycle_bin/restore_event/${eventId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message);
-            // Remove row from table
-            document.getElementById(`event-${eventId}`).remove();
-            location.reload();
-        } else {
-            alert('שגיאה: ' + data.message);
-        }
-    })
-    .catch(error => {
-        alert('שגיאה בשחזור האירוע');
-        console.error('Error:', error);
-    });
-}
 
-function permanentDeleteVaada(vaadotId) {
-    if (!confirm('האם אתה בטוח? פעולה זו תמחק את הועדה לצמיתות ולא ניתן יהיה לשחזר אותה!')) {
-        return;
-    }
-    
-    fetch(`/api/recycle_bin/permanent_delete_vaada/${vaadotId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
+    function restoreEvent(eventId) {
+        if (!confirm('האם אתה בטוח שברצונך לשחזר אירוע זה?')) {
+            return;
         }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message);
-            // Remove row from table
-            document.getElementById(`vaada-${vaadotId}`).remove();
-            location.reload();
-        } else {
-            alert('שגיאה: ' + data.message);
-        }
-    })
-    .catch(error => {
-        alert('שגיאה במחיקה לצמיתות');
-        console.error('Error:', error);
-    });
-}
 
-function permanentDeleteEvent(eventId) {
-    if (!confirm('האם אתה בטוח? פעולה זו תמחק את האירוע לצמיתות ולא ניתן יהיה לשחזר אותו!')) {
-        return;
+        fetch(`/api/recycle_bin/restore_event/${eventId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    // Remove row from table
+                    document.getElementById(`event-${eventId}`).remove();
+                    location.reload();
+                } else {
+                    alert('שגיאה: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('שגיאה בשחזור האירוע');
+                console.error('Error:', error);
+            });
     }
-    
-    fetch(`/api/recycle_bin/permanent_delete_event/${eventId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message);
-            // Remove row from table
-            document.getElementById(`event-${eventId}`).remove();
-            location.reload();
-        } else {
-            alert('שגיאה: ' + data.message);
-        }
-    })
-    .catch(error => {
-        alert('שגיאה במחיקה לצמיתות');
-        console.error('Error:', error);
-    });
-}
 
-function emptyRecycleBin() {
-    if (!confirm('האם אתה בטוח? פעולה זו תמחק לצמיתות את כל הפריטים בסל המחזור ולא ניתן יהיה לשחזר אותם!')) {
-        return;
+    function permanentDeleteVaada(vaadotId) {
+        if (!confirm('האם אתה בטוח? פעולה זו תמחק את הועדה לצמיתות ולא ניתן יהיה לשחזר אותה!')) {
+            return;
+        }
+
+        fetch(`/api/recycle_bin/permanent_delete_vaada/${vaadotId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    // Remove row from table
+                    document.getElementById(`vaada-${vaadotId}`).remove();
+                    location.reload();
+                } else {
+                    alert('שגיאה: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('שגיאה במחיקה לצמיתות');
+                console.error('Error:', error);
+            });
     }
-    
-    fetch('/api/recycle_bin/empty', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
+
+    function permanentDeleteEvent(eventId) {
+        if (!confirm('האם אתה בטוח? פעולה זו תמחק את האירוע לצמיתות ולא ניתן יהיה לשחזר אותו!')) {
+            return;
         }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(`סל המחזור רוקן בהצלחה.\nנמחקו ${data.vaadot_deleted} ועדות ו-${data.events_deleted} אירועים.`);
-            location.reload();
-        } else {
-            alert('שגיאה: ' + data.message);
+
+        fetch(`/api/recycle_bin/permanent_delete_event/${eventId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    // Remove row from table
+                    document.getElementById(`event-${eventId}`).remove();
+                    location.reload();
+                } else {
+                    alert('שגיאה: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('שגיאה במחיקה לצמיתות');
+                console.error('Error:', error);
+            });
+    }
+
+    function emptyRecycleBin() {
+        if (!confirm('האם אתה בטוח? פעולה זו תמחק לצמיתות את כל הפריטים בסל המחזור ולא ניתן יהיה לשחזר אותם!')) {
+            return;
         }
-    })
-    .catch(error => {
-        alert('שגיאה בריקון סל המחזור');
-        console.error('Error:', error);
-    });
-}
+
+        fetch('/api/recycle_bin/empty', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`סל המחזור רוקן בהצלחה.\nנמחקו ${data.vaadot_deleted} ועדות ו-${data.events_deleted} אירועים.`);
+                    location.reload();
+                } else {
+                    alert('שגיאה: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('שגיאה בריקון סל המחזור');
+                console.error('Error:', error);
+            });
+    }
 </script>
 {% endblock %}
-
