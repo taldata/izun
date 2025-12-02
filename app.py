@@ -1206,6 +1206,28 @@ def dashboard():
     
     maslul_monthly_stats.sort(key=lambda x: (x['month'], x['maslul_name']), reverse=True)
 
+    # Aggregate by hativa for grouped display
+    hativa_monthly_data = defaultdict(lambda: {'expected': 0, 'actual': 0, 'hativa_name': ''})
+    for (month, maslul), data in maslul_monthly_data.items():
+        hativa_key = (month, data['hativa_name'])
+        hativa_monthly_data[hativa_key]['expected'] += data['expected']
+        hativa_monthly_data[hativa_key]['actual'] += data['actual']
+        hativa_monthly_data[hativa_key]['hativa_name'] = data['hativa_name']
+    
+    # Convert to list
+    hativa_monthly_stats = []
+    for (month, hativa_name), data in hativa_monthly_data.items():
+        hativa_monthly_stats.append({
+            'month': month,
+            'hativa_name': hativa_name,
+            'expected': data['expected'],
+            'actual': data['actual'],
+            'gap': data['expected'] - data['actual']
+        })
+    
+    hativa_monthly_stats.sort(key=lambda x: (x['month'], x['hativa_name']), reverse=True)
+
+
     # 3. Expected requests by submission month
     expected_submission_chart = defaultdict(int)
     
@@ -1240,6 +1262,7 @@ def dashboard():
         stats=stats,
         stats_by_hativa=stats_by_hativa,
         committees_chart=committees_chart,
+        hativa_monthly_stats=hativa_monthly_stats,
         maslul_monthly_stats=maslul_monthly_stats,
         expected_submission_chart=expected_submission_chart,
         top_maslulim=top_maslulim,
