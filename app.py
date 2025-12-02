@@ -1079,62 +1079,15 @@ def dashboard():
     from datetime import datetime, timedelta
     from collections import defaultdict
     
-    # Get date filters from request
-    start_date_str = request.args.get('start_date')
-    end_date_str = request.args.get('end_date')
-    start_date = None
-    end_date = None
-    
-    # Default to last 6 months if no date provided
-    today = date.today()
-    
-    if start_date_str:
-        try:
-            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-        except:
-            pass
-    else:
-        start_date = today - timedelta(days=180)
-    
-    if end_date_str:
-        try:
-            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-        except:
-            pass
-    else:
-        end_date = today
-    
-    # Get all data
+    # Get all data (No date filtering)
     hativot = db.get_hativot()
     maslulim = db.get_maslulim()
     committee_types = db.get_committee_types()
-    committees = db.get_vaadot(start_date=start_date, end_date=end_date)
-    all_events = db.get_all_events()
+    committees = db.get_vaadot()
+    events = db.get_all_events()
     
-    # Filter events by date range
-    events = []
-    for event in all_events:
-        event_date = None
-        # Try to get date from vaada_date
-        if event.get('vaada_date'):
-            if isinstance(event['vaada_date'], str):
-                try:
-                    event_date = datetime.strptime(event['vaada_date'], '%Y-%m-%d').date()
-                except:
-                    pass
-            else:
-                event_date = event['vaada_date']
-        
-        # If we have a date, check if it's in range
-        if event_date:
-            if start_date and event_date < start_date:
-                continue
-            if end_date and event_date > end_date:
-                continue
-            events.append(event)
-        elif not start_date and not end_date:
-            # If no filter, include everything
-            events.append(event)
+    # Current date
+    today = date.today()
     
     # === Statistics by Division ===
     stats_by_hativa = {}
@@ -1156,11 +1109,7 @@ def dashboard():
             'fulfillment_rate': round((total_actual / total_expected * 100) if total_expected > 0 else 0, 1)
         }
     
-    # === Events by Type ===
-    events_by_type = defaultdict(int)
-    for event in events:
-        event_type = event.get('event_type', 'אחר')
-        events_by_type[event_type] += 1
+
     
     # === Top Routes by Events ===
     maslul_stats = defaultdict(lambda: {'count': 0, 'expected': 0, 'actual': 0})
@@ -1189,23 +1138,7 @@ def dashboard():
     maslul_rankings.sort(key=lambda x: x['events_count'], reverse=True)
     top_maslulim = maslul_rankings[:10]
     
-    # === Upcoming Events (next 30 days) - Uses ALL events, not filtered ===
-    upcoming_events = []
-    future_date = today + timedelta(days=30)
-    for event in all_events:
-        if event.get('vaada_date'):
-            try:
-                if isinstance(event['vaada_date'], str):
-                    event_date = datetime.strptime(event['vaada_date'], '%Y-%m-%d').date()
-                else:
-                    event_date = event['vaada_date']
-                
-                if today <= event_date <= future_date:
-                    upcoming_events.append(event)
-            except:
-                pass
-    
-    upcoming_events.sort(key=lambda x: x.get('vaada_date', ''))
+
     
     # === Overall Statistics ===
     total_expected = sum([e.get('expected_requests', 0) or 0 for e in events])
@@ -1220,9 +1153,7 @@ def dashboard():
         'total_events': len(events),
         'total_expected_requests': total_expected,
         'total_actual_submissions': total_actual,
-        'overall_fulfillment_rate': overall_fulfillment,
-        'kokok_count': events_by_type.get('קול קורא', 0),
-        'shotef_count': events_by_type.get('שוטף', 0)
+        'overall_fulfillment_rate': overall_fulfillment
     }
 
     # === Chart Data for Dashboard Template ===
@@ -1252,8 +1183,8 @@ def dashboard():
     # Convert to dict
     committees_chart = {m: {h: d for h, d in hd.items()} for m, hd in committees_chart.items()}
 
-    # 2. Maslul requests by month (Expected vs Actual)
-    maslul_chart = defaultdict(lambda: defaultdict(lambda: {'expected': 0, 'actual': 0}))
+    # 2. Maslul requests by month (Expected vs Actual) - FOR TABLE
+    maslul_monthly_data = defaultdict(lambda: {'expected': 0, 'actual': 0, 'hativa_name': ''})
     
     for event in events:
         if event.get('vaada_date') and event.get('maslul_name'):
@@ -1265,14 +1196,28 @@ def dashboard():
                 
                 month_key = f"{event_date.year}-{event_date.month:02d}"
                 maslul_name = event['maslul_name']
+                hativa_name = event.get('hativa_name', '')
                 
-                maslul_chart[month_key][maslul_name]['expected'] += event.get('expected_requests', 0) or 0
-                maslul_chart[month_key][maslul_name]['actual'] += event.get('actual_submissions', 0) or 0
+                key = (month_key, maslul_name)
+                maslul_monthly_data[key]['expected'] += event.get('expected_requests', 0) or 0
+                maslul_monthly_data[key]['actual'] += event.get('actual_submissions', 0) or 0
+                maslul_monthly_data[key]['hativa_name'] = hativa_name
             except:
                 pass
-                
-    # Convert to dict
-    maslul_chart = {m: {mas: d for mas, d in md.items()} for m, md in maslul_chart.items()}
+    
+    # Convert to list for template
+    maslul_monthly_stats = []
+    for (month, maslul), data in maslul_monthly_data.items():
+        maslul_monthly_stats.append({
+            'month': month,
+            'maslul_name': maslul,
+            'hativa_name': data['hativa_name'],
+            'expected': data['expected'],
+            'actual': data['actual'],
+            'gap': data['expected'] - data['actual']
+        })
+    
+    maslul_monthly_stats.sort(key=lambda x: (x['month'], x['maslul_name']), reverse=True)
 
     # 3. Expected requests by submission month
     expected_submission_chart = defaultdict(int)
@@ -1307,18 +1252,11 @@ def dashboard():
         'dashboard.html',
         stats=stats,
         stats_by_hativa=stats_by_hativa,
-        events_by_type={
-            'kokok': events_by_type.get('קול קורא', 0),
-            'shotef': events_by_type.get('שוטף', 0)
-        },
         committees_chart=committees_chart,
-        maslul_chart=maslul_chart,
+        maslul_monthly_stats=maslul_monthly_stats,
         expected_submission_chart=expected_submission_chart,
         top_maslulim=top_maslulim,
-        upcoming_events=upcoming_events[:10],
-        current_user=current_user,
-        start_date=start_date,
-        end_date=end_date,
+        current_user=current_user
     )
 
 @app.route('/hativot')
