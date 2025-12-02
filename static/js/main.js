@@ -444,12 +444,19 @@ function formatDate(dateString, locale = 'he-IL') {
         if (activePopover) {
             try {
                 if (activeEl && document.body.contains(activeEl)) {
+                    // Element exists - do normal hide then dispose
                     activePopover.hide();
+                    activePopover.dispose();
+                } else {
+                    // Element removed - skip hide, just dispose
+                    activePopover.dispose();
                 }
-            } catch (e) { }
-            try {
-                activePopover.dispose();
-            } catch (e) { }
+            } catch (e) {
+                // Fallback: try to dispose anyway
+                try {
+                    activePopover.dispose();
+                } catch (e2) { }
+            }
         }
         activePopover = null;
         activeEl = null;
@@ -610,20 +617,20 @@ function formatDate(dateString, locale = 'he-IL') {
 
     function hidePopover() {
         if (activePopover) {
-            // Safely handle popover cleanup
             try {
-                // Only try to hide if element still exists and is connected
                 if (activeEl && document.body.contains(activeEl)) {
+                    // Element exists - do normal hide then dispose
                     activePopover.hide();
+                    activePopover.dispose();
+                } else {
+                    // Element removed - skip hide, just dispose
+                    activePopover.dispose();
                 }
             } catch (e) {
-                // Ignore errors during hide (e.g. element removed)
-            }
-
-            try {
-                activePopover.dispose();
-            } catch (e) {
-                // Ignore errors during dispose
+                // Fallback: try to dispose anyway
+                try {
+                    activePopover.dispose();
+                } catch (e2) { }
             }
         }
         activePopover = null;
