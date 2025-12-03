@@ -930,6 +930,7 @@ class DatabaseManager:
                 JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
                 JOIN hativot h ON v.hativa_id = h.hativa_id
                 WHERE v.committee_type_id = ? AND v.hativa_id = ? AND v.vaada_date = ?
+                  AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
             ''', (committee_type_id, hativa_id, vaada_date))
             existing = cursor.fetchone()
             
@@ -975,6 +976,7 @@ class DatabaseManager:
             FROM vaadot v
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
             WHERE v.vaada_date = ? AND COALESCE(ct.is_operational, 0) = 0
+              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
         ''', (vaada_date,))
         count = cursor.fetchone()[0]
         conn.close()
@@ -1111,6 +1113,7 @@ class DatabaseManager:
             cursor.execute('''
                 SELECT COUNT(*) FROM vaadot 
                 WHERE vaada_date = ? AND vaadot_id != ?
+                  AND (is_deleted = 0 OR is_deleted IS NULL)
             ''', (vaada_date, vaadot_id))
             existing_count = cursor.fetchone()[0]
             if existing_count >= max_per_day:
@@ -1180,6 +1183,7 @@ class DatabaseManager:
             cursor.execute('''
                 SELECT COUNT(*) FROM vaadot
                 WHERE vaada_date = ? AND vaadot_id != ?
+                  AND (is_deleted = 0 OR is_deleted IS NULL)
             ''', (vaada_date, vaadot_id))
             existing_count = cursor.fetchone()[0]
             if existing_count >= max_per_day:
@@ -1336,6 +1340,7 @@ class DatabaseManager:
         query = '''
             SELECT COUNT(*) FROM vaadot
             WHERE vaada_date BETWEEN ? AND ?
+              AND (is_deleted = 0 OR is_deleted IS NULL)
         '''
         params = [week_start, week_end]
         if exclude_vaada_id is not None:
