@@ -2440,6 +2440,8 @@ class DatabaseManager:
             FROM events e
             JOIN vaadot v ON e.vaadot_id = v.vaadot_id
             WHERE v.vaada_date = ?
+              AND (e.is_deleted = 0 OR e.is_deleted IS NULL)
+              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
         '''
         params = [check_date]
         
