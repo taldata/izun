@@ -708,8 +708,8 @@ class DatabaseManager:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            # Check if any committees are linked to this exception date
-            cursor.execute('SELECT COUNT(*) FROM vaadot WHERE exception_date_id = ?', (date_id,))
+            # Check if any committees are linked to this exception date (excluding deleted)
+            cursor.execute('SELECT COUNT(*) FROM vaadot WHERE exception_date_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (date_id,))
             linked_count = cursor.fetchone()[0]
             
             if linked_count > 0:
@@ -853,8 +853,8 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Check if there are any vaadot using this committee type
-        cursor.execute('SELECT COUNT(*) FROM vaadot WHERE committee_type_id = ?', (committee_type_id,))
+        # Check if there are any vaadot using this committee type (excluding deleted)
+        cursor.execute('SELECT COUNT(*) FROM vaadot WHERE committee_type_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (committee_type_id,))
         vaadot_count = cursor.fetchone()[0]
         
         if vaadot_count > 0:
@@ -1372,7 +1372,7 @@ class DatabaseManager:
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
             JOIN hativot h ON v.hativa_id = h.hativa_id
             LEFT JOIN exception_dates ed ON v.exception_date_id = ed.date_id
-            WHERE v.vaada_date = ?
+            WHERE v.vaada_date = ? AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
             ORDER BY ct.scheduled_day
         ''', (vaada_date,))
         rows = cursor.fetchall()
@@ -1395,7 +1395,7 @@ class DatabaseManager:
             FROM vaadot v
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
             JOIN hativot h ON v.hativa_id = h.hativa_id
-            WHERE v.vaada_date = ? AND v.hativa_id = ?
+            WHERE v.vaada_date = ? AND v.hativa_id = ? AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
         ''', (vaada_date, hativa_id))
         rows = cursor.fetchall()
         conn.close()
@@ -1417,7 +1417,7 @@ class DatabaseManager:
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
             JOIN hativot h ON v.hativa_id = h.hativa_id
             JOIN exception_dates ed ON v.exception_date_id = ed.date_id
-            WHERE v.exception_date_id = ?
+            WHERE v.exception_date_id = ? AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
             ORDER BY ct.scheduled_day
         ''', (exception_date_id,))
         rows = cursor.fetchall()
