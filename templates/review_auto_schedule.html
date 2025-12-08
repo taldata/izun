@@ -131,7 +131,7 @@
                                         <input type="checkbox" class="form-check-input meeting-checkbox" 
                                                name="selected_meetings" value="{{ loop.index0 }}" checked>
                                     </td>
-                                    <td>
+                                    <td dir="ltr" style="text-align: center;">
                                         {% if suggestion.suggested_date is string %}
                                             <strong>{{ suggestion.suggested_date }}</strong>
                                         {% else %}
