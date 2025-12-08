@@ -784,9 +784,73 @@ class DatabaseManager:
         conn.commit()
         conn.close()
         return updated_count
-    
+
+    def recalculate_event_deadlines_for_maslul(self, maslul_id: int) -> int:
+        """Recalculate deadline dates for all events of a specific maslul based on updated stage days"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Get the maslul's current stage information
+        cursor.execute('''
+            SELECT stage_a_days, stage_b_days, stage_c_days, stage_d_days
+            FROM maslulim
+            WHERE maslul_id = ?
+        ''', (maslul_id,))
+
+        maslul_row = cursor.fetchone()
+        if not maslul_row:
+            conn.close()
+            return 0
+
+        stage_a_days, stage_b_days, stage_c_days, stage_d_days = maslul_row
+
+        # Get all events for this maslul with their committee dates
+        cursor.execute('''
+            SELECT e.event_id, v.vaada_date
+            FROM events e
+            JOIN vaadot v ON e.vaadot_id = v.vaadot_id
+            WHERE e.maslul_id = ?
+              AND (e.is_deleted = 0 OR e.is_deleted IS NULL)
+              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
+        ''', (maslul_id,))
+
+        events = cursor.fetchall()
+        updated_count = 0
+
+        for event in events:
+            event_id, vaada_date = event
+
+            # Convert vaada_date to date object if it's a string
+            if isinstance(vaada_date, str):
+                from datetime import datetime
+                vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+
+            # Recalculate stage dates using maslul's updated values
+            stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
+
+            # Update the event with new deadline dates
+            cursor.execute('''
+                UPDATE events
+                SET call_deadline_date = ?,
+                    intake_deadline_date = ?,
+                    review_deadline_date = ?,
+                    response_deadline_date = ?
+                WHERE event_id = ?
+            ''', (
+                stage_dates['call_deadline_date'],
+                stage_dates['intake_deadline_date'],
+                stage_dates['review_deadline_date'],
+                stage_dates['response_deadline_date'],
+                event_id
+            ))
+            updated_count += 1
+
+        conn.commit()
+        conn.close()
+        return updated_count
+
     # Committee Types operations
-    def add_committee_type(self, hativa_id: int, name: str, scheduled_day: int, frequency: str = 'weekly', 
+    def add_committee_type(self, hativa_id: int, name: str, scheduled_day: int, frequency: str = 'weekly',
                           week_of_month: Optional[int] = None, description: str = "", is_operational: int = 0) -> int:
         """Add a new committee type"""
         conn = self.get_connection()
