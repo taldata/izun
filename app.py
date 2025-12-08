@@ -2217,7 +2217,7 @@ def api_vaadot_hativa(vaadot_id):
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT hativa_id FROM vaadot WHERE vaadot_id = ?', (vaadot_id,))
+        cursor.execute('SELECT hativa_id FROM vaadot WHERE vaadot_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (vaadot_id,))
         result = cursor.fetchone()
         conn.close()
         
