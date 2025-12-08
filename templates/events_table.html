@@ -357,10 +357,6 @@
                                     <i class="bi bi-grid-3x2 me-1"></i>תצוגת ועדות
                                 </label>
                             </div>
-                            <div id="emptyCommitteesToggle" class="form-check form-switch ms-2" style="opacity: 0; pointer-events: none;">
-                                <input class="form-check-input" type="checkbox" id="includeEmptyCommittees" onchange="onEmptyCommitteesToggle()" disabled>
-                                <label class="form-check-label" for="includeEmptyCommittees">הצג גם ועדות ללא אירועים</label>
-                            </div>
                             <button class="btn clear-filters-btn btn-sm" onclick="clearAllFilters()">
                                 <i class="bi bi-x-circle me-1"></i>נקה פילטרים
                             </button>
@@ -1286,11 +1282,6 @@ function initializeViewToggle() {
             filterTable();
             document.getElementById('bulkDeleteEventsBtn').classList.remove('d-none');
             document.getElementById('bulkDeleteCommitteesBtn').classList.add('d-none');
-            // Hide toggle but keep space
-            const toggle = document.getElementById('emptyCommitteesToggle');
-            toggle.style.opacity = '0';
-            toggle.style.pointerEvents = 'none';
-            document.getElementById('includeEmptyCommittees').disabled = true;
         }
     });
 
@@ -1302,25 +1293,19 @@ function initializeViewToggle() {
             loadCommitteeView();
             document.getElementById('bulkDeleteEventsBtn').classList.add('d-none');
             document.getElementById('bulkDeleteCommitteesBtn').classList.remove('d-none');
-            // Show toggle
-            const toggle = document.getElementById('emptyCommitteesToggle');
-            toggle.style.opacity = '1';
-            toggle.style.pointerEvents = 'auto';
-            document.getElementById('includeEmptyCommittees').disabled = false;
         }
     });
 }
 
 async function loadCommitteeView() {
     const container = document.getElementById('committeeTableBody');
-    const includeEmpty = document.getElementById('includeEmptyCommittees').checked;
 
     try {
         // Show loading state
         container.innerHTML = '<tr><td colspan="9" class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">טוען...</span></div></td></tr>';
 
-        // Fetch committee data from API
-        const response = await fetch('/api/events_by_committee' + (includeEmpty ? '?include_empty=1' : ''));
+        // Fetch committee data from API - always include empty committees
+        const response = await fetch('/api/events_by_committee?include_empty=1');
         const data = await response.json();
 
         if (data.success) {
@@ -1999,12 +1984,6 @@ async function exportCommitteeViewToExcel() {
 }
 
 // Bulk selection / actions
-function onEmptyCommitteesToggle() {
-    const committeesViewRadio = document.getElementById('committeesView');
-    if (committeesViewRadio.checked) {
-        loadCommitteeView();
-    }
-}
 function getSelectedEventIds() {
     return Array.from(document.querySelectorAll('.event-select:checked'))
         .map(cb => parseInt(cb.value))
