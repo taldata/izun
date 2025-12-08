@@ -1164,7 +1164,7 @@ class DatabaseManager:
             cursor = conn.cursor()
 
             # Get hativa_id for this committee to check day constraints
-            cursor.execute('SELECT hativa_id FROM vaadot WHERE vaadot_id = ?', (vaadot_id,))
+            cursor.execute('SELECT hativa_id FROM vaadot WHERE vaadot_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (vaadot_id,))
             hativa_row = cursor.fetchone()
             if hativa_row:
                 hativa_id = hativa_row[0]
@@ -2360,6 +2360,7 @@ class DatabaseManager:
             FROM vaadot v
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
             WHERE v.vaada_date = ? AND COALESCE(ct.is_operational, 0) = 0
+              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
         ''', (vaada_date,))
         count = cursor.fetchone()[0]
         conn.close()
@@ -2375,6 +2376,7 @@ class DatabaseManager:
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
             WHERE v.vaada_date BETWEEN ? AND ?
               AND COALESCE(ct.is_operational, 0) = 0
+              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
         ''', (start_date, end_date))
         count = cursor.fetchone()[0]
         conn.close()
@@ -2644,11 +2646,13 @@ class DatabaseManager:
                 JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
                 JOIN hativot h ON m.hativa_id = h.hativa_id
                 WHERE e.event_id = ?
+                  AND (e.is_deleted = 0 OR e.is_deleted IS NULL)
+                  AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
             """, (event_id,))
-            
+
             row = cursor.fetchone()
             conn.close()
-            
+
             if row:
                 return {
                     'event_id': row[0],
@@ -2687,6 +2691,7 @@ class DatabaseManager:
                 JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
                 JOIN hativot h ON v.hativa_id = h.hativa_id
                 WHERE v.vaadot_id = ?
+                  AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
             """, (vaada_id,))
             
             row = cursor.fetchone()
@@ -2955,6 +2960,8 @@ class DatabaseManager:
                 FROM events e
                 JOIN vaadot v ON e.vaadot_id = v.vaadot_id
                 WHERE e.event_id = ?
+                  AND (e.is_deleted = 0 OR e.is_deleted IS NULL)
+                  AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
             """, (event_id,))
             
             event_data = cursor.fetchone()
@@ -2972,6 +2979,7 @@ class DatabaseManager:
                 FROM vaadot v
                 JOIN maslulim m ON m.maslul_id = ?
                 WHERE v.vaadot_id = ?
+                  AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
             """, (maslul_id, new_vaada_id))
             target_data = cursor.fetchone()
             if not target_data:
