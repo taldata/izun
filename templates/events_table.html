@@ -333,6 +333,31 @@
         text-shadow: 0 0 0 currentColor;
     }
 
+    /* Event name link styles */
+    .event-name-link {
+        color: inherit;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.2s ease;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin: -2px -6px;
+    }
+    .event-name-link:hover {
+        color: #0d6efd;
+        background-color: #e7f1ff;
+        text-decoration: none;
+    }
+    .event-name-link .link-icon {
+        opacity: 0;
+        font-size: 0.75rem;
+        transition: opacity 0.2s ease;
+    }
+    .event-name-link:hover .link-icon {
+        opacity: 0.7;
+    }
+
     /* Force LTR direction for all date displays */
     .events-table td:nth-child(7),  /* פרסום קול קורא */
     .events-table td:nth-child(8),  /* סיום קול קורא */
@@ -563,7 +588,12 @@
                                     {{ event.maslul_name or '-' }}
                                 </td>
                                 <td>
-                                    <strong>{{ event.name }}</strong>
+                                    <a href="{{ url_for('index') }}?highlight_event={{ event.event_id }}"
+                                       class="event-name-link"
+                                       title="לחץ לפתיחה בלוח השנה">
+                                        <strong>{{ event.name }}</strong>
+                                        <i class="bi bi-box-arrow-up-left ms-1 link-icon"></i>
+                                    </a>
                                 </td>
                                 <td>
                                     {% if event.event_type %}
