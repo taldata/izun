@@ -1558,11 +1558,16 @@ def edit_maslul(maslul_id):
             return redirect(url_for('maslulim'))
         
         # Update the maslul
-        success = db.update_maslul(maslul_id, name, description, sla_days, 
+        success = db.update_maslul(maslul_id, name, description, sla_days,
                                  stage_a_days, stage_b_days, stage_c_days, stage_d_days, is_active)
         if success:
+            # Recalculate deadlines for all events using this maslul
+            updated_events = db.recalculate_event_deadlines_for_maslul(maslul_id)
             status_text = 'פעיל' if is_active else 'לא פעיל'
-            flash(f'מסלול "{name}" עודכן בהצלחה (סטטוס: {status_text})', 'success')
+            if updated_events > 0:
+                flash(f'מסלול "{name}" עודכן בהצלחה (סטטוס: {status_text}). עודכנו תאריכי יעד ב-{updated_events} אירועים.', 'success')
+            else:
+                flash(f'מסלול "{name}" עודכן בהצלחה (סטטוס: {status_text})', 'success')
         else:
             flash('המסלול לא נמצא במערכת', 'error')
             
