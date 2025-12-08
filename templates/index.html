@@ -29,6 +29,22 @@
         }
     }
 
+    /* Highlight animation for events coming from events table */
+    @keyframes highlightPulse {
+        0% {
+            box-shadow: 0 0 0 3px #ffc107, 0 4px 15px rgba(255, 193, 7, 0.5);
+            transform: scale(1.05);
+        }
+        50% {
+            box-shadow: 0 0 0 6px #ffc107, 0 4px 20px rgba(255, 193, 7, 0.7);
+            transform: scale(1.08);
+        }
+        100% {
+            box-shadow: 0 0 0 3px #ffc107, 0 4px 15px rgba(255, 193, 7, 0.5);
+            transform: scale(1.05);
+        }
+    }
+
     /* Force LTR direction for all date displays */
     .fc-daygrid-day-number,
     .fc-col-header-cell-cushion,
@@ -1551,7 +1567,80 @@
                 setTimeout(initializeDragAndDrop, 50);
             });
         }
+
+        // Check for highlight_event URL parameter
+        checkHighlightEventParam();
     });
+
+    // Function to check URL for highlight_event parameter and highlight the event
+    function checkHighlightEventParam() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const highlightEventId = urlParams.get('highlight_event');
+
+        if (highlightEventId) {
+            // Find the event in eventsData
+            const eventToHighlight = eventsData.find(e => e.event_id == highlightEventId);
+
+            if (eventToHighlight && eventToHighlight.vaada_date) {
+                // Navigate to the event's vaada_date month
+                const eventDate = new Date(eventToHighlight.vaada_date);
+                currentDate = eventDate;
+
+                // Update the year and month selectors
+                updateSelectors();
+
+                // Re-render calendar
+                renderCalendar();
+
+                // Wait for calendar to render, then highlight the event
+                setTimeout(() => {
+                    highlightEventOnCalendar(highlightEventId);
+                    initializeDragAndDrop();
+                }, 150);
+            }
+
+            // Clean up URL (remove the parameter)
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+        }
+    }
+
+    // Function to highlight a specific event on the calendar
+    function highlightEventOnCalendar(eventId) {
+        const eventBadge = document.querySelector(`[data-event-id="${eventId}"]`);
+
+        if (eventBadge) {
+            // Scroll the event into view
+            eventBadge.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // Add highlight animation
+            eventBadge.style.animation = 'highlightPulse 2s ease-in-out';
+            eventBadge.style.boxShadow = '0 0 0 3px #ffc107, 0 4px 15px rgba(255, 193, 7, 0.5)';
+            eventBadge.style.transform = 'scale(1.05)';
+            eventBadge.style.zIndex = '100';
+
+            // Show the event menu after a short delay
+            setTimeout(() => {
+                // Find the event and committee data
+                const event = eventsData.find(e => e.event_id == eventId);
+                if (event) {
+                    const committee = committeesData.find(c => c.vaadot_id == event.vaadot_id);
+                    if (committee) {
+                        // Trigger click to show the event menu
+                        showEventMenu(event, { stopPropagation: () => {} }, committee);
+                    }
+                }
+            }, 800);
+
+            // Remove highlight after animation
+            setTimeout(() => {
+                eventBadge.style.animation = '';
+                eventBadge.style.boxShadow = '';
+                eventBadge.style.transform = '';
+                eventBadge.style.zIndex = '';
+            }, 3000);
+        }
+    }
 
     // Toggle deadline dates display
     function toggleDeadlineDates() {
