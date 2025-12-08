@@ -73,6 +73,18 @@
             color: #2c3e50;
             margin-bottom: 1.5rem;
         }
+
+        /* Global: Force LTR direction for all date displays */
+        .date-badge,
+        .date-text,
+        .calendar-date,
+        .event-date,
+        .committee-date,
+        td[dir="ltr"],
+        span[dir="ltr"],
+        .ltr-date {
+            direction: ltr !important;
+        }
     </style>
     
     {% block extra_head %}{% endblock %}
