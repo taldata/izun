@@ -1123,21 +1123,26 @@ def dashboard():
             maslul_stats[maslul_id]['expected'] += event.get('expected_requests', 0) or 0
             maslul_stats[maslul_id]['actual'] += event.get('actual_submissions', 0) or 0
     
+    # Create hativa name to color mapping for maslulim
+    hativa_name_to_color_map = {h['name']: h.get('color', '#007bff') for h in hativot}
+
     # Add maslul names
     maslul_rankings = []
     for maslul in maslulim:
         maslul_id = maslul['maslul_id']
         if maslul_id in maslul_stats:
             stats = maslul_stats[maslul_id]
+            hativa_name = maslul.get('hativa_name', '')
             maslul_rankings.append({
                 'name': maslul['name'],
-                'hativa_name': maslul.get('hativa_name', ''),
+                'hativa_name': hativa_name,
+                'hativa_color': hativa_name_to_color_map.get(hativa_name, '#007bff'),
                 'events_count': stats['count'],
                 'expected_requests': stats['expected'],
                 'actual_submissions': stats['actual'],
                 'fulfillment_rate': round((stats['actual'] / stats['expected'] * 100) if stats['expected'] > 0 else 0, 1)
             })
-    
+
     maslul_rankings.sort(key=lambda x: x['events_count'], reverse=True)
     top_maslulim = maslul_rankings[:10]
     
@@ -1229,18 +1234,22 @@ def dashboard():
         hativa_monthly_data[hativa_key]['expected'] += data['expected']
         hativa_monthly_data[hativa_key]['actual'] += data['actual']
         hativa_monthly_data[hativa_key]['hativa_name'] = data['hativa_name']
-    
+
+    # Create hativa name to color mapping
+    hativa_name_to_color = {h['name']: h.get('color', '#007bff') for h in hativot}
+
     # Convert to list
     hativa_monthly_stats = []
     for (month, hativa_name), data in hativa_monthly_data.items():
         hativa_monthly_stats.append({
             'month': month,
             'hativa_name': hativa_name,
+            'hativa_color': hativa_name_to_color.get(hativa_name, '#007bff'),
             'expected': data['expected'],
             'actual': data['actual'],
             'gap': data['expected'] - data['actual']
         })
-    
+
     hativa_monthly_stats.sort(key=lambda x: (x['month'], x['hativa_name']), reverse=True)
 
 
