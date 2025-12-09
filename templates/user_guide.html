@@ -2,179 +2,620 @@
 {% block title %}מדריך למשתמש{% endblock %}
 {% block extra_head %}
 <style>
-    .guide-container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
-    .guide-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 3rem 2rem; border-radius: 15px; margin-bottom: 2rem; text-align: center; }
+    .guide-container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+    .guide-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 3rem 2rem; border-radius: 15px; margin-bottom: 2rem; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+    .guide-nav { background: white; padding: 1.5rem; border-radius: 10px; margin-bottom: 2rem; box-shadow: 0 2px 10px rgba(0,0,0,0.1); position: sticky; top: 20px; z-index: 100; }
+    .guide-nav h5 { color: #667eea; margin-bottom: 1rem; }
+    .guide-nav a { color: #495057; text-decoration: none; display: block; padding: 0.5rem 1rem; border-radius: 5px; transition: all 0.3s; }
+    .guide-nav a:hover { background: #f8f9fa; color: #667eea; transform: translateX(5px); }
     .guide-section { background: white; padding: 2rem; margin-bottom: 2rem; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .guide-section h2 { color: #667eea; border-bottom: 3px solid #667eea; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
+    .guide-section h3 { color: #764ba2; margin-top: 1.5rem; }
+    .feature-card { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); padding: 1.5rem; border-radius: 10px; margin-bottom: 1rem; border-right: 5px solid #667eea; }
+    .feature-card h4 { color: #667eea; margin-bottom: 0.5rem; }
     .role-badge { display: inline-block; padding: 0.5rem 1.5rem; border-radius: 25px; font-weight: bold; font-size: 1.2rem; margin-bottom: 1rem; }
     .role-user { background: linear-gradient(135deg, #3498db, #2980b9); color: white; }
     .role-manager { background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; }
     .role-admin { background: linear-gradient(135deg, #f39c12, #d68910); color: white; }
-    .success-box { background: #d4edda; border-left: 4px solid #28a745; padding: 1rem; margin: 1rem 0; border-radius: 5px; }
-    .error-box { background: #f8d7da; border-left: 4px solid #dc3545; padding: 1rem; margin: 1rem 0; border-radius: 5px; }
-    .warning-box { background: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; margin: 1rem 0; border-radius: 5px; }
-    .info-box { background: #d1ecf1; border-left: 4px solid #17a2b8; padding: 1rem; margin: 1rem 0; border-radius: 5px; }
+    .success-box { background: #d4edda; border-right: 4px solid #28a745; padding: 1rem; margin: 1rem 0; border-radius: 5px; }
+    .error-box { background: #f8d7da; border-right: 4px solid #dc3545; padding: 1rem; margin: 1rem 0; border-radius: 5px; }
+    .warning-box { background: #fff3cd; border-right: 4px solid #ffc107; padding: 1rem; margin: 1rem 0; border-radius: 5px; }
+    .info-box { background: #d1ecf1; border-right: 4px solid #17a2b8; padding: 1rem; margin: 1rem 0; border-radius: 5px; }
+    .icon-large { font-size: 2rem; margin-left: 0.5rem; }
+    .toc-item { font-size: 0.9rem; }
+    ul.feature-list { list-style: none; padding-right: 0; }
+    ul.feature-list li:before { content: "✓ "; color: #28a745; font-weight: bold; margin-left: 5px; }
+    .quick-link { background: #667eea; color: white; padding: 0.75rem 1.5rem; border-radius: 25px; display: inline-block; margin: 0.5rem; text-decoration: none; transition: all 0.3s; }
+    .quick-link:hover { background: #764ba2; color: white; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="guide-container">
+    <!-- Header -->
     <div class="guide-header">
         <h1 class="display-4 mb-3"><i class="bi bi-book"></i> מדריך למשתמש</h1>
         <p class="lead">מערכת ניהול ועדות - איזון עומסים</p>
-        <p class="mb-0">גרסה 0.5 | אוקטובר 2025</p>
-        <div class="alert alert-warning mt-3 mb-0" role="alert">
-            <i class="bi bi-tools me-2"></i>
-            <strong>שימו לב:</strong> מדריך זה עדיין בפיתוח. חלק מהתכנים עשויים להשתנות.
+        <p class="mb-0">גרסה 2.0 | דצמבר 2025</p>
+        <div class="mt-3">
+            <a href="#overview" class="quick-link"><i class="bi bi-info-circle me-2"></i>סקירה כללית</a>
+            <a href="#getting-started" class="quick-link"><i class="bi bi-play-circle me-2"></i>התחלה מהירה</a>
+            <a href="#features" class="quick-link"><i class="bi bi-stars me-2"></i>תכונות</a>
+            <a href="#permissions" class="quick-link"><i class="bi bi-shield-lock me-2"></i>הרשאות</a>
         </div>
     </div>
 
-    <!-- Viewer -->
-    <div id="viewer-role" class="guide-section">
-        <h2><span class="role-badge role-user">👁️ צופה - Viewer</span></h2>
-        <div class="info-box">
-            <h5>💡 מי זה צופה?</h5>
-            <p class="mb-0">משתמש עם <strong>הרשאות קריאה בלבד</strong>. יכול לצפות בכל המידע אך לא יכול לבצע שינויים.</p>
-        </div>
-        <div class="row mt-3">
-            <div class="col-md-6">
-                <div class="success-box">
-                    <h5>✅ מה ניתן:</h5>
-                    <ul class="mb-0">
-                        <li>צפייה בכל הנתונים</li>
-                        <li>ייצוא Excel</li>
-                        <li>חיפוש וסינון</li>
-                    </ul>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="error-box">
-                    <h5>❌ מה אסור:</h5>
-                    <ul class="mb-0">
-                        <li>עריכה או יצירה</li>
-                        <li>מחיקה</li>
-                        <li>ניהול</li>
-                    </ul>
-                </div>
+    <div class="row">
+        <!-- Navigation Sidebar -->
+        <div class="col-md-3">
+            <div class="guide-nav">
+                <h5><i class="bi bi-list-ul"></i> תוכן עניינים</h5>
+                <a href="#overview" class="toc-item">📌 סקירה כללית</a>
+                <a href="#getting-started" class="toc-item">🚀 התחלת עבודה</a>
+                <a href="#features" class="toc-item">⭐ תכונות עיקריות</a>
+                <a href="#calendar" class="toc-item">📅 יומן אינטראקטיבי</a>
+                <a href="#scheduling" class="toc-item">🤖 תזמון אוטומטי</a>
+                <a href="#events" class="toc-item">📋 ניהול אירועים</a>
+                <a href="#recycle" class="toc-item">🗑️ סל מחזור</a>
+                <a href="#audit" class="toc-item">📝 יומן ביקורת</a>
+                <a href="#calendar-sync" class="toc-item">📆 סנכרון לוח שנה</a>
+                <a href="#auth" class="toc-item">🔐 אימות משתמשים</a>
+                <a href="#recommendations" class="toc-item">💡 המלצות חכמות</a>
+                <a href="#permissions" class="toc-item">👥 מערכת הרשאות</a>
+                <a href="#faq" class="toc-item">❓ שאלות נפוצות</a>
             </div>
         </div>
-    </div>
 
-    <!-- Editor -->
-    <div id="editor-role" class="guide-section">
-        <h2><span class="role-badge role-manager">✏️ עורך - Editor</span></h2>
-        <div class="info-box">
-            <h5>💡 מי זה עורך?</h5>
-            <p class="mb-0">משתמש עם <strong>הרשאות קריאה ועריכה</strong>. יכול ליצור ולערוך אירועים בחטיבות שלו.</p>
-        </div>
-        <div class="row mt-3">
-            <div class="col-md-6">
-                <div class="success-box">
-                    <h5>✅ מה ניתן:</h5>
-                    <ul class="mb-0">
-                        <li>כל מה שיש ל-Viewer</li>
-                        <li>יצירת אירועים (בחטיבות שלו)</li>
-                        <li>עריכת אירועים (שיצר)</li>
-                    </ul>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="error-box">
-                    <h5>❌ מה אסור:</h5>
-                    <ul class="mb-0">
-                        <li>יצירת/עריכת ועדות</li>
-                        <li>מחיקת אירועים</li>
-                        <li>ניהול משתמשים</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-        <div class="warning-box mt-3">
-            <strong>⚠️ תקופת עריכה:</strong> תוכל לערוך רק כשתקופת העריכה פתוחה (מנהל מערכת שולט בזה)
-        </div>
-    </div>
+        <!-- Main Content -->
+        <div class="col-md-9">
+            <!-- Overview -->
+            <div id="overview" class="guide-section">
+                <h2><i class="bi bi-info-circle icon-large"></i> סקירה כללית</h2>
+                <p class="lead">מערכת ניהול ועדות היא פלטפורמה ווב מתקדמת לארגון ותזמון ישיבות ועדות, ניהול אירועים וארגון חטיבות.</p>
 
-    <!-- Admin -->
-    <div id="admin-role" class="guide-section">
-        <h2><span class="role-badge role-admin">👑 מנהל מערכת - Admin</span></h2>
-        <div class="info-box">
-            <h5>💡 מי זה מנהל מערכת?</h5>
-            <p class="mb-0">ה-<strong>"סופר-יוזר"</strong> - הרשאות מלאות על כל המערכת ללא הגבלות.</p>
-        </div>
-        <div class="success-box mt-3">
-            <h5>✅ הרשאות מלאות:</h5>
-            <div class="row">
-                <div class="col-md-6">
-                    <ul class="mb-0">
-                        <li>כל האירועים - CRUD מלא</li>
-                        <li>כל הועדות - CRUD מלא</li>
-                        <li>ניהול חטיבות</li>
-                        <li>ניהול מסלולים</li>
-                    </ul>
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div class="info-box">
+                            <h5>🎯 מטרת המערכת</h5>
+                            <p class="mb-0">ניהול יעיל של ועדות ארגוניות עם תזמון אוטומטי חכם, מעקב אחר אירועים, וחישוב מועדים אוטומטי תוך כיבוד SLA ואילוצים עסקיים.</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="success-box">
+                            <h5>✨ יתרונות המערכת</h5>
+                            <ul class="mb-0 feature-list">
+                                <li>חיסכון בזמן תזמון</li>
+                                <li>איזון עומסים אוטומטי</li>
+                                <li>שקיפות ומעקב מלא</li>
+                                <li>אינטגרציה עם מערכות ארגוניות</li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-6">
+            </div>
+
+            <!-- Getting Started -->
+            <div id="getting-started" class="guide-section">
+                <h2><i class="bi bi-play-circle icon-large"></i> התחלת עבודה</h2>
+
+                <h3>התחברות למערכת</h3>
+                <p>המערכת תומכת ב-3 שיטות אימות:</p>
+                <ol>
+                    <li><strong>אימות מקומי</strong> - שם משתמש וסיסמה</li>
+                    <li><strong>Active Directory</strong> - משתמשים ארגוניים (LDAP)</li>
+                    <li><strong>Azure AD / Microsoft 365</strong> - כניסה עם חשבון Microsoft</li>
+                </ol>
+
+                <div class="warning-box mt-3">
+                    <strong>ℹ️ משתמש ברירת מחדל:</strong> admin / admin123 (יש לשנות את הסיסמה בהתחברות הראשונה)
+                </div>
+
+                <h3 class="mt-4">ממשק המשתמש הראשי</h3>
+                <ul class="feature-list">
+                    <li><strong>דף הבית</strong> - יומן אינטראקטיבי ודשבורד מידע</li>
+                    <li><strong>אירועים</strong> - ניהול אירועים בישיבות ועדה</li>
+                    <li><strong>תזמון אוטומטי</strong> - יצירה אוטומטית של לוח זמנים</li>
+                    <li><strong>הגדרות</strong> - ניהול חטיבות, מסלולים, סוגי ועדות ותאריכי חריגים</li>
+                    <li><strong>סל מחזור</strong> - שחזור פריטים מחוקים</li>
+                    <li><strong>יומן ביקורת</strong> - מעקב אחר שינויים (Admin בלבד)</li>
+                </ul>
+            </div>
+
+            <!-- Features -->
+            <div id="features" class="guide-section">
+                <h2><i class="bi bi-stars icon-large"></i> תכונות עיקריות</h2>
+
+                <div class="feature-card">
+                    <h4><i class="bi bi-building"></i> ניהול ארגוני מתקדם</h4>
+                    <p><strong>חטיבות ומסלולים:</strong> ארגון היררכי עם צבעים מותאמים אישית לזיהוי ויזואלי. כל חטיבה יכולה לכלול מספר מסלולים ולהגדיר סוגי ועדות משלה.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4><i class="bi bi-calendar-event"></i> ניהול סוגי ועדות גמיש</h4>
+                    <p><strong>ועדות שבועיות וחודשיות:</strong> יצירה דינמית של סוגי ועדות עם תזמון גמיש. ועדות חודשיות יכולות להיות מוגדרות לשבוע מסוים בחודש (ראשון, שני, שלישי, רביעי). תמיכה בועדות תפעוליות ללא קשר לאירועים.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4><i class="bi bi-robot"></i> תזמון אוטומטי חכם</h4>
+                    <p><strong>יצירה אוטומטית של לוח זמנים:</strong> תזמון למספר חודשים בבת אחת עם אילוצים עסקיים - ועדה אחת ביום, כיבוד ימי עבודה (ראשון-חמישי), התחשבות בחגים ומגבלות שבועיות. ממשק ביקורת ואישור לפני יצירת ישיבות.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4><i class="bi bi-clipboard-check"></i> ניהול אירועים מתקדם</h4>
+                    <p><strong>אירועים עם חישוב מועדים:</strong> יצירת אירועים הקשורים לישיבות ועדה ספציפיות, עם חישוב אוטומטי של מועדי שלבים (קול קורא, הגשה, סקירה, תגובה) תוך כיבוד SLA וימי עבודה. אימות אוטומטי של התאמת חטיבות.</p>
+                </div>
+            </div>
+
+            <!-- Calendar -->
+            <div id="calendar" class="guide-section">
+                <h2><i class="bi bi-calendar3 icon-large"></i> יומן אינטראקטיבי</h2>
+                <p>היומן האינטראקטיבי הוא הלב של המערכת - ממשק ויזואלי מתקדם המאפשר ניהול מהיר ויעיל.</p>
+
+                <h3>תכונות היומן</h3>
+                <ul class="feature-list">
+                    <li><strong>צבעי חטיבות</strong> - כל חטיבה מוצגת בצבע ייחודי</li>
+                    <li><strong>תפריטי הקשר</strong> - לחיצה על תאריך ריק ליצירת ועדה, לחיצה על תאריך עם ועדה להוספת אירוע/עריכה/מחיקה</li>
+                    <li><strong>ניווט מהיר</strong> - מעבר בין חודשים עם חצים או בחירה ישירה</li>
+                    <li><strong>מקרא צבעים</strong> - הצגת כל החטיבות עם הצבעים שלהן</li>
+                </ul>
+
+                <div class="info-box">
+                    <strong>💡 טיפ:</strong> השתמש ביומן האינטראקטיבי ליצירה מהירה - זו הדרך המהירה ביותר ליצור ועדות ואירועים!
+                </div>
+            </div>
+
+            <!-- Scheduling -->
+            <div id="scheduling" class="guide-section">
+                <h2><i class="bi bi-gear-wide-connected icon-large"></i> תזמון אוטומטי</h2>
+                <p>מערכת התזמון האוטומטי יוצרת לוח זמנים חכם למספר חודשים בבת אחת.</p>
+
+                <h3>תהליך התזמון</h3>
+                <ol>
+                    <li><strong>בחירת פרמטרים:</strong> שנה, חודשים (אפשרות למספר חודשים), וחטיבות</li>
+                    <li><strong>סקירת הצעות:</strong> עמוד ביקורת עם כל ההצעות ותוצאות אימות</li>
+                    <li><strong>אישור ויצירה:</strong> בחירת ישיבות רצויות ויצירתן במערכת</li>
+                </ol>
+
+                <h3>אילוצי תזמון</h3>
+                <ul class="feature-list">
+                    <li>ימי עסקים: ראשון עד חמישי בלבד</li>
+                    <li>ועדה אחת ביום בכל המערכת</li>
+                    <li>כל סוג ועדה ביום קבוע</li>
+                    <li>התחשבות בחגים ותאריכי חריגים</li>
+                    <li>מגבלות שבועיות על מספר ישיבות</li>
+                    <li>ועדות חודשיות בשבוע מסוים</li>
+                </ul>
+            </div>
+
+            <!-- Events -->
+            <div id="events" class="guide-section">
+                <h2><i class="bi bi-calendar-event icon-large"></i> ניהול אירועים</h2>
+
+                <h3>יצירת אירוע</h3>
+                <p>ישנן שתי דרכים ליצור אירוע:</p>
+                <ol>
+                    <li><strong>מהיומן (מומלץ):</strong> לחץ על תאריך עם ועדה קיימת → "הוסף אירוע לועדה"</li>
+                    <li><strong>מעמוד האירועים:</strong> לחץ "צור אירוע חדש" ובחר ועדה ומסלול</li>
+                </ol>
+
+                <h3>חישוב מועדי שלבים</h3>
+                <p>בעת יצירת אירוע, המערכת מחשבת אוטומטית 5 מועדים:</p>
+                <ul class="feature-list">
+                    <li><strong>פרסום קול קורא</strong> - הזנה ידנית</li>
+                    <li><strong>סגירת קול קורא</strong> - מחושב אוטומטית</li>
+                    <li><strong>מועד הגשה</strong> - מחושב אוטומטית</li>
+                    <li><strong>מועד סקירה</strong> - מחושב אוטומטית</li>
+                    <li><strong>מועד תגובה</strong> - מחושב אוטומטית</li>
+                </ul>
+                <p>כל המועדים מחושבים תוך כיבוד ימי עבודה, חגים, והגדרות SLA של המסלול.</p>
+            </div>
+
+            <!-- Recycle Bin -->
+            <div id="recycle" class="guide-section">
+                <h2><i class="bi bi-trash3 icon-large"></i> סל מחזור</h2>
+                <p>סל המחזור מאפשר שחזור של פריטים שנמחקו בטעות.</p>
+
+                <h3>מחיקה רכה</h3>
+                <p>כאשר אתה מוחק ועדה או אירוע:</p>
+                <ul class="feature-list">
+                    <li>הפריט מועבר לסל המחזור (לא נמחק לצמיתות)</li>
+                    <li>מוסתר מהתצוגה הרגילה</li>
+                    <li>ניתן לשחזור בכל עת</li>
+                    <li>נרשם ביומן הביקורת</li>
+                </ul>
+
+                <h3>שחזור פריטים</h3>
+                <ol>
+                    <li>גש ל"סל מחזור" מהתפריט הראשי</li>
+                    <li>מצא את הפריט (ועדה או אירוע)</li>
+                    <li>לחץ "שחזר" ליד הפריט</li>
+                    <li>אשר את השחזור - הפריט יחזור למערכת</li>
+                </ol>
+
+                <div class="warning-box">
+                    <strong>⚠️ אזהרה:</strong> מחיקה קבועה (Permanent Delete) היא בלתי הפיכה! שימוש בזהירות.
+                </div>
+            </div>
+
+            <!-- Audit Log -->
+            <div id="audit" class="guide-section">
+                <h2><i class="bi bi-journal-text icon-large"></i> יומן ביקורת</h2>
+                <p><strong>הרשאות:</strong> Admin בלבד</p>
+
+                <h3>מה נרשם?</h3>
+                <p>כל פעולה במערכת מתועדת אוטומטית:</p>
+                <ul class="feature-list">
+                    <li>התחברות וניתוק (כולל כושלים)</li>
+                    <li>יצירה, עריכה ומחיקה של כל הישויות</li>
+                    <li>שחזור פריטים מסל המחזור</li>
+                    <li>שינויים בהגדרות מערכת</li>
+                    <li>ניהול משתמשים והרשאות</li>
+                </ul>
+
+                <h3>פרטים נרשמים</h3>
+                <p>לכל רשומה: תאריך/שעה, משתמש, פעולה, ישות, מזהה, פרטים נוספים, IP Address, User Agent, סטטוס והודעת שגיאה (במקרה של כישלון).</p>
+
+                <h3>יכולות</h3>
+                <ul class="feature-list">
+                    <li><strong>סינון מתקדם</strong> - לפי תאריך, משתמש, פעולה, ישות</li>
+                    <li><strong>סטטיסטיקות גרפיות</strong> - גרפי עמודות, עוגה וקווים</li>
+                    <li><strong>ייצוא CSV</strong> - להורדה ולניתוח חיצוני</li>
+                </ul>
+            </div>
+
+            <!-- Calendar Sync -->
+            <div id="calendar-sync" class="guide-section">
+                <h2><i class="bi bi-calendar-sync icon-large"></i> סנכרון לוח שנה</h2>
+                <p><strong>הרשאות:</strong> Admin בלבד</p>
+
+                <p>המערכת יכולה לסנכרן אוטומטית ישיבות ועדות ומועדי אירועים ללוח השנה של Microsoft 365.</p>
+
+                <h3>הפעלת הסנכרון</h3>
+                <ol>
+                    <li>גש ל"הגדרות" → "הגדרות מערכת"</li>
+                    <li>מצא את קטגוריית "סנכרון לוח שנה"</li>
+                    <li>הפעל סנכרון ושמור</li>
+                    <li>הזן כתובת אימייל Microsoft 365</li>
+                    <li>התחבר ואשר הרשאות ב-Microsoft</li>
+                </ol>
+
+                <h3>מה מסונכרן?</h3>
+                <ul class="feature-list">
+                    <li>ישיבות ועדה (2 שעות)</li>
+                    <li>מועד פרסום קול קורא</li>
+                    <li>מועד סגירת קול קורא (עם התראה 3 ימים לפני)</li>
+                    <li>מועד הגשת בקשות (עם התראה)</li>
+                    <li>מועד תגובה למבקשים</li>
+                </ul>
+
+                <p>הסנכרון רץ אוטומטית ברקע בתדירות מוגדרת (ברירת מחדל: כל שעה).</p>
+            </div>
+
+            <!-- Authentication -->
+            <div id="auth" class="guide-section">
+                <h2><i class="bi bi-shield-lock icon-large"></i> אימות משתמשים מתקדם</h2>
+
+                <p>המערכת תומכת ב-3 שיטות אימות:</p>
+
+                <div class="feature-card">
+                    <h4><i class="bi bi-person-badge"></i> 1. אימות מקומי (Local)</h4>
+                    <p>סיסמאות מאוחסנות במערכת. מתאים לסביבות קטנות ופיתוח. יצירת משתמשים ידנית על ידי Admin.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4><i class="bi bi-building"></i> 2. Active Directory (LDAP)</h4>
+                    <p>אימות ארגוני מול שרת AD. מתאים לארגונים עם תשתית AD קיימת. יצירת משתמשים אוטומטית בהתחברות ראשונה עם מיפוי קבוצות לתפקידים.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4><i class="bi bi-microsoft"></i> 3. Azure AD / Microsoft 365 (OAuth 2.0)</h4>
+                    <p>אימות ענן מול Microsoft Azure. מתאים לארגונים עם Microsoft 365. תומך ב-SSO, MFA ו-Conditional Access.</p>
+                </div>
+
+                <div class="info-box mt-3">
+                    <strong>ℹ️ הערה:</strong> המערכת תומכת במשתמשים מקומיים ו-AD/Azure במקביל. כל משתמש מסומן עם מקור האימות שלו.
+                </div>
+            </div>
+
+            <!-- Recommendations -->
+            <div id="recommendations" class="guide-section">
+                <h2><i class="bi bi-lightbulb icon-large"></i> המלצות חכמות</h2>
+
+                <p>מערכת ההמלצות החכמה עוזרת למשתמשים לבחור את הועדה המתאימה ביותר בעת הוספת אירוע חדש.</p>
+
+                <h3>קריטריוני הניקוד</h3>
+                <p>המערכת מעריכה כל ועדה לפי:</p>
+                <ul class="feature-list">
+                    <li><strong>זמינות מקום</strong> ⭐ - האם יש מקום נוסף? כמה בקשות כבר יש?</li>
+                    <li><strong>התאמת SLA</strong> 📅 - האם מועד הועדה מתאים למועדי SLA של המסלול?</li>
+                    <li><strong>עומס הועדה</strong> ⚖️ - ועדות פחות עמוסות מועדפות</li>
+                    <li><strong>טווח זמן</strong> 📆 - בונוס לועדות בטווח סביר</li>
+                    <li><strong>אילוצים שבועיים</strong> 🗓️ - קנס אם השבוע עמוס מדי</li>
+                </ul>
+
+                <h3>תצוגת ההמלצות</h3>
+                <p>הועדות מוצגות עם:</p>
+                <ul class="feature-list">
+                    <li>כוכבים צבעוניים (1-5 כוכבים)</li>
+                    <li>ניקוד מספרי (0-100)</li>
+                    <li>סיבת ההמלצה - הסבר קצר</li>
+                    <li>מיון אוטומטי - הועדות הטובות ביותר בראש</li>
+                </ul>
+
+                <div class="info-box">
+                    <strong>💡 טיפ:</strong> Admin יכול להתאים את פרמטרי ההמלצות (בונוסים, קנסים, טווחים) בדף "ניהול אילוצים".
+                </div>
+            </div>
+
+            <!-- Permissions -->
+            <div id="permissions" class="guide-section">
+                <h2><i class="bi bi-people icon-large"></i> מערכת הרשאות</h2>
+
+                <!-- Viewer -->
+                <div class="mt-4">
+                    <h3><span class="role-badge role-user">👁️ צופה - Viewer</span></h3>
+                    <div class="info-box">
+                        <h5>💡 מי זה צופה?</h5>
+                        <p class="mb-0">משתמש עם <strong>הרשאות קריאה בלבד</strong>. יכול לצפות בכל המידע אך לא יכול לבצע שינויים.</p>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="success-box">
+                                <h5>✅ מה ניתן:</h5>
+                                <ul class="mb-0">
+                                    <li>צפייה בכל הנתונים</li>
+                                    <li>ייצוא Excel</li>
+                                    <li>חיפוש וסינון</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="error-box">
+                                <h5>❌ מה אסור:</h5>
+                                <ul class="mb-0">
+                                    <li>עריכה או יצירה</li>
+                                    <li>מחיקה</li>
+                                    <li>ניהול</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Editor -->
+                <div class="mt-4">
+                    <h3><span class="role-badge role-manager">✏️ עורך - Editor</span></h3>
+                    <div class="info-box">
+                        <h5>💡 מי זה עורך?</h5>
+                        <p class="mb-0">משתמש עם <strong>הרשאות קריאה ועריכה</strong>. יכול ליצור ולערוך אירועים בחטיבות שלו.</p>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="success-box">
+                                <h5>✅ מה ניתן:</h5>
+                                <ul class="mb-0">
+                                    <li>כל מה שיש ל-Viewer</li>
+                                    <li>יצירת אירועים (בחטיבות שלו)</li>
+                                    <li>עריכת אירועים (שיצר)</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="error-box">
+                                <h5>❌ מה אסור:</h5>
+                                <ul class="mb-0">
+                                    <li>יצירת/עריכת ועדות</li>
+                                    <li>מחיקת אירועים</li>
+                                    <li>ניהול משתמשים</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="warning-box mt-3">
+                        <strong>⚠️ תקופת עריכה:</strong> תוכל לערוך רק כשתקופת העריכה פתוחה (מנהל מערכת שולט בזה)
+                    </div>
+                </div>
+
+                <!-- Admin -->
+                <div class="mt-4">
+                    <h3><span class="role-badge role-admin">👑 מנהל מערכת - Admin</span></h3>
+                    <div class="info-box">
+                        <h5>💡 מי זה מנהל מערכת?</h5>
+                        <p class="mb-0">ה-<strong>"סופר-יוזר"</strong> - הרשאות מלאות על כל המערכת ללא הגבלות.</p>
+                    </div>
+                    <div class="success-box mt-3">
+                        <h5>✅ הרשאות מלאות:</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <ul class="mb-0">
+                                    <li>כל האירועים - CRUD מלא</li>
+                                    <li>כל הועדות - CRUD מלא</li>
+                                    <li>ניהול חטיבות ומסלולים</li>
+                                    <li>ניהול סוגי ועדות</li>
+                                    <li>תזמון אוטומטי</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <ul class="mb-0">
+                                    <li>ניהול משתמשים והרשאות</li>
+                                    <li>הגדרות מערכת גלובליות</li>
+                                    <li>יומן ביקורת</li>
+                                    <li>סנכרון לוח שנה</li>
+                                    <li>הגדרות אימות (AD/Azure)</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- מטריצת הרשאות -->
+                <div class="mt-4">
+                    <h3><i class="bi bi-table me-2"></i>מטריצת הרשאות</h3>
+                    <table class="table table-bordered table-hover">
+                        <thead class="table-primary">
+                            <tr>
+                                <th>פעולה</th>
+                                <th>Viewer</th>
+                                <th>Editor</th>
+                                <th>Admin</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>צפייה בנתונים</td>
+                                <td class="text-center">✅</td>
+                                <td class="text-center">✅</td>
+                                <td class="text-center">✅</td>
+                            </tr>
+                            <tr>
+                                <td>יצירת אירועים</td>
+                                <td class="text-center">❌</td>
+                                <td class="text-center">✅*</td>
+                                <td class="text-center">✅</td>
+                            </tr>
+                            <tr>
+                                <td>עריכת אירועים</td>
+                                <td class="text-center">❌</td>
+                                <td class="text-center">✅*</td>
+                                <td class="text-center">✅</td>
+                            </tr>
+                            <tr>
+                                <td>מחיקת אירועים</td>
+                                <td class="text-center">❌</td>
+                                <td class="text-center">❌</td>
+                                <td class="text-center">✅</td>
+                            </tr>
+                            <tr>
+                                <td>ניהול ועדות</td>
+                                <td class="text-center">❌</td>
+                                <td class="text-center">❌</td>
+                                <td class="text-center">✅</td>
+                            </tr>
+                            <tr>
+                                <td>תזמון אוטומטי</td>
+                                <td class="text-center">❌</td>
+                                <td class="text-center">❌</td>
+                                <td class="text-center">✅</td>
+                            </tr>
+                            <tr>
+                                <td>ניהול משתמשים</td>
+                                <td class="text-center">❌</td>
+                                <td class="text-center">❌</td>
+                                <td class="text-center">✅</td>
+                            </tr>
+                            <tr>
+                                <td>יומן ביקורת</td>
+                                <td class="text-center">❌</td>
+                                <td class="text-center">❌</td>
+                                <td class="text-center">✅</td>
+                            </tr>
+                            <tr>
+                                <td>הגדרות מערכת</td>
+                                <td class="text-center">❌</td>
+                                <td class="text-center">❌</td>
+                                <td class="text-center">✅</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="text-muted"><small>* Editor תלוי בתקופת עריכה ובחטיבות המשויכות</small></p>
+                </div>
+            </div>
+
+            <!-- FAQ -->
+            <div id="faq" class="guide-section">
+                <h2><i class="bi bi-question-circle icon-large"></i> שאלות נפוצות</h2>
+
+                <h3>שאלות כלליות</h3>
+
+                <div class="feature-card">
+                    <h4>ש: איך אני מתחיל להשתמש במערכת?</h4>
+                    <p>ת: התחבר עם שם משתמש וסיסמה (או דרך AD/Azure). גש לדף הבית לראות את היומן ולהתחיל ליצור ועדות ואירועים.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>ש: מה ההבדל בין סוג ועדה לישיבת ועדה?</h4>
+                    <p>ת: סוג ועדה הוא הגדרה כללית (כמו "ועדת הזנק") עם כללי תזמון. ישיבת ועדה היא מופע ספציפי (ועדת הזנק ב-15/01/2025).</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>ש: כמה ישיבות יכולות להתקיים ביום אחד?</h4>
+                    <p>ת: מקסימום ישיבה אחת ביום בכל המערכת - זהו כלל יסוד שמבטיח איזון עומסים.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>ש: איך משחזרים פריט שנמחק בטעות?</h4>
+                    <p>ת: גש ל"סל מחזור" מהתפריט הראשי, מצא את הפריט, ולחץ "שחזר". הפריט יחזור למערכת.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>ש: איך מפעילים סנכרון לוח שנה עם Microsoft 365?</h4>
+                    <p>ת: Admin בלבד - גש ל"הגדרות" → "הגדרות מערכת", הפעל את "סנכרון לוח שנה", הזן כתובת אימייל Microsoft 365, והתחבר לאישור הרשאות.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>ש: איך רואים מי שינה משהו במערכת?</h4>
+                    <p>ת: Admin בלבד - גש ל"יומן ביקורת" מתפריט המשתמש. שם תוכל לראות את כל הפעולות, מי ביצע, מתי, ועל איזה פריט.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>ש: איך עובדת מערכת ההמלצות לועדות?</h4>
+                    <p>ת: כשאתה יוצר אירוע חדש, המערכת אוטומטית ממליצה על ועדות מתאימות לפי זמינות, התאמת SLA, עומס ועוד. הועדות מדורגות עם כוכבים וניקוד.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>ש: איך המערכת מחשבת את מועדי השלבים?</h4>
+                    <p>ת: אתה מזין תאריך פרסום קול קורא, והמערכת מחשבת אוטומטית את כל המועדים הבאים (סגירת קול קורא, הגשה, סקירה, תגובה) לפי הגדרות ה-SLA של המסלול, תוך כיבוד ימי עבודה וחגים.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>ש: מה ההבדל בין Editor ל-Viewer?</h4>
+                    <p>ת: Viewer יכול רק לצפות בנתונים. Editor יכול גם ליצור ולערוך אירועים בחטיבות שלו (כשתקופת העריכה פתוחה). Admin יכול הכל.</p>
+                </div>
+
+                <h3 class="mt-4">טיפים לשימוש יעיל</h3>
+                <ul class="feature-list">
+                    <li>השתמש ביומן האינטראקטיבי - הדרך המהירה ביותר ליצירת ועדות ואירועים</li>
+                    <li>תכנן עם התזמון האוטומטי - יצור לוח זמנים לכמה חודשים בבת אחת</li>
+                    <li>הגדר סוגי ועדות מראש - לפני השימוש בתזמון האוטומטי</li>
+                    <li>נהל תאריכי חריגים - עדכן חגים בתחילת השנה</li>
+                    <li>השתמש בצבעי חטיבות - לזיהוי מהיר ביומן</li>
+                    <li>בדוק הרשאות - וודא שיש לך הרשאות מתאימות לפעולות שאתה רוצה לבצע</li>
+                </ul>
+            </div>
+
+            <!-- Footer -->
+            <div class="guide-section">
+                <h2><i class="bi bi-info-square icon-large"></i> מידע נוסף</h2>
+                <p><strong>גרסה:</strong> 2.0</p>
+                <p><strong>עדכון אחרון:</strong> דצמבר 2025</p>
+                <p><strong>טכנולוגיות:</strong> Flask, SQLite, Bootstrap 5, JavaScript, Microsoft Graph API</p>
+
+                <div class="info-box">
+                    <h5>קבלת עזרה</h5>
                     <ul class="mb-0">
-                        <li>ניהול משתמשים</li>
-                        <li>תקופת עריכה</li>
-                        <li>תזמון אוטומטי</li>
-                        <li>יומן ביקורת</li>
+                        <li>בדוק את <a href="https://github.com/taldata/izun" target="_blank">README.md</a> למידע טכני</li>
+                        <li>בדוק את ERD.md למבנה מסד הנתונים</li>
+                        <li>פנה למנהל המערכת לשאלות נוספות</li>
                     </ul>
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- מטריצת הרשאות -->
-    <div id="permissions-matrix" class="guide-section">
-        <h2><i class="bi bi-table me-2"></i>מטריצת הרשאות</h2>
-        <table class="table table-bordered">
-            <thead class="table-primary">
-                <tr>
-                    <th>פעולה</th>
-                    <th>Viewer</th>
-                    <th>Editor</th>
-                    <th>Admin</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>צפייה</td>
-                    <td class="text-center">✅</td>
-                    <td class="text-center">✅</td>
-                    <td class="text-center">✅</td>
-                </tr>
-                <tr>
-                    <td>יצירת אירועים</td>
-                    <td class="text-center">❌</td>
-                    <td class="text-center">✅*</td>
-                    <td class="text-center">✅</td>
-                </tr>
-                <tr>
-                    <td>עריכת אירועים</td>
-                    <td class="text-center">❌</td>
-                    <td class="text-center">✅*</td>
-                    <td class="text-center">✅</td>
-                </tr>
-                <tr>
-                    <td>מחיקת אירועים</td>
-                    <td class="text-center">❌</td>
-                    <td class="text-center">❌</td>
-                    <td class="text-center">✅</td>
-                </tr>
-                <tr>
-                    <td>ניהול ועדות</td>
-                    <td class="text-center">❌</td>
-                    <td class="text-center">❌</td>
-                    <td class="text-center">✅</td>
-                </tr>
-                <tr>
-                    <td>ניהול משתמשים</td>
-                    <td class="text-center">❌</td>
-                    <td class="text-center">❌</td>
-                    <td class="text-center">✅</td>
-                </tr>
-            </tbody>
-        </table>
-        <p class="text-muted"><small>* Editor תלוי בתקופת עריכה ובחטיבות המשויכות</small></p>
     </div>
 </div>
+
+<script>
+// Smooth scrolling for navigation links
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+            target.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        }
+    });
+});
+</script>
 {% endblock %}
