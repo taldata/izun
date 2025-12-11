@@ -2653,7 +2653,7 @@ class DatabaseManager:
                    e.call_deadline_date, e.intake_deadline_date, e.review_deadline_date,
                    e.response_deadline_date, e.is_call_deadline_manual, e.created_at,
                    m.name as maslul_name, m.hativa_id as maslul_hativa_id, m.sla_days,
-                   v.vaada_date, v.status as vaada_status,
+                   v.vaada_date,
                    ct.name as committee_name, ct.committee_type_id,
                    h.name as hativa_name, h.color as hativa_color,
                    ht.name as committee_type_name
@@ -2689,12 +2689,11 @@ class DatabaseManager:
             'maslul_hativa_id': row[15],
             'sla_days': row[16],
             'vaada_date': row[17],
-            'vaada_status': row[18],
-            'committee_name': row[19],
-            'committee_type_id': row[20],
-            'hativa_name': row[21],
-            'hativa_color': row[22],
-            'committee_type_name': row[23]
+            'committee_name': row[18],
+            'committee_type_id': row[19],
+            'hativa_name': row[20],
+            'hativa_color': row[21],
+            'committee_type_name': row[22]
         } for row in rows]
 
     def get_event_by_id(self, event_id: int) -> Optional[Dict]:
