@@ -89,11 +89,21 @@ class DatabaseManager:
                 exception_date_id INTEGER,
                 notes TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_deleted INTEGER DEFAULT 0,
+                deleted_at TIMESTAMP,
+                deleted_by INTEGER,
                 FOREIGN KEY (committee_type_id) REFERENCES committee_types (committee_type_id),
                 FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id),
-                FOREIGN KEY (exception_date_id) REFERENCES exception_dates (date_id),
-                UNIQUE(committee_type_id, hativa_id, vaada_date)
+                FOREIGN KEY (exception_date_id) REFERENCES exception_dates (date_id)
             )
+        ''')
+
+        # Create partial unique index for vaadot - only applies to non-deleted records
+        # This allows recreating a committee on the same date after the previous one was deleted
+        cursor.execute('''
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_vaadot_unique_active
+            ON vaadot(committee_type_id, hativa_id, vaada_date)
+            WHERE is_deleted = 0 OR is_deleted IS NULL
         ''')
         
         cursor.execute('''
@@ -324,13 +334,91 @@ class DatabaseManager:
         
         conn.commit()
         conn.close()
-    
+
+    def _migrate_vaadot_unique_constraint(self, cursor):
+        """
+        Migrate vaadot table to use a partial unique index instead of inline UNIQUE constraint.
+        This allows recreating a committee on the same date after the previous one was deleted.
+        """
+        try:
+            # Check if partial index already exists
+            cursor.execute("""
+                SELECT name FROM sqlite_master
+                WHERE type='index' AND name='idx_vaadot_unique_active'
+            """)
+            if cursor.fetchone():
+                # Migration already done
+                return
+
+            # Check if table exists
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='vaadot'")
+            if not cursor.fetchone():
+                return
+
+            # Get current columns
+            cursor.execute("PRAGMA table_info(vaadot)")
+            columns_info = cursor.fetchall()
+            if not columns_info:
+                return
+
+            # Recreate table without inline UNIQUE constraint
+            # Step 1: Create new table without the constraint
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS vaadot_new (
+                    vaadot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    committee_type_id INTEGER NOT NULL,
+                    hativa_id INTEGER NOT NULL,
+                    vaada_date DATE NOT NULL,
+                    exception_date_id INTEGER,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_deleted INTEGER DEFAULT 0,
+                    deleted_at TIMESTAMP,
+                    deleted_by INTEGER,
+                    FOREIGN KEY (committee_type_id) REFERENCES committee_types (committee_type_id),
+                    FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id),
+                    FOREIGN KEY (exception_date_id) REFERENCES exception_dates (date_id)
+                )
+            ''')
+
+            # Step 2: Copy data from old table
+            cursor.execute('''
+                INSERT INTO vaadot_new
+                SELECT vaadot_id, committee_type_id, hativa_id, vaada_date, exception_date_id,
+                       notes, created_at, is_deleted, deleted_at, deleted_by
+                FROM vaadot
+            ''')
+
+            # Step 3: Drop old table
+            cursor.execute('DROP TABLE vaadot')
+
+            # Step 4: Rename new table
+            cursor.execute('ALTER TABLE vaadot_new RENAME TO vaadot')
+
+            # Step 5: Create partial unique index (only for non-deleted records)
+            cursor.execute('''
+                CREATE UNIQUE INDEX idx_vaadot_unique_active
+                ON vaadot(committee_type_id, hativa_id, vaada_date)
+                WHERE is_deleted = 0 OR is_deleted IS NULL
+            ''')
+
+            print("Migration: vaadot table UNIQUE constraint replaced with partial unique index")
+
+        except Exception as e:
+            print(f"Migration error for vaadot unique constraint: {e}")
+            # Don't raise - allow other migrations to continue
+
     def _migrate_database(self, cursor):
         """Migrate existing database to add new columns if they don't exist"""
         try:
+            # Fix UNIQUE constraint on vaadot to allow recreating deleted committees
+            # The old constraint didn't account for is_deleted, causing errors when
+            # recreating a committee that was previously deleted on the same date
+            self._migrate_vaadot_unique_constraint(cursor)
+
             cursor.execute("PRAGMA table_info(vaadot)")
             vaadot_columns = [column[1] for column in cursor.fetchall()]
-            
+
             if 'vaada_date' not in vaadot_columns:
                 cursor.execute('ALTER TABLE vaadot ADD COLUMN vaada_date DATE')
             
