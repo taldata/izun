@@ -1516,7 +1516,7 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date, v.status, v.notes, v.exception_date_id,
+            SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date, v.notes, v.exception_date_id,
                    ct.name, ct.scheduled_day, ct.frequency, ct.week_of_month,
                    h.name as hativa_name,
                    ed.exception_date, ed.description as exception_description, ed.type as exception_type
@@ -1529,14 +1529,14 @@ class DatabaseManager:
         ''', (vaada_date,))
         rows = cursor.fetchall()
         conn.close()
-        
+
         days = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת']
-        
-        return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2], 'vaada_date': row[3], 
-                'status': row[4], 'notes': row[5], 'exception_date_id': row[6],
-                'committee_name': row[7], 'scheduled_day': row[8], 'frequency': row[9], 'week_of_month': row[10],
-                'hativa_name': row[11], 'exception_date': row[12], 'exception_description': row[13], 
-                'exception_type': row[14]} for row in rows]
+
+        return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2], 'vaada_date': row[3],
+                'notes': row[4], 'exception_date_id': row[5],
+                'committee_name': row[6], 'scheduled_day': row[7], 'frequency': row[8], 'week_of_month': row[9],
+                'hativa_name': row[10], 'exception_date': row[11], 'exception_description': row[12],
+                'exception_type': row[13]} for row in rows]
     
     def get_vaadot_by_date_and_hativa(self, vaada_date: str, hativa_id: int) -> List[Dict]:
         """Get committees scheduled for a specific date and hativa"""
@@ -1561,7 +1561,7 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date, v.status, v.notes, v.exception_date_id,
+            SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date, v.notes, v.exception_date_id,
                    ct.name, ct.scheduled_day, ct.frequency, ct.week_of_month,
                    h.name as hativa_name,
                    ed.exception_date, ed.description as exception_description, ed.type as exception_type
@@ -1574,14 +1574,14 @@ class DatabaseManager:
         ''', (exception_date_id,))
         rows = cursor.fetchall()
         conn.close()
-        
+
         days = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת']
-        
-        return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2], 'vaada_date': row[3], 
-                'status': row[4], 'notes': row[5], 'exception_date_id': row[6],
-                'committee_name': row[7], 'scheduled_day': row[8], 'frequency': row[9], 'week_of_month': row[10],
-                'hativa_name': row[11], 'exception_date': row[12], 'exception_description': row[13], 
-                'exception_type': row[14]} for row in rows]
+
+        return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2], 'vaada_date': row[3],
+                'notes': row[4], 'exception_date_id': row[5],
+                'committee_name': row[6], 'scheduled_day': row[7], 'frequency': row[8], 'week_of_month': row[9],
+                'hativa_name': row[10], 'exception_date': row[11], 'exception_description': row[12],
+                'exception_type': row[13]} for row in rows]
     
     # Events operations
     def add_event(self, vaadot_id: int, maslul_id: int, name: str, event_type: str,
@@ -2742,7 +2742,7 @@ class DatabaseManager:
                    e.call_deadline_date, e.intake_deadline_date, e.review_deadline_date,
                    e.response_deadline_date, e.is_call_deadline_manual, e.created_at,
                    m.name as maslul_name, m.hativa_id as maslul_hativa_id, m.sla_days,
-                   v.vaada_date, v.status as vaada_status,
+                   v.vaada_date,
                    ct.name as committee_name, ct.committee_type_id,
                    h.name as hativa_name, h.color as hativa_color,
                    ht.name as committee_type_name
@@ -2778,12 +2778,11 @@ class DatabaseManager:
             'maslul_hativa_id': row[15],
             'sla_days': row[16],
             'vaada_date': row[17],
-            'vaada_status': row[18],
-            'committee_name': row[19],
-            'committee_type_id': row[20],
-            'hativa_name': row[21],
-            'hativa_color': row[22],
-            'committee_type_name': row[23]
+            'committee_name': row[18],
+            'committee_type_id': row[19],
+            'hativa_name': row[20],
+            'hativa_color': row[21],
+            'committee_type_name': row[22]
         } for row in rows]
 
     def get_event_by_id(self, event_id: int) -> Optional[Dict]:
