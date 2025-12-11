@@ -1531,36 +1531,37 @@ class DatabaseManager:
             JOIN maslulim m ON m.maslul_id = ?
             JOIN hativot h2 ON m.hativa_id = h2.hativa_id
             WHERE v.vaadot_id = ?
+              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
         ''', (maslul_id, vaadot_id))
-        
+
         result = cursor.fetchone()
         if not result:
             conn.close()
             raise ValueError("ועדה או מסלול לא נמצאו במערכת")
-        
+
         vaada_hativa_id, maslul_hativa_id, vaada_hativa_name, maslul_hativa_name, committee_name, maslul_name, vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days = result
-        
+
         if call_publication_date in ("", None):
             call_publication_date = None
         elif isinstance(call_publication_date, str):
             call_publication_date = datetime.strptime(call_publication_date, '%Y-%m-%d').date()
         elif isinstance(call_publication_date, datetime):
             call_publication_date = call_publication_date.date()
-        
+
         if vaada_hativa_id != maslul_hativa_id:
             conn.close()
             raise ValueError(f'המסלול "{maslul_name}" מחטיבת "{maslul_hativa_name}" אינו יכול להיות משויך לועדה "{committee_name}" מחטיבת "{vaada_hativa_name}"')
-        
+
         # Check max requests per day constraint on committee date (skip for admins)
         if user_role != 'admin':
             max_requests_committee = int(self.get_system_setting('max_requests_committee_date') or '100')
             current_total_requests = self.get_total_requests_on_date(vaada_date, exclude_event_id=None)
             new_total_requests = current_total_requests + expected_requests
-            
+
             if new_total_requests > max_requests_committee:
                 conn.close()
                 raise ValueError(f'חריגה מאילוץ מקסימום בקשות ביום ועדה: התאריך {vaada_date} כבר מכיל {current_total_requests} בקשות צפויות. הוספת {expected_requests} בקשות תגרום לסך של {new_total_requests} (המגבלה היא {max_requests_committee})')
-        
+
         # Calculate derived dates based on stage durations
         stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
         
@@ -1681,32 +1682,33 @@ class DatabaseManager:
             JOIN maslulim m ON m.maslul_id = ?
             JOIN hativot h2 ON m.hativa_id = h2.hativa_id
             WHERE v.vaadot_id = ?
+              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
         ''', (maslul_id, vaadot_id))
-        
+
         result = cursor.fetchone()
         if not result:
             conn.close()
             raise ValueError("ועדה או מסלול לא נמצאו במערכת")
-        
+
         vaada_hativa_id, maslul_hativa_id, vaada_hativa_name, maslul_hativa_name, committee_name, maslul_name, vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days = result
-        
+
         if call_publication_date in ("", None):
             call_publication_date = None
         elif isinstance(call_publication_date, str):
             call_publication_date = datetime.strptime(call_publication_date, '%Y-%m-%d').date()
         elif isinstance(call_publication_date, datetime):
             call_publication_date = call_publication_date.date()
-        
+
         if vaada_hativa_id != maslul_hativa_id:
             conn.close()
             raise ValueError(f'המסלול "{maslul_name}" מחטיבת "{maslul_hativa_name}" אינו יכול להיות משויך לועדה "{committee_name}" מחטיבת "{vaada_hativa_name}"')
-        
+
         # Check max requests per day constraint on committee date (excluding current event, skip for admins)
         if user_role != 'admin':
             max_requests_committee = int(self.get_system_setting('max_requests_committee_date') or '100')
             current_total_requests = self.get_total_requests_on_date(vaada_date, exclude_event_id=event_id)
             new_total_requests = current_total_requests + expected_requests
-            
+
             if new_total_requests > max_requests_committee:
                 conn.close()
                 raise ValueError(f'חריגה מאילוץ מקסימום בקשות ביום ועדה: התאריך {vaada_date} כבר מכיל {current_total_requests} בקשות צפויות (ללא האירוע הנוכחי). עדכון ל-{expected_requests} בקשות יגרום לסך של {new_total_requests} (המגבלה היא {max_requests_committee})')
