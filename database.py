@@ -1358,21 +1358,21 @@ class DatabaseManager:
         try:
             cursor = conn.cursor()
             # Count related events before deletion
-            cursor.execute(f'SELECT COUNT(*) FROM events WHERE vaadot_id IN ({placeholders}) AND is_deleted = 0', ids)
+            cursor.execute(f'SELECT COUNT(*) FROM events WHERE vaadot_id IN ({placeholders}) AND (is_deleted = 0 OR is_deleted IS NULL)', ids)
             events_count = cursor.fetchone()[0] or 0
-            
+
             # Soft delete related events first
             cursor.execute(f'''
-                UPDATE events 
-                SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
-                WHERE vaadot_id IN ({placeholders}) AND is_deleted = 0
+                UPDATE events
+                SET is_deleted = 1, deleted_at = ?, deleted_by = ?
+                WHERE vaadot_id IN ({placeholders}) AND (is_deleted = 0 OR is_deleted IS NULL)
             ''', [datetime.now(ISRAEL_TZ), user_id] + ids)
-            
+
             # Soft delete committees
             cursor.execute(f'''
-                UPDATE vaadot 
-                SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
-                WHERE vaadot_id IN ({placeholders}) AND is_deleted = 0
+                UPDATE vaadot
+                SET is_deleted = 1, deleted_at = ?, deleted_by = ?
+                WHERE vaadot_id IN ({placeholders}) AND (is_deleted = 0 OR is_deleted IS NULL)
             ''', [datetime.now(ISRAEL_TZ), user_id] + ids)
             deleted_committees = cursor.rowcount or 0
             
@@ -2560,7 +2560,7 @@ class DatabaseManager:
         query = f'''
             SELECT COALESCE(SUM(e.expected_requests), 0)
             FROM events e
-            WHERE e.{column_name} = ? AND e.is_deleted = 0
+            WHERE e.{column_name} = ? AND (e.is_deleted = 0 OR e.is_deleted IS NULL)
         '''
         params = [check_date]
         
@@ -3396,17 +3396,30 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            
+
+            # Check if parent committee is deleted
             cursor.execute('''
-                UPDATE events 
-                SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL 
+                SELECT v.is_deleted FROM events e
+                JOIN vaadot v ON e.vaadot_id = v.vaadot_id
+                WHERE e.event_id = ?
+            ''', (event_id,))
+            result = cursor.fetchone()
+            if result and result[0] == 1:
+                conn.close()
+                raise ValueError("לא ניתן לשחזר אירוע: הוועדה נמצאת בסל המחזור. יש לשחזר תחילה את הוועדה.")
+
+            cursor.execute('''
+                UPDATE events
+                SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL
                 WHERE event_id = ? AND is_deleted = 1
             ''', (event_id,))
             success = cursor.rowcount > 0
-            
+
             conn.commit()
             conn.close()
             return success
+        except ValueError:
+            raise
         except Exception as e:
             print(f"Error restoring event: {e}")
             if 'conn' in locals():
