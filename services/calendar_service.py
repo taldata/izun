@@ -368,9 +368,28 @@ class CalendarService:
                     self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', calendar_event_id, content_hash=content_hash)
                     return True, f"Committee updated in calendar"
                 else:
-                    # If update fails, keep the existing calendar_event_id but mark as failed
-                    self.db.update_calendar_sync_status(sync_record['sync_id'], 'failed', calendar_event_id, error_message=message)
-                    return False, message
+                    # If update fails with 404 (event not found), clear the calendar_event_id
+                    # so next sync will create a new event instead of trying to update non-existent one
+                    if 'ErrorItemNotFound' in message or '404' in message:
+                        logger.info(f"Calendar event {calendar_event_id} no longer exists, clearing for recreation")
+                        self.db.update_calendar_sync_status(sync_record['sync_id'], 'pending', None, error_message=message)
+                        # Try to create a new event immediately
+                        success2, new_event_id, create_msg = self.create_calendar_event(
+                            subject=subject,
+                            start_date=vaada_date,
+                            body=body,
+                            is_all_day=True
+                        )
+                        if success2:
+                            self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', new_event_id, content_hash=content_hash)
+                            return True, f"Committee recreated in calendar with ID: {new_event_id}"
+                        else:
+                            self.db.update_calendar_sync_status(sync_record['sync_id'], 'failed', error_message=create_msg)
+                            return False, create_msg
+                    else:
+                        # For other errors, keep the existing calendar_event_id but mark as failed
+                        self.db.update_calendar_sync_status(sync_record['sync_id'], 'failed', calendar_event_id, error_message=message)
+                        return False, message
             else:
                 # Create new event (no sync record or no calendar_event_id)
                 success, event_id, message = self.create_calendar_event(
@@ -511,9 +530,27 @@ class CalendarService:
                             self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', calendar_event_id, content_hash=content_hash)
                             synced_count += 1
                         else:
-                            # If update fails, keep the existing calendar_event_id but mark as failed
-                            self.db.update_calendar_sync_status(sync_record['sync_id'], 'failed', calendar_event_id, error_message=message)
-                            failed_count += 1
+                            # If update fails with 404 (event not found), recreate it
+                            if 'ErrorItemNotFound' in message or '404' in message:
+                                logger.info(f"Calendar event {calendar_event_id} no longer exists, recreating")
+                                self.db.update_calendar_sync_status(sync_record['sync_id'], 'pending', None, error_message=message)
+                                # Try to create a new event immediately
+                                success2, new_cal_id, create_msg = self.create_calendar_event(
+                                    subject=subject,
+                                    start_date=deadline_date,
+                                    body=body,
+                                    is_all_day=True
+                                )
+                                if success2:
+                                    self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', new_cal_id, content_hash=content_hash)
+                                    synced_count += 1
+                                else:
+                                    self.db.update_calendar_sync_status(sync_record['sync_id'], 'failed', error_message=create_msg)
+                                    failed_count += 1
+                            else:
+                                # For other errors, keep the existing calendar_event_id but mark as failed
+                                self.db.update_calendar_sync_status(sync_record['sync_id'], 'failed', calendar_event_id, error_message=message)
+                                failed_count += 1
                     else:
                         # Create new event (no sync record or no calendar_event_id)
                         success, cal_event_id, message = self.create_calendar_event(
