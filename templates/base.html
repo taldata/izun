@@ -1,537 +1,762 @@
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block title %}איזון עומסים{% endblock %}</title>
-    
+
     <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg">
-    
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg"
+    />
+
     <!-- Bootstrap RTL CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css"
+      rel="stylesheet"
+    />
     <!-- Bootstrap Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css"
+      rel="stylesheet"
+    />
     <!-- SortableJS for Drag & Drop -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <!-- Custom CSS -->
-    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
-    
-    <style>
-        .nav-link:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-            transform: translateY(-1px);
-            transition: all 0.3s ease;
-        }
-        
-        .card {
-            transition: all 0.3s ease;
-            border: none;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-        
-        .btn {
-            border-radius: 25px;
-            padding: 8px 20px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        }
-        
-        .jumbotron {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 20px;
-        }
-        
-        .stats-card {
-            border-radius: 15px;
-            background: white;
-            border-left: 4px solid;
-        }
-        
-        .quick-action-card {
-            border-radius: 15px;
-            height: 100%;
-            background: white;
-        }
-        
-        .quick-action-card .card-body {
-            padding: 2rem;
-        }
-        
-        .section-title {
-            font-weight: 600;
-            color: #2c3e50;
-            margin-bottom: 1.5rem;
-        }
+    <link
+      href="{{ url_for('static', filename='css/style.css') }}"
+      rel="stylesheet"
+    />
 
-        /* Global: Force LTR direction for all date displays */
-        .date-badge,
-        .date-text,
-        .calendar-date,
-        .event-date,
-        .committee-date,
-        td[dir="ltr"],
-        span[dir="ltr"],
-        .ltr-date {
-            direction: ltr !important;
-        }
+    <style>
+      .nav-link:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        transform: translateY(-1px);
+        transition: all 0.3s ease;
+      }
+
+      .card {
+        transition: all 0.3s ease;
+        border: none;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+      }
+
+      .btn {
+        border-radius: 25px;
+        padding: 8px 20px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      }
+
+      .jumbotron {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 20px;
+      }
+
+      .stats-card {
+        border-radius: 15px;
+        background: white;
+        border-left: 4px solid;
+      }
+
+      .quick-action-card {
+        border-radius: 15px;
+        height: 100%;
+        background: white;
+      }
+
+      .quick-action-card .card-body {
+        padding: 2rem;
+      }
+
+      .section-title {
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 1.5rem;
+      }
+
+      /* Global: Force LTR direction for all date displays */
+      .date-badge,
+      .date-text,
+      .calendar-date,
+      .event-date,
+      .committee-date,
+      td[dir="ltr"],
+      span[dir="ltr"],
+      .ltr-date {
+        direction: ltr !important;
+      }
     </style>
-    
+
     {% block extra_head %}{% endblock %}
-</head>
-<body>
+  </head>
+  <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">
-                <img src="https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg" alt="לוגו" style="height: 60px; margin-left: 12px; background: rgba(255,255,255,0.98); padding: 8px; border-radius: 10px; filter: drop-shadow(0 3px 8px rgba(0,0,0,0.2));">
-                איזון עומסים
-            </a>
-            
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    {# All users can access home, events table, and user guide #}
-                    <li class="nav-item">
-                        <a class="nav-link rounded-pill px-3 mx-1" href="{{ url_for('index') }}">
-                            <i class="bi bi-house me-1"></i>דף הבית
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link rounded-pill px-3 mx-1" href="{{ url_for('events_table') }}">
-                            <i class="bi bi-table me-1"></i>טבלת אירועים
-                        </a>
-                    </li>
-                    {# Dashboard for editors and admins #}
-                    {% if current_user and current_user.role in ['editor', 'admin'] %}
-                    <li class="nav-item">
-                        <a class="nav-link rounded-pill px-3 mx-1" href="{{ url_for('dashboard') }}">
-                            <i class="bi bi-graph-up-arrow me-1"></i>דשבורד
-                        </a>
-                    </li>
-                    {% endif %}
-                    <li class="nav-item">
-                        <a class="nav-link rounded-pill px-3 mx-1" href="{{ url_for('user_guide') }}" style="background: linear-gradient(135deg, #667eea20, #764ba220);">
-                            <i class="bi bi-book me-1"></i>מדריך למשתמש
-                        </a>
-                    </li>
-                    
-                    {# Editors and Admins can access settings #}
-                    {% if current_user and current_user.role in ['editor', 'admin'] %}
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle rounded-pill px-3 mx-1" href="#" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-gear me-1"></i>הגדרות
-                        </a>
-                        <ul class="dropdown-menu shadow border-0">
-                            <li><a class="dropdown-item" href="{{ url_for('committee_types') }}">
-                                <i class="bi bi-people me-2"></i>ניהול ועדות
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('recycle_bin') }}">
-                                <i class="bi bi-trash3 me-2 text-secondary"></i>סל מחזור
-                            </a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('auto_schedule') }}">
-                                <i class="bi bi-robot me-2 text-success"></i>תזמון אוטומטי
-                            </a></li>
-                            
-                            {# Admin-only settings #}
-                            {% if current_user.role == 'admin' %}
-                            <li><hr class="dropdown-divider"></li>
-                            <li><h6 class="dropdown-header">הגדרות מנהל</h6></li>
-                            <li><a class="dropdown-item" href="{{ url_for('hativot') }}">
-                                <i class="bi bi-diagram-3 me-2 text-primary"></i>חטיבות
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('maslulim') }}">
-                                <i class="bi bi-arrow-right-circle me-2 text-info"></i>מסלולים
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('exception_dates') }}">
-                                <i class="bi bi-calendar-x me-2 text-danger"></i>תאריכי חריגים
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('constraints') }}">
-                                <i class="bi bi-sliders me-2 text-warning"></i>ניהול אילוצים
-                            </a></li>
-                            {% endif %}
-                        </ul>
-                    </li>
-                    {% endif %}
-                </ul>
-                
-                <!-- User Menu -->
-                {% if current_user %}
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle text-light" href="#" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-person-circle me-1"></i>{{ current_user.full_name }}
-                            <span class="badge bg-light text-dark ms-1">
-                                {% if current_user.role == 'admin' %}מנהל{% elif current_user.role == 'editor' %}עורך{% else %}צופה{% endif %}
-                            </span>
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                            <li><h6 class="dropdown-header">{{ current_user.full_name }}</h6></li>
-                            <li><span class="dropdown-item-text small text-muted">{{ current_user.username }}</span></li>
-                            <li><hr class="dropdown-divider"></li>
-                            {% if current_user.role == 'admin' %}
-                            <li><h6 class="dropdown-header text-primary">ניהול מערכת</h6></li>
-                            <li><a class="dropdown-item" href="{{ url_for('manage_users') }}">
-                                <i class="bi bi-people me-2 text-primary"></i>ניהול משתמשים
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('permissions_matrix') }}">
-                                <i class="bi bi-shield-lock me-2 text-warning"></i>מטריצת הרשאות
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('admin_audit_logs') }}">
-                                <i class="bi bi-clipboard-data me-2 text-success"></i>יומן ביקורת
-                            </a></li>
-                            <li><a class="dropdown-item" href="#" onclick="toggleEditingPeriod()">
-                                <i class="bi bi-toggle-on me-2"></i>ניהול תקופת עריכה
-                            </a></li>
-                            <li><a class="dropdown-item" href="#" onclick="showCalendarSyncModal()">
-                                <i class="bi bi-calendar-check me-2 text-info"></i>סנכרון לוח שנה
-                            </a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            {% endif %}
-                            <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">
-                                <i class="bi bi-box-arrow-right me-2"></i>התנתק
-                            </a></li>
-                        </ul>
-                    </li>
-                </ul>
+    <nav
+      class="navbar navbar-expand-lg navbar-dark"
+      style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+    >
+      <div class="container">
+        <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">
+          <img
+            src="https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg"
+            alt="לוגו"
+            style="
+              height: 60px;
+              margin-left: 12px;
+              background: rgba(255, 255, 255, 0.98);
+              padding: 8px;
+              border-radius: 10px;
+              filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.2));
+            "
+          />
+          איזון עומסים
+        </a>
+
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav me-auto">
+            {# All users can access home, events table, and user guide #}
+            <li class="nav-item">
+              <a
+                class="nav-link rounded-pill px-3 mx-1"
+                href="{{ url_for('index') }}"
+              >
+                <i class="bi bi-house me-1"></i>דף הבית
+              </a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link rounded-pill px-3 mx-1"
+                href="{{ url_for('events_table') }}"
+              >
+                <i class="bi bi-table me-1"></i>טבלת אירועים
+              </a>
+            </li>
+            {# Dashboard hidden from navigation - commented out per user request
+            #} {# {% if current_user and current_user.role in ['editor',
+            'admin'] %}
+            <li class="nav-item">
+              <a
+                class="nav-link rounded-pill px-3 mx-1"
+                href="{{ url_for('dashboard') }}"
+              >
+                <i class="bi bi-graph-up-arrow me-1"></i>דשבורד
+              </a>
+            </li>
+            {% endif %} #}
+            <li class="nav-item">
+              <a
+                class="nav-link rounded-pill px-3 mx-1"
+                href="{{ url_for('user_guide') }}"
+                style="
+                  background: linear-gradient(135deg, #667eea20, #764ba220);
+                "
+              >
+                <i class="bi bi-book me-1"></i>מדריך למשתמש
+              </a>
+            </li>
+
+            {# Editors and Admins can access settings #} {% if current_user and
+            current_user.role in ['editor', 'admin'] %}
+            <li class="nav-item dropdown">
+              <a
+                class="nav-link dropdown-toggle rounded-pill px-3 mx-1"
+                href="#"
+                role="button"
+                data-bs-toggle="dropdown"
+              >
+                <i class="bi bi-gear me-1"></i>הגדרות
+              </a>
+              <ul class="dropdown-menu shadow border-0">
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('committee_types') }}"
+                  >
+                    <i class="bi bi-people me-2"></i>ניהול ועדות
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('recycle_bin') }}">
+                    <i class="bi bi-trash3 me-2 text-secondary"></i>סל מחזור
+                  </a>
+                </li>
+                <li><hr class="dropdown-divider" /></li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('auto_schedule') }}"
+                  >
+                    <i class="bi bi-robot me-2 text-success"></i>תזמון אוטומטי
+                  </a>
+                </li>
+
+                {# Admin-only settings #} {% if current_user.role == 'admin' %}
+                <li><hr class="dropdown-divider" /></li>
+                <li><h6 class="dropdown-header">הגדרות מנהל</h6></li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('hativot') }}">
+                    <i class="bi bi-diagram-3 me-2 text-primary"></i>חטיבות
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('maslulim') }}">
+                    <i class="bi bi-arrow-right-circle me-2 text-info"></i
+                    >מסלולים
+                  </a>
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('exception_dates') }}"
+                  >
+                    <i class="bi bi-calendar-x me-2 text-danger"></i>תאריכי
+                    חריגים
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('constraints') }}">
+                    <i class="bi bi-sliders me-2 text-warning"></i>ניהול אילוצים
+                  </a>
+                </li>
                 {% endif %}
-            </div>
+              </ul>
+            </li>
+            {% endif %}
+          </ul>
+
+          <!-- User Menu -->
+          {% if current_user %}
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item dropdown">
+              <a
+                class="nav-link dropdown-toggle text-light"
+                href="#"
+                role="button"
+                data-bs-toggle="dropdown"
+              >
+                <i class="bi bi-person-circle me-1"></i>{{
+                current_user.full_name }}
+                <span class="badge bg-light text-dark ms-1">
+                  {% if current_user.role == 'admin' %}מנהל{% elif
+                  current_user.role == 'editor' %}עורך{% else %}צופה{% endif %}
+                </span>
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                <li>
+                  <h6 class="dropdown-header">{{ current_user.full_name }}</h6>
+                </li>
+                <li>
+                  <span class="dropdown-item-text small text-muted"
+                    >{{ current_user.username }}</span
+                  >
+                </li>
+                <li><hr class="dropdown-divider" /></li>
+                {% if current_user.role == 'admin' %}
+                <li>
+                  <h6 class="dropdown-header text-primary">ניהול מערכת</h6>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('manage_users') }}">
+                    <i class="bi bi-people me-2 text-primary"></i>ניהול משתמשים
+                  </a>
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('permissions_matrix') }}"
+                  >
+                    <i class="bi bi-shield-lock me-2 text-warning"></i>מטריצת
+                    הרשאות
+                  </a>
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('admin_audit_logs') }}"
+                  >
+                    <i class="bi bi-clipboard-data me-2 text-success"></i>יומן
+                    ביקורת
+                  </a>
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="#"
+                    onclick="toggleEditingPeriod()"
+                  >
+                    <i class="bi bi-toggle-on me-2"></i>ניהול תקופת עריכה
+                  </a>
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="#"
+                    onclick="showCalendarSyncModal()"
+                  >
+                    <i class="bi bi-calendar-check me-2 text-info"></i>סנכרון
+                    לוח שנה
+                  </a>
+                </li>
+                <li><hr class="dropdown-divider" /></li>
+                {% endif %}
+                <li>
+                  <a
+                    class="dropdown-item text-danger"
+                    href="{{ url_for('logout') }}"
+                  >
+                    <i class="bi bi-box-arrow-right me-2"></i>התנתק
+                  </a>
+                </li>
+              </ul>
+            </li>
+          </ul>
+          {% endif %}
         </div>
+      </div>
     </nav>
 
     <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            <div class="container mt-3">
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show notification-enhanced" role="alert">
-                        <div class="notification-content">
-                            <i class="bi bi-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' }} me-2 notification-icon"></i>
-                            <span class="notification-message">{{ message }}</span>
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="סגור"></button>
-                        </div>
-                        <div class="notification-progress"></div>
-                    </div>
-                {% endfor %}
-            </div>
-        {% endif %}
-    {% endwith %}
+    {% with messages = get_flashed_messages(with_categories=true) %} {% if
+    messages %}
+    <div class="container mt-3">
+      {% for category, message in messages %}
+      <div
+        class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show notification-enhanced"
+        role="alert"
+      >
+        <div class="notification-content">
+          <i
+            class="bi bi-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' }} me-2 notification-icon"
+          ></i>
+          <span class="notification-message">{{ message }}</span>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="alert"
+            aria-label="סגור"
+          ></button>
+        </div>
+        <div class="notification-progress"></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %} {% endwith %}
 
     <!-- Main Content -->
-    <main class="container mt-4">
-        {% block content %}{% endblock %}
-    </main>
+    <main class="container mt-4">{% block content %}{% endblock %}</main>
 
     <!-- Footer -->
     <footer class="bg-light mt-5 py-4">
-        <div class="container text-center">
-            <p class="mb-0 text-muted">
-                <img src="https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg" alt="לוגו" style="height: 32px; margin-left: 10px; background: rgba(255,255,255,0.95); padding: 4px; border-radius: 6px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">
-                איזון עומסים © 2025
-            </p>
-        </div>
+      <div class="container text-center">
+        <p class="mb-0 text-muted">
+          <img
+            src="https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg"
+            alt="לוגו"
+            style="
+              height: 32px;
+              margin-left: 10px;
+              background: rgba(255, 255, 255, 0.95);
+              padding: 4px;
+              border-radius: 6px;
+              filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+            "
+          />
+          איזון עומסים © 2025
+        </p>
+      </div>
     </footer>
 
     <!-- Mobile Device Block Overlay -->
-    <div id="mobileBlockOverlay" class="mobile-block-overlay" style="display: none;">
-        <div class="mobile-block-content">
-            <i class="bi bi-exclamation-triangle-fill text-warning mb-3" style="font-size: 4rem;"></i>
-            <h2>גישה ממכשיר נייד אינה נתמכת</h2>
-            <p class="lead">מערכת איזון עומסים מיועדת לעבודה ממחשב שולחני בלבד.</p>
-            <p>אנא היכנס למערכת ממחשב נייח או נייד (לא טאבלט או סמארטפון).</p>
-            <div class="mt-4">
-                <i class="bi bi-laptop me-2"></i>
-                <span>יש להשתמש במסך ברזולוציה מינימלית של 1024px</span>
-            </div>
+    <div
+      id="mobileBlockOverlay"
+      class="mobile-block-overlay"
+      style="display: none"
+    >
+      <div class="mobile-block-content">
+        <i
+          class="bi bi-exclamation-triangle-fill text-warning mb-3"
+          style="font-size: 4rem"
+        ></i>
+        <h2>גישה ממכשיר נייד אינה נתמכת</h2>
+        <p class="lead">מערכת איזון עומסים מיועדת לעבודה ממחשב שולחני בלבד.</p>
+        <p>אנא היכנס למערכת ממחשב נייח או נייד (לא טאבלט או סמארטפון).</p>
+        <div class="mt-4">
+          <i class="bi bi-laptop me-2"></i>
+          <span>יש להשתמש במסך ברזולוציה מינימלית של 1024px</span>
         </div>
+      </div>
     </div>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    
-    <script>
-    // Block mobile devices
-    function isMobileDevice() {
-        const userAgent = navigator.userAgent.toLowerCase();
-        const mobileKeywords = ['android', 'webos', 'iphone', 'ipad', 'ipod', 'blackberry', 'windows phone', 'mobile'];
-        const isMobileUA = mobileKeywords.some(keyword => userAgent.includes(keyword));
-        const isSmallScreen = window.innerWidth < 1024 || window.innerHeight < 768;
-        const isTouchOnly = navigator.maxTouchPoints > 0 && !window.matchMedia('(pointer: fine)').matches;
-        
-        return isMobileUA || (isSmallScreen && isTouchOnly);
-    }
 
-    function blockMobileAccess() {
+    <script>
+      // Block mobile devices
+      function isMobileDevice() {
+        const userAgent = navigator.userAgent.toLowerCase();
+        const mobileKeywords = [
+          "android",
+          "webos",
+          "iphone",
+          "ipad",
+          "ipod",
+          "blackberry",
+          "windows phone",
+          "mobile",
+        ];
+        const isMobileUA = mobileKeywords.some((keyword) =>
+          userAgent.includes(keyword)
+        );
+        const isSmallScreen =
+          window.innerWidth < 1024 || window.innerHeight < 768;
+        const isTouchOnly =
+          navigator.maxTouchPoints > 0 &&
+          !window.matchMedia("(pointer: fine)").matches;
+
+        return isMobileUA || (isSmallScreen && isTouchOnly);
+      }
+
+      function blockMobileAccess() {
         if (isMobileDevice()) {
-            document.getElementById('mobileBlockOverlay').style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-            return true;
+          document.getElementById("mobileBlockOverlay").style.display = "flex";
+          document.body.style.overflow = "hidden";
+          return true;
         }
         return false;
-    }
+      }
 
-    // Check on page load
-    document.addEventListener('DOMContentLoaded', blockMobileAccess);
-    
-    // Check on window resize
-    window.addEventListener('resize', function() {
+      // Check on page load
+      document.addEventListener("DOMContentLoaded", blockMobileAccess);
+
+      // Check on window resize
+      window.addEventListener("resize", function () {
         if (isMobileDevice()) {
-            blockMobileAccess();
+          blockMobileAccess();
         } else {
-            document.getElementById('mobileBlockOverlay').style.display = 'none';
-            document.body.style.overflow = '';
+          document.getElementById("mobileBlockOverlay").style.display = "none";
+          document.body.style.overflow = "";
         }
-    });
+      });
     </script>
-    
+
     <script>
-    // Admin functions
-    function toggleEditingPeriod() {
-        if (confirm('האם אתה בטוח שברצונך לשנות את מצב תקופת העריכה?')) {
-            fetch('/api/toggle_editing_period', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
+      // Admin functions
+      function toggleEditingPeriod() {
+        if (confirm("האם אתה בטוח שברצונך לשנות את מצב תקופת העריכה?")) {
+          fetch("/api/toggle_editing_period", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.success) {
+                alert(data.message);
+                location.reload();
+              } else {
+                alert("שגיאה: " + data.error);
+              }
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert(data.message);
-                    location.reload();
-                } else {
-                    alert('שגיאה: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('שגיאה בשרת');
+            .catch((error) => {
+              console.error("Error:", error);
+              alert("שגיאה בשרת");
             });
         }
-    }
+      }
 
-    // Check editing status on page load
-    document.addEventListener('DOMContentLoaded', function() {
+      // Check editing status on page load
+      document.addEventListener("DOMContentLoaded", function () {
         // Check if user is logged in by looking for user menu
-        if (document.querySelector('.navbar-nav .dropdown-toggle')) {
-            checkEditingStatus();
+        if (document.querySelector(".navbar-nav .dropdown-toggle")) {
+          checkEditingStatus();
         }
-    });
-    
-    function checkEditingStatus() {
-        fetch('/api/editing_status')
-            .then(response => response.json())
-            .then(data => {
-                if (!data.can_edit && data.user_role !== 'admin') {
-                    // Show editing restriction notice
-                    const notice = document.createElement('div');
-                    notice.className = 'alert alert-warning alert-dismissible fade show';
-                    notice.innerHTML = 
-                        '<i class="bi bi-exclamation-triangle me-2"></i>' +
-                        '<strong>הודעה:</strong> ' + data.reason +
-                        '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-                    
-                    const container = document.querySelector('main.container');
-                    if (container) {
-                        container.insertBefore(notice, container.firstChild);
-                    }
-                }
-                
-                // Update admin toggle button text
-                if (data.user_role === 'admin') {
-                    const toggleBtn = document.querySelector('[onclick="toggleEditingPeriod()"]');
-                    if (toggleBtn) {
-                        const icon = data.editing_period_active ? 'bi-toggle-on' : 'bi-toggle-off';
-                        const text = data.editing_period_active ? 'סגור תקופת עריכה' : 'פתח תקופת עריכה';
-                        toggleBtn.innerHTML = '<i class="' + icon + ' me-2"></i>' + text;
-                    }
-                }
-            })
-            .catch(error => console.error('Error checking editing status:', error));
-    }
+      });
 
-    // Calendar Sync Functions
-    function showCalendarSyncModal() {
+      function checkEditingStatus() {
+        fetch("/api/editing_status")
+          .then((response) => response.json())
+          .then((data) => {
+            if (!data.can_edit && data.user_role !== "admin") {
+              // Show editing restriction notice
+              const notice = document.createElement("div");
+              notice.className =
+                "alert alert-warning alert-dismissible fade show";
+              notice.innerHTML =
+                '<i class="bi bi-exclamation-triangle me-2"></i>' +
+                "<strong>הודעה:</strong> " +
+                data.reason +
+                '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+
+              const container = document.querySelector("main.container");
+              if (container) {
+                container.insertBefore(notice, container.firstChild);
+              }
+            }
+
+            // Update admin toggle button text
+            if (data.user_role === "admin") {
+              const toggleBtn = document.querySelector(
+                '[onclick="toggleEditingPeriod()"]'
+              );
+              if (toggleBtn) {
+                const icon = data.editing_period_active
+                  ? "bi-toggle-on"
+                  : "bi-toggle-off";
+                const text = data.editing_period_active
+                  ? "סגור תקופת עריכה"
+                  : "פתח תקופת עריכה";
+                toggleBtn.innerHTML =
+                  '<i class="' + icon + ' me-2"></i>' + text;
+              }
+            }
+          })
+          .catch((error) =>
+            console.error("Error checking editing status:", error)
+          );
+      }
+
+      // Calendar Sync Functions
+      function showCalendarSyncModal() {
         // Fetch sync status first
-        fetch('/api/calendar/sync/status')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const modal = document.getElementById('calendarSyncModal');
+        fetch("/api/calendar/sync/status")
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              const modal = document.getElementById("calendarSyncModal");
 
-                    // Update status info
-                    document.getElementById('syncEnabled').textContent = data.sync_enabled ? 'מופעל' : 'כבוי';
-                    document.getElementById('syncEmail').textContent = data.calendar_email || 'לא הוגדר';
-                    document.getElementById('schedulerStatus').textContent = data.scheduler_running ? 'פועל' : 'מושהה';
+              // Update status info
+              document.getElementById("syncEnabled").textContent =
+                data.sync_enabled ? "מופעל" : "כבוי";
+              document.getElementById("syncEmail").textContent =
+                data.calendar_email || "לא הוגדר";
+              document.getElementById("schedulerStatus").textContent =
+                data.scheduler_running ? "פועל" : "מושהה";
 
-                    if (data.next_run_time) {
-                        const nextRun = new Date(data.next_run_time);
-                        document.getElementById('nextRunTime').textContent = nextRun.toLocaleString('he-IL');
-                    } else {
-                        document.getElementById('nextRunTime').textContent = 'לא זמין';
-                    }
+              if (data.next_run_time) {
+                const nextRun = new Date(data.next_run_time);
+                document.getElementById("nextRunTime").textContent =
+                  nextRun.toLocaleString("he-IL");
+              } else {
+                document.getElementById("nextRunTime").textContent = "לא זמין";
+              }
 
-                    // Show modal
-                    const bsModal = new bootstrap.Modal(modal);
-                    bsModal.show();
-                } else {
-                    alert('שגיאה בטעינת סטטוס סנכרון: ' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching sync status:', error);
-                alert('שגיאה בטעינת סטטוס סנכרון');
-            });
-    }
+              // Show modal
+              const bsModal = new bootstrap.Modal(modal);
+              bsModal.show();
+            } else {
+              alert("שגיאה בטעינת סטטוס סנכרון: " + data.message);
+            }
+          })
+          .catch((error) => {
+            console.error("Error fetching sync status:", error);
+            alert("שגיאה בטעינת סטטוס סנכרון");
+          });
+      }
 
-    function triggerCalendarSync() {
-        const btn = document.getElementById('triggerSyncBtn');
+      function triggerCalendarSync() {
+        const btn = document.getElementById("triggerSyncBtn");
         const originalText = btn.innerHTML;
 
         // Disable button and show loading
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>מסנכרן...';
+        btn.innerHTML =
+          '<span class="spinner-border spinner-border-sm me-2"></span>מסנכרן...';
 
-        fetch('/api/calendar/sync', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
+        fetch("/api/calendar/sync", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
         })
-        .then(response => response.json())
-        .then(data => {
+          .then((response) => response.json())
+          .then((data) => {
             if (data.success) {
-                alert(`סנכרון הושלם בהצלחה!\n\nועדות: ${data.committees_synced}\nאירועים: ${data.events_synced}\nכשלונות: ${data.failures}`);
-                // Refresh status
-                showCalendarSyncModal();
+              alert(
+                `סנכרון הושלם בהצלחה!\n\nועדות: ${data.committees_synced}\nאירועים: ${data.events_synced}\nכשלונות: ${data.failures}`
+              );
+              // Refresh status
+              showCalendarSyncModal();
             } else {
-                alert('שגיאה בסנכרון: ' + data.message);
+              alert("שגיאה בסנכרון: " + data.message);
             }
-        })
-        .catch(error => {
-            console.error('Error triggering sync:', error);
-            alert('שגיאה בסנכרון לוח השנה');
-        })
-        .finally(() => {
+          })
+          .catch((error) => {
+            console.error("Error triggering sync:", error);
+            alert("שגיאה בסנכרון לוח השנה");
+          })
+          .finally(() => {
             // Re-enable button
             btn.disabled = false;
             btn.innerHTML = originalText;
-        });
-    }
+          });
+      }
 
-    function resetCalendarSync() {
-        if (!confirm('האם אתה בטוח שברצונך למחוק את כל האירועים מה-calendar ולסנכרן אותם מחדש?\n\nפעולה זו לא ניתנת לביטול!')) {
-            return;
+      function resetCalendarSync() {
+        if (
+          !confirm(
+            "האם אתה בטוח שברצונך למחוק את כל האירועים מה-calendar ולסנכרן אותם מחדש?\n\nפעולה זו לא ניתנת לביטול!"
+          )
+        ) {
+          return;
         }
 
-        const btn = document.getElementById('resetSyncBtn');
+        const btn = document.getElementById("resetSyncBtn");
         const originalText = btn.innerHTML;
 
         // Disable button and show loading
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>מאפס וסינכרן...';
+        btn.innerHTML =
+          '<span class="spinner-border spinner-border-sm me-2"></span>מאפס וסינכרן...';
 
-        fetch('/api/calendar/sync/reset', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
+        fetch("/api/calendar/sync/reset", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
         })
-        .then(response => response.json())
-        .then(data => {
+          .then((response) => response.json())
+          .then((data) => {
             if (data.success) {
-                alert(`איפוס וסנכרון מחדש הושלמו בהצלחה!\n\nנמחקו: ${data.events_deleted} אירועים\nנוקו: ${data.records_cleared} רשומות\n\nועדות: ${data.committees_synced}\nאירועים: ${data.events_synced}\nכשלונות: ${data.failures}`);
-                // Refresh status
-                showCalendarSyncModal();
+              alert(
+                `איפוס וסנכרון מחדש הושלמו בהצלחה!\n\nנמחקו: ${data.events_deleted} אירועים\nנוקו: ${data.records_cleared} רשומות\n\nועדות: ${data.committees_synced}\nאירועים: ${data.events_synced}\nכשלונות: ${data.failures}`
+              );
+              // Refresh status
+              showCalendarSyncModal();
             } else {
-                alert('שגיאה באיפוס וסנכרון: ' + data.message);
+              alert("שגיאה באיפוס וסנכרון: " + data.message);
             }
-        })
-        .catch(error => {
-            console.error('Error resetting sync:', error);
-            alert('שגיאה באיפוס וסנכרון לוח השנה');
-        })
-        .finally(() => {
+          })
+          .catch((error) => {
+            console.error("Error resetting sync:", error);
+            alert("שגיאה באיפוס וסנכרון לוח השנה");
+          })
+          .finally(() => {
             // Re-enable button
             btn.disabled = false;
             btn.innerHTML = originalText;
-        });
-    }
+          });
+      }
     </script>
 
     <!-- Calendar Sync Modal -->
-    <div class="modal fade" id="calendarSyncModal" tabindex="-1" aria-labelledby="calendarSyncModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header bg-info text-white">
-                    <h5 class="modal-title" id="calendarSyncModalLabel">
-                        <i class="bi bi-calendar-check me-2"></i>סנכרון לוח שנה
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-4">
-                        <h6 class="text-primary mb-3">סטטוס סנכרון</h6>
-                        <table class="table table-sm">
-                            <tbody>
-                                <tr>
-                                    <td class="fw-bold">סנכרון:</td>
-                                    <td><span id="syncEnabled" class="badge bg-success">מופעל</span></td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">לוח שנה:</td>
-                                    <td id="syncEmail">plan@innovationisrael.org.il</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">סטטוס תזמון:</td>
-                                    <td><span id="schedulerStatus" class="badge bg-info">פועל</span></td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">סנכרון הבא:</td>
-                                    <td id="nextRunTime">טוען...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        <strong>הערה:</strong> סנכרון אוטומטי מתבצע מדי שעה. ניתן להפעיל סנכרון ידני בכל עת.
-                    </div>
-
-                    <div class="alert alert-warning mt-3">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
-                        <strong>אזהרה:</strong> פעולת איפוס תמחק את כל האירועים מה-calendar ותסנכרן אותם מחדש.
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">סגור</button>
-                    <button type="button" class="btn btn-danger" id="resetSyncBtn" onclick="resetCalendarSync()">
-                        <i class="bi bi-trash me-2"></i>איפוס וסנכרון מחדש
-                    </button>
-                    <button type="button" class="btn btn-info" id="triggerSyncBtn" onclick="triggerCalendarSync()">
-                        <i class="bi bi-arrow-clockwise me-2"></i>הפעל סנכרון כעת
-                    </button>
-                </div>
+    <div
+      class="modal fade"
+      id="calendarSyncModal"
+      tabindex="-1"
+      aria-labelledby="calendarSyncModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header bg-info text-white">
+            <h5 class="modal-title" id="calendarSyncModalLabel">
+              <i class="bi bi-calendar-check me-2"></i>סנכרון לוח שנה
+            </h5>
+            <button
+              type="button"
+              class="btn-close btn-close-white"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-4">
+              <h6 class="text-primary mb-3">סטטוס סנכרון</h6>
+              <table class="table table-sm">
+                <tbody>
+                  <tr>
+                    <td class="fw-bold">סנכרון:</td>
+                    <td>
+                      <span id="syncEnabled" class="badge bg-success"
+                        >מופעל</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="fw-bold">לוח שנה:</td>
+                    <td id="syncEmail">plan@innovationisrael.org.il</td>
+                  </tr>
+                  <tr>
+                    <td class="fw-bold">סטטוס תזמון:</td>
+                    <td>
+                      <span id="schedulerStatus" class="badge bg-info"
+                        >פועל</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="fw-bold">סנכרון הבא:</td>
+                    <td id="nextRunTime">טוען...</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
+
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle me-2"></i>
+              <strong>הערה:</strong> סנכרון אוטומטי מתבצע מדי שעה. ניתן להפעיל
+              סנכרון ידני בכל עת.
+            </div>
+
+            <div class="alert alert-warning mt-3">
+              <i class="bi bi-exclamation-triangle me-2"></i>
+              <strong>אזהרה:</strong> פעולת איפוס תמחק את כל האירועים
+              מה-calendar ותסנכרן אותם מחדש.
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
+              סגור
+            </button>
+            <button
+              type="button"
+              class="btn btn-danger"
+              id="resetSyncBtn"
+              onclick="resetCalendarSync()"
+            >
+              <i class="bi bi-trash me-2"></i>איפוס וסנכרון מחדש
+            </button>
+            <button
+              type="button"
+              class="btn btn-info"
+              id="triggerSyncBtn"
+              onclick="triggerCalendarSync()"
+            >
+              <i class="bi bi-arrow-clockwise me-2"></i>הפעל סנכרון כעת
+            </button>
+          </div>
         </div>
+      </div>
     </div>
 
     {% block extra_scripts %}{% endblock %}
-</body>
+  </body>
 </html>
