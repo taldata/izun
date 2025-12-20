@@ -100,6 +100,8 @@ class CalendarSyncScheduler:
 
     def stop(self):
         """Stop the background scheduler"""
+        global _scheduler_started
+        
         if not self.scheduler or not self.is_running:
             logger.warning("Scheduler is not running")
             return
@@ -107,6 +109,7 @@ class CalendarSyncScheduler:
         try:
             self.scheduler.shutdown(wait=True)
             self.is_running = False
+            _scheduler_started = False
             logger.info("Calendar sync scheduler stopped")
         except Exception as e:
             logger.error(f"Error stopping scheduler: {e}", exc_info=True)
