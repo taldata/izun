@@ -7,6 +7,7 @@ Handles automatic periodic synchronization of committee meetings and events to c
 """
 
 import logging
+import os
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.date import DateTrigger
@@ -16,6 +17,9 @@ from zoneinfo import ZoneInfo
 logger = logging.getLogger(__name__)
 
 ISRAEL_TZ = ZoneInfo('Asia/Jerusalem')
+
+# Track if scheduler has been started globally (prevents multiple instances in multi-worker scenarios)
+_scheduler_started = False
 
 
 class CalendarSyncScheduler:
@@ -40,8 +44,15 @@ class CalendarSyncScheduler:
 
     def start(self):
         """Start the background scheduler"""
+        global _scheduler_started
+        
         if self.scheduler and self.is_running:
             logger.warning("Scheduler is already running")
+            return
+        
+        # Prevent multiple scheduler instances in multi-worker environments
+        if _scheduler_started:
+            logger.info("Scheduler already started in another instance - skipping")
             return
 
         try:
@@ -69,6 +80,7 @@ class CalendarSyncScheduler:
             # Start scheduler
             self.scheduler.start()
             self.is_running = True
+            _scheduler_started = True
 
             logger.info(f"Calendar sync scheduler started - running every {interval_hours} hour(s)")
 
