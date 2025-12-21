@@ -361,35 +361,46 @@ class DatabaseManager:
             
             # Migrate user roles from old system (admin/manager/user) to new system (admin/editor/viewer)
             try:
-                cursor.execute("SELECT user_id, role, hativa_id FROM users WHERE role IN ('manager', 'user')")
-                old_role_users = cursor.fetchall()
+                # Check if hativa_id column exists in users table (legacy column)
+                cursor.execute("PRAGMA table_info(users)")
+                users_columns = [column[1] for column in cursor.fetchall()]
+                has_hativa_id = 'hativa_id' in users_columns
                 
-                for user_id, old_role, hativa_id in old_role_users:
-                    # Map old roles to new roles
-                    if old_role == 'manager':
-                        new_role = 'editor'
-                    elif old_role == 'user':
-                        new_role = 'viewer'
-                    else:
-                        continue  # admin stays admin
+                if has_hativa_id:
+                    # Legacy migration: migrate hativa_id from users table to user_hativot
+                    cursor.execute("SELECT user_id, role, hativa_id FROM users WHERE role IN ('manager', 'user')")
+                    old_role_users = cursor.fetchall()
                     
-                    cursor.execute("UPDATE users SET role = ? WHERE user_id = ?", (new_role, user_id))
+                    for user_id, old_role, hativa_id in old_role_users:
+                        # Map old roles to new roles
+                        if old_role == 'manager':
+                            new_role = 'editor'
+                        elif old_role == 'user':
+                            new_role = 'viewer'
+                        else:
+                            continue  # admin stays admin
+                        
+                        cursor.execute("UPDATE users SET role = ? WHERE user_id = ?", (new_role, user_id))
+                        
+                        # If user had a hativa_id, migrate it to user_hativot table
+                        if hativa_id:
+                            cursor.execute("""
+                                INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
+                                VALUES (?, ?)
+                            """, (user_id, hativa_id))
                     
-                    # If user had a hativa_id, migrate it to user_hativot table
-                    if hativa_id:
+                    # Also migrate admin users with hativa_id
+                    cursor.execute("SELECT user_id, hativa_id FROM users WHERE role = 'admin' AND hativa_id IS NOT NULL")
+                    admin_users = cursor.fetchall()
+                    for user_id, hativa_id in admin_users:
                         cursor.execute("""
                             INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
                             VALUES (?, ?)
                         """, (user_id, hativa_id))
-                
-                # Also migrate admin users with hativa_id
-                cursor.execute("SELECT user_id, hativa_id FROM users WHERE role = 'admin' AND hativa_id IS NOT NULL")
-                admin_users = cursor.fetchall()
-                for user_id, hativa_id in admin_users:
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
-                        VALUES (?, ?)
-                    """, (user_id, hativa_id))
+                else:
+                    # New schema: just migrate old role names if they exist
+                    cursor.execute("UPDATE users SET role = 'editor' WHERE role = 'manager'")
+                    cursor.execute("UPDATE users SET role = 'viewer' WHERE role = 'user'")
                     
             except Exception as e:
                 print(f"Role migration note: {e}")
@@ -3139,10 +3150,18 @@ class DatabaseManager:
                 # Use a placeholder that cannot be used for login
                 dummy_password = 'AZURE_AD_NO_PASSWORD_AUTH'
                 cursor.execute('''
-                    INSERT INTO users (username, email, password_hash, full_name, role, hativa_id, auth_source, ad_dn)
-                    VALUES (?, ?, ?, ?, ?, ?, 'ad', ?)
-                ''', (username, email, dummy_password, full_name, role, hativa_id, ad_dn))
+                    INSERT INTO users (username, email, password_hash, full_name, role, auth_source, ad_dn)
+                    VALUES (?, ?, ?, ?, ?, 'ad', ?)
+                ''', (username, email, dummy_password, full_name, role, ad_dn))
                 user_id = cursor.lastrowid
+                
+                # If hativa_id provided, add to user_hativot table
+                if hativa_id:
+                    cursor.execute('''
+                        INSERT OR IGNORE INTO user_hativot (user_id, hativa_id)
+                        VALUES (?, ?)
+                    ''', (user_id, hativa_id))
+                
                 conn.commit()
                 conn.close()
                 return user_id
