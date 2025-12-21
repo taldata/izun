@@ -36,7 +36,7 @@ def main():
             
             # Run import
             result = subprocess.run(
-                ['python', 'upload_db.py', 'import', export_file],
+                ['python3', 'upload_db.py', 'import', export_file],
                 capture_output=True,
                 text=True
             )
