@@ -25,7 +25,8 @@ env/
 *~
 .DS_Store
 committee_system.db
-db_export.json
+# db_export.json (Temporarily allowed for migration)
+# db_export.json
 *.log
 .pytest_cache
 .coverage

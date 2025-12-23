@@ -1,0 +1,31 @@
+# Example Terraform Variables
+# Copy this file to terraform.tfvars and fill in your values
+
+# AWS Region
+aws_region  = "il-central-1"
+environment = "production"
+app_name    = "izun"
+
+# RDS Configuration
+db_instance_class        = "db.t3.micro"
+db_allocated_storage     = 20
+db_name                  = "izun"
+db_username              = "izun_admin"
+db_password              = ""  # Leave empty to auto-generate a secure password
+db_engine_version        = "15.4"
+db_backup_retention_period = 7
+db_publicly_accessible   = true
+
+# Elastic Beanstalk Configuration
+eb_solution_stack = "64bit Amazon Linux 2023 v4.1.0 running Python 3.12"
+eb_instance_type  = "t3.micro"
+
+# Azure AD Configuration - REQUIRED
+azure_tenant_id     = "YOUR_AZURE_TENANT_ID"
+azure_client_id     = "YOUR_AZURE_CLIENT_ID"
+azure_client_secret = "YOUR_AZURE_CLIENT_SECRET"
+
+# VPC Configuration
+create_new_vpc  = true
+vpc_cidr        = "10.0.0.0/16"
+# existing_vpc_id = ""  # Only needed if create_new_vpc = false
