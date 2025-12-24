@@ -254,7 +254,8 @@
                             <option value="">בחר סוג ועדה</option>
                             {% for committee_type in committee_types %}
                             <option value="{{ committee_type.committee_type_id }}"
-                                data-hativa-id="{{ committee_type.hativa_id }}">{{ committee_type.name }}</option>
+                                data-hativa-id="{{ committee_type.hativa_id }}"
+                                data-is-operational="{{ committee_type.is_operational }}">{{ committee_type.name }}</option>
                             {% endfor %}
                         </select>
                         <div class="form-text">
@@ -465,7 +466,8 @@
                             <option value="">בחר סוג ועדה</option>
                             {% for committee_type in committee_types %}
                             <option value="{{ committee_type.committee_type_id }}"
-                                data-hativa-id="{{ committee_type.hativa_id }}">{{ committee_type.name }}</option>
+                                data-hativa-id="{{ committee_type.hativa_id }}"
+                                data-is-operational="{{ committee_type.is_operational }}">{{ committee_type.name }}</option>
                             {% endfor %}
                         </select>
                         <div class="form-text">
@@ -3706,6 +3708,30 @@
             });
         }
 
+        // Add change listener to populate default times based on committee type (add form)
+        if (addCommitteeTypeSelect) {
+            addCommitteeTypeSelect.addEventListener('change', function () {
+                const selectedOption = this.options[this.selectedIndex];
+                if (selectedOption && selectedOption.value) {
+                    const isOperational = selectedOption.getAttribute('data-is-operational') === '1';
+                    const startTimeInput = document.getElementById('start_time');
+                    const endTimeInput = document.getElementById('end_time');
+
+                    if (startTimeInput && endTimeInput) {
+                        if (isOperational) {
+                            // Operational committee: 09:00-11:00
+                            startTimeInput.value = '09:00';
+                            endTimeInput.value = '11:00';
+                        } else {
+                            // Regular committee: 09:00-15:00
+                            startTimeInput.value = '09:00';
+                            endTimeInput.value = '15:00';
+                        }
+                    }
+                }
+            });
+        }
+
         // Add change listener to filter committee types by selected division in edit form
         const editCommitteeHativaSelect = document.getElementById('edit_hativa_id');
         const editCommitteeTypeSelect = document.getElementById('edit_committee_type_id');
@@ -3748,6 +3774,33 @@
                         const currentHativaId = currentSelection.getAttribute('data-hativa-id');
                         if (currentHativaId !== selectedHativaId) {
                             editCommitteeTypeSelect.value = '';
+                        }
+                    }
+                }
+            });
+        }
+
+        // Add change listener to populate default times based on committee type (edit form)
+        if (editCommitteeTypeSelect) {
+            editCommitteeTypeSelect.addEventListener('change', function () {
+                const selectedOption = this.options[this.selectedIndex];
+                if (selectedOption && selectedOption.value) {
+                    const isOperational = selectedOption.getAttribute('data-is-operational') === '1';
+                    const startTimeInput = document.getElementById('edit_start_time');
+                    const endTimeInput = document.getElementById('edit_end_time');
+
+                    // Only set default times if fields are empty
+                    if (startTimeInput && endTimeInput) {
+                        if (!startTimeInput.value && !endTimeInput.value) {
+                            if (isOperational) {
+                                // Operational committee: 09:00-11:00
+                                startTimeInput.value = '09:00';
+                                endTimeInput.value = '11:00';
+                            } else {
+                                // Regular committee: 09:00-15:00
+                                startTimeInput.value = '09:00';
+                                endTimeInput.value = '15:00';
+                            }
                         }
                     }
                 }
