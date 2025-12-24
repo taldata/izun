@@ -1570,6 +1570,8 @@ def add_committee_meeting():
     hativa_id = request.form.get('hativa_id')
     vaada_date = request.form.get('vaada_date')
     notes = request.form.get('notes', '').strip()
+    start_time = request.form.get('start_time', '').strip() or None
+    end_time = request.form.get('end_time', '').strip() or None
 
     if not all([committee_type_id, hativa_id, vaada_date]):
         flash('סוג ועדה, חטיבה ותאריך הם שדות חובה', 'error')
@@ -1614,10 +1616,12 @@ def add_committee_meeting():
         
         # Try to add meeting (admins get warnings instead of errors)
         vaadot_id, warning_message = db.add_vaada(
-            int(committee_type_id), 
-            int(hativa_id), 
-            meeting_date, 
-            notes=notes, 
+            int(committee_type_id),
+            int(hativa_id),
+            meeting_date,
+            notes=notes,
+            start_time=start_time,
+            end_time=end_time,
             override_constraints=is_admin
         )
         
@@ -1658,6 +1662,8 @@ def edit_committee_meeting(vaadot_id):
     hativa_id = request.form.get('hativa_id')
     vaada_date = request.form.get('vaada_date')
     notes = request.form.get('notes', '').strip()
+    start_time = request.form.get('start_time', '').strip() or None
+    end_time = request.form.get('end_time', '').strip() or None
 
     if not all([committee_type_id, hativa_id, vaada_date]):
         flash('סוג ועדה, חטיבה ותאריך הם שדות חובה', 'error')
@@ -1696,7 +1702,7 @@ def edit_committee_meeting(vaadot_id):
         
         # Get user role for constraint checking
         user_role = session.get('role')
-        success = db.update_vaada(vaadot_id, int(committee_type_id), target_hativa_id, meeting_date, notes=notes, user_role=user_role)
+        success = db.update_vaada(vaadot_id, int(committee_type_id), target_hativa_id, meeting_date, notes=notes, start_time=start_time, end_time=end_time, user_role=user_role)
         if success:
             # Get committee name for logging
             committee_types = db.get_committee_types()
