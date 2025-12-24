@@ -268,6 +268,18 @@
                             pattern="\d{4}-\d{2}-\d{2}">
                         <div class="form-text">בחר תאריך לישיבת הועדה</div>
                     </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="start_time" class="form-label">שעת התחלה</label>
+                            <input type="time" class="form-control" name="start_time" id="start_time">
+                            <div class="form-text">שעת התחלת הועדה</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="end_time" class="form-label">שעת סיום</label>
+                            <input type="time" class="form-control" name="end_time" id="end_time">
+                            <div class="form-text">שעת סיום הועדה</div>
+                        </div>
+                    </div>
                     <div class="d-flex align-items-center gap-2 mb-2">
                         <button type="button" class="btn btn-outline-primary btn-sm" id="findAvailableDatesBtn">
                             <i class="bi bi-search me-1"></i>מצא תאריכים פנויים
@@ -464,6 +476,18 @@
                     <div class="mb-3">
                         <label for="edit_vaada_date" class="form-label">תאריך הישיבה</label>
                         <input type="date" class="form-control" name="vaada_date" id="edit_vaada_date" required>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="edit_start_time" class="form-label">שעת התחלה</label>
+                            <input type="time" class="form-control" name="start_time" id="edit_start_time">
+                            <div class="form-text">שעת התחלת הועדה</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_end_time" class="form-label">שעת סיום</label>
+                            <input type="time" class="form-control" name="end_time" id="edit_end_time">
+                            <div class="form-text">שעת סיום הועדה</div>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="edit_notes" class="form-label">הערות</label>
@@ -1868,6 +1892,8 @@
         }, 0);
 
         document.getElementById('edit_vaada_date').value = committee.vaada_date;
+        document.getElementById('edit_start_time').value = committee.start_time || '';
+        document.getElementById('edit_end_time').value = committee.end_time || '';
         document.getElementById('edit_notes').value = committee.notes || '';
 
         // Set form action with the committee ID
