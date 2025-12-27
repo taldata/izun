@@ -2744,6 +2744,7 @@ def admin_audit_logs():
         action = request.args.get('action', '').strip() or None
         entity_type = request.args.get('entity_type', '').strip() or None
         status_filter = request.args.get('status', '').strip() or None
+        search_text = request.args.get('search_text', '').strip() or None
         start_date = request.args.get('start_date', '').strip()
         end_date = request.args.get('end_date', '').strip()
         
@@ -2780,6 +2781,7 @@ def admin_audit_logs():
             user_id=user_id_filter,
             entity_type=entity_type,
             action=action,
+            search_text=search_text,
             start_date=start_date_obj,
             end_date=end_date_obj
         )
@@ -2793,6 +2795,7 @@ def admin_audit_logs():
             user_id=user_id_filter,
             entity_type=entity_type,
             action=action,
+            search_text=search_text,
             start_date=start_date_obj,
             end_date=end_date_obj
         )
@@ -2833,6 +2836,7 @@ def export_audit_logs():
         username = request.args.get('username', '').strip() or None
         action = request.args.get('action', '').strip() or None
         entity_type = request.args.get('entity_type', '').strip() or None
+        search_text = request.args.get('search_text', '').strip() or None
         start_date = request.args.get('start_date', '').strip()
         end_date = request.args.get('end_date', '').strip()
         
@@ -2850,6 +2854,7 @@ def export_audit_logs():
             offset=0,
             entity_type=entity_type,
             action=action,
+            search_text=search_text,
             start_date=start_date_obj,
             end_date=end_date_obj
         )
