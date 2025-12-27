@@ -132,11 +132,7 @@
                                                name="selected_meetings" value="{{ loop.index0 }}" checked>
                                     </td>
                                     <td dir="ltr" style="text-align: center;">
-                                        {% if suggestion.suggested_date is string %}
-                                            <strong>{{ suggestion.suggested_date }}</strong>
-                                        {% else %}
-                                            <strong>{{ suggestion.suggested_date.strftime('%d/%m/%Y') }}</strong>
-                                        {% endif %}
+                                        <strong>{{ suggestion.suggested_date|format_date }}</strong>
                                     </td>
                                     <td>
                                         {% set weekdays = ['יום ב\'', 'יום ג\'', 'יום ד\'', 'יום ה\'', 'יום ו\'', 'שבת', 'יום א\''] %}

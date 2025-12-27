@@ -609,7 +609,7 @@
                                 </td>
                                 <td>
                                     {% if event.call_publication_date %}
-                                        <span class="date-badge date-publication">{{ event.call_publication_date }}</span>
+                                        <span class="date-badge date-publication">{{ event.call_publication_date|format_date }}</span>
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
@@ -617,12 +617,12 @@
                                 <td>
                                     {% if event.call_deadline_date %}
                                         {% set is_manual = event.get('is_call_deadline_manual') == 1 or event.get('is_call_deadline_manual') == True %}
-                                        <span class="date-badge {% if is_manual %}date-call-manual{% else %}date-call{% endif %}" 
+                                        <span class="date-badge {% if is_manual %}date-call-manual{% else %}date-call{% endif %}"
                                               {% if is_manual %}title="תאריך זה שונה ידנית"{% endif %}>
                                             {% if is_manual %}
                                                 <i class="bi bi-pencil-square manual-indicator" title="תאריך שונה ידנית"></i>
                                             {% endif %}
-                                            {{ event.call_deadline_date }}
+                                            {{ event.call_deadline_date|format_date }}
                                         </span>
                                     {% else %}
                                         <span class="text-muted">-</span>
@@ -630,28 +630,28 @@
                                 </td>
                                 <td>
                                     {% if event.intake_deadline_date %}
-                                        <span class="date-badge date-intake">{{ event.intake_deadline_date }}</span>
+                                        <span class="date-badge date-intake">{{ event.intake_deadline_date|format_date }}</span>
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if event.review_deadline_date %}
-                                        <span class="date-badge date-review">{{ event.review_deadline_date }}</span>
+                                        <span class="date-badge date-review">{{ event.review_deadline_date|format_date }}</span>
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if event.vaada_date %}
-                                        <span class="date-badge date-committee">{{ event.vaada_date }}</span>
+                                        <span class="date-badge date-committee">{{ event.vaada_date|format_date }}</span>
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if event.response_deadline_date %}
-                                        <span class="date-badge date-response">{{ event.response_deadline_date }}</span>
+                                        <span class="date-badge date-response">{{ event.response_deadline_date|format_date }}</span>
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
@@ -660,7 +660,7 @@
                                     <span class="badge bg-info">{{ event.actual_submissions or 0 }}</span>
                                 </td>
                                 <td>
-                                    <small class="text-muted">{{ event.created_at.strftime('%d/%m/%Y') if event.created_at else '-' }}</small>
+                                    <small class="text-muted">{{ event.created_at|format_date if event.created_at else '-' }}</small>
                                 </td>
                             </tr>
                             {% endfor %}

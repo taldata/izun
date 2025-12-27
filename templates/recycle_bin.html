@@ -78,7 +78,7 @@
                     <tbody>
                         {% for vaada in deleted_vaadot %}
                         <tr id="vaada-{{ vaada.vaadot_id }}">
-                            <td>{{ vaada.vaada_date }}</td>
+                            <td>{{ vaada.vaada_date|format_date }}</td>
                             <td>{{ vaada.committee_name }}</td>
                             <td>{{ vaada.hativa_name }}</td>
                             <td>
@@ -158,7 +158,7 @@
                                 </span>
                             </td>
                             <td>{{ event.maslul_name }}</td>
-                            <td>{{ event.vaada_date }}</td>
+                            <td>{{ event.vaada_date|format_date }}</td>
                             <td>{{ event.committee_name }}</td>
                             <td>
                                 {% if event.deleted_by_name %}

@@ -376,7 +376,7 @@
                             <option value="{{ committee.vaadot_id }}" data-hativa-id="{{ committee.hativa_id }}"
                                 data-is-operational="{{ 1 if committee.is_operational else 0 }}">
                                 {{ committee.committee_name }} - {{ committee.hativa_name }}
-                                {% if committee.vaada_date %} ({{ committee.vaada_date }}){% endif %}
+                                {% if committee.vaada_date %} ({{ committee.vaada_date|format_date }}){% endif %}
                             </option>
                             {% endfor %}
                         </select>
@@ -601,7 +601,7 @@
                             <option value="{{ committee.vaadot_id }}" data-hativa-id="{{ committee.hativa_id }}"
                                 data-is-operational="{{ 1 if committee.is_operational else 0 }}">
                                 {{ committee.committee_name }} - {{ committee.hativa_name }}
-                                {% if committee.vaada_date %} ({{ committee.vaada_date }}){% endif %}
+                                {% if committee.vaada_date %} ({{ committee.vaada_date|format_date }}){% endif %}
                             </option>
                             {% endfor %}
                         </select>
