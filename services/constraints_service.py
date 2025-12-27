@@ -24,8 +24,9 @@ class ConstraintsService:
 
     time_pattern = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 
-    def __init__(self, database: DatabaseManager):
+    def __init__(self, database: DatabaseManager, audit_logger=None):
         self.db = database
+        self.audit_logger = audit_logger
         self.day_options = self._build_day_options()
 
     def _build_day_options(self) -> List[Dict[str, Any]]:
@@ -322,6 +323,15 @@ class ConstraintsService:
         for key, value in updates.items():
             self.db.update_system_setting(key, str(value), user_id)
             logger.debug("Updated system setting %s=%s", key, value)
+
+        # Log to audit log
+        if self.audit_logger:
+            self.audit_logger.log_success(
+                self.audit_logger.ACTION_UPDATE,
+                self.audit_logger.ENTITY_SYSTEM_SETTINGS,
+                entity_name='constraints',
+                details='עדכון הגדרות אילוצים'
+            )
 
         logger.info("Constraint settings updated successfully")
         return ConstraintUpdateResult(success=True, message='הגדרות האילוצים עודכנו בהצלחה')
