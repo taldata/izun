@@ -1378,13 +1378,18 @@ def edit_maslul(maslul_id):
             # Recalculate deadlines for all events using this maslul
             updated_events = db.recalculate_event_deadlines_for_maslul(maslul_id)
             status_text = 'פעיל' if is_active else 'לא פעיל'
+
+            # Log the update
+            changes = f'SLA: {sla_days} ימים, שלבים: A={stage_a_days}, B={stage_b_days}, C={stage_c_days}, D={stage_d_days}, סטטוס: {status_text}'
+            audit_logger.log_maslul_updated(maslul_id, name, changes)
+
             if updated_events > 0:
                 flash(f'מסלול "{name}" עודכן בהצלחה (סטטוס: {status_text}). עודכנו תאריכי יעד ב-{updated_events} אירועים.', 'success')
             else:
                 flash(f'מסלול "{name}" עודכן בהצלחה (סטטוס: {status_text})', 'success')
         else:
             flash('המסלול לא נמצא במערכת', 'error')
-            
+
     except Exception as e:
         flash(f'שגיאה בעדכון המסלול: {str(e)}', 'error')
     
@@ -1438,6 +1443,8 @@ def delete_maslul(maslul_id):
         # Delete the maslul
         success = db.delete_maslul(maslul_id)
         if success:
+            # Log the deletion
+            audit_logger.log_maslul_deleted(maslul_id, maslul['name'])
             flash(f'מסלול "{maslul["name"]}" נמחק בהצלחה', 'success')
         else:
             flash('שגיאה במחיקת המסלול', 'error')
