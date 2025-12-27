@@ -62,7 +62,7 @@
                         <div class="row">
                             <div class="col-md-3">
                                 <label>משתמש</label>
-                                <input type="text" name="username" class="form-control" 
+                                <input type="text" name="username" class="form-control"
                                        value="{{ request.args.get('username', '') }}" placeholder="שם משתמש">
                             </div>
                             <div class="col-md-3">
@@ -95,6 +95,15 @@
                                     <option value="success" {% if request.args.get('status') == 'success' %}selected{% endif %}>הצלחה</option>
                                     <option value="error" {% if request.args.get('status') == 'error' %}selected{% endif %}>שגיאה</option>
                                 </select>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <label>חיפוש טקסט חופשי</label>
+                                <input type="text" name="search_text" class="form-control"
+                                       value="{{ request.args.get('search_text', '') }}"
+                                       placeholder='חפש בפרטי הרשומה (לדוגמה: "סיום קול קורא", "תאריך", שם אירוע וכו׳)'>
+                                <small class="form-text text-muted">חיפוש בשם הישות ובפרטי השינוי</small>
                             </div>
                         </div>
                         <div class="row mt-3">
@@ -188,7 +197,7 @@
                         <ul class="pagination justify-content-center">
                             {% if current_page > 1 %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ current_page - 1 }}{% if request.args.get('username') %}&username={{ request.args.get('username') }}{% endif %}{% if request.args.get('action') %}&action={{ request.args.get('action') }}{% endif %}{% if request.args.get('entity_type') %}&entity_type={{ request.args.get('entity_type') }}{% endif %}">הקודם</a>
+                                <a class="page-link" href="?page={{ current_page - 1 }}{% if request.args.get('username') %}&username={{ request.args.get('username') }}{% endif %}{% if request.args.get('action') %}&action={{ request.args.get('action') }}{% endif %}{% if request.args.get('entity_type') %}&entity_type={{ request.args.get('entity_type') }}{% endif %}{% if request.args.get('search_text') %}&search_text={{ request.args.get('search_text') }}{% endif %}{% if request.args.get('status') %}&status={{ request.args.get('status') }}{% endif %}{% if request.args.get('start_date') %}&start_date={{ request.args.get('start_date') }}{% endif %}{% if request.args.get('end_date') %}&end_date={{ request.args.get('end_date') }}{% endif %}">הקודם</a>
                             </li>
                             {% endif %}
                             
@@ -197,14 +206,14 @@
                                     <li class="page-item active"><span class="page-link">{{ i }}</span></li>
                                 {% elif i >= current_page - 2 and i <= current_page + 2 %}
                                     <li class="page-item">
-                                        <a class="page-link" href="?page={{ i }}{% if request.args.get('username') %}&username={{ request.args.get('username') }}{% endif %}{% if request.args.get('action') %}&action={{ request.args.get('action') }}{% endif %}{% if request.args.get('entity_type') %}&entity_type={{ request.args.get('entity_type') }}{% endif %}">{{ i }}</a>
+                                        <a class="page-link" href="?page={{ i }}{% if request.args.get('username') %}&username={{ request.args.get('username') }}{% endif %}{% if request.args.get('action') %}&action={{ request.args.get('action') }}{% endif %}{% if request.args.get('entity_type') %}&entity_type={{ request.args.get('entity_type') }}{% endif %}{% if request.args.get('search_text') %}&search_text={{ request.args.get('search_text') }}{% endif %}{% if request.args.get('status') %}&status={{ request.args.get('status') }}{% endif %}{% if request.args.get('start_date') %}&start_date={{ request.args.get('start_date') }}{% endif %}{% if request.args.get('end_date') %}&end_date={{ request.args.get('end_date') }}{% endif %}">{{ i }}</a>
                                     </li>
                                 {% endif %}
                             {% endfor %}
                             
                             {% if current_page < total_pages %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ current_page + 1 }}{% if request.args.get('username') %}&username={{ request.args.get('username') }}{% endif %}{% if request.args.get('action') %}&action={{ request.args.get('action') }}{% endif %}{% if request.args.get('entity_type') %}&entity_type={{ request.args.get('entity_type') }}{% endif %}">הבא</a>
+                                <a class="page-link" href="?page={{ current_page + 1 }}{% if request.args.get('username') %}&username={{ request.args.get('username') }}{% endif %}{% if request.args.get('action') %}&action={{ request.args.get('action') }}{% endif %}{% if request.args.get('entity_type') %}&entity_type={{ request.args.get('entity_type') }}{% endif %}{% if request.args.get('search_text') %}&search_text={{ request.args.get('search_text') }}{% endif %}{% if request.args.get('status') %}&status={{ request.args.get('status') }}{% endif %}{% if request.args.get('start_date') %}&start_date={{ request.args.get('start_date') }}{% endif %}{% if request.args.get('end_date') %}&end_date={{ request.args.get('end_date') }}{% endif %}">הבא</a>
                             </li>
                             {% endif %}
                         </ul>

@@ -2863,10 +2863,11 @@ class DatabaseManager:
         conn.close()
         return log_id
     
-    def get_audit_logs(self, limit: int = 100, offset: int = 0, 
-                       user_id: Optional[int] = None, 
+    def get_audit_logs(self, limit: int = 100, offset: int = 0,
+                       user_id: Optional[int] = None,
                        entity_type: Optional[str] = None,
                        action: Optional[str] = None,
+                       search_text: Optional[str] = None,
                        start_date: Optional[date] = None,
                        end_date: Optional[date] = None) -> List[Dict]:
         """Get audit logs with optional filters"""
@@ -2888,19 +2889,24 @@ class DatabaseManager:
         if entity_type:
             query += ' AND entity_type = ?'
             params.append(entity_type)
-        
+
         if action:
             query += ' AND action = ?'
             params.append(action)
-        
+
+        if search_text:
+            query += ' AND (entity_name LIKE ? OR details LIKE ? OR entity_type LIKE ?)'
+            search_pattern = f'%{search_text}%'
+            params.extend([search_pattern, search_pattern, search_pattern])
+
         if start_date:
             query += ' AND DATE(timestamp) >= ?'
             params.append(start_date)
-        
+
         if end_date:
             query += ' AND DATE(timestamp) <= ?'
             params.append(end_date)
-        
+
         query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?'
         params.extend([limit, offset])
         
@@ -2927,6 +2933,7 @@ class DatabaseManager:
     def get_audit_logs_count(self, user_id: Optional[int] = None,
                             entity_type: Optional[str] = None,
                             action: Optional[str] = None,
+                            search_text: Optional[str] = None,
                             start_date: Optional[date] = None,
                             end_date: Optional[date] = None) -> int:
         """Get total count of audit logs matching filters"""
@@ -2935,23 +2942,28 @@ class DatabaseManager:
         
         query = 'SELECT COUNT(*) FROM audit_logs WHERE 1=1'
         params = []
-        
+
         if user_id:
             query += ' AND user_id = ?'
             params.append(user_id)
-        
+
         if entity_type:
             query += ' AND entity_type = ?'
             params.append(entity_type)
-        
+
         if action:
             query += ' AND action = ?'
             params.append(action)
-        
+
+        if search_text:
+            query += ' AND (entity_name LIKE ? OR details LIKE ? OR entity_type LIKE ?)'
+            search_pattern = f'%{search_text}%'
+            params.extend([search_pattern, search_pattern, search_pattern])
+
         if start_date:
             query += ' AND DATE(timestamp) >= ?'
             params.append(start_date)
-        
+
         if end_date:
             query += ' AND DATE(timestamp) <= ?'
             params.append(end_date)
