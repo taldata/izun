@@ -36,11 +36,11 @@ db = DatabaseManager()
 ad_service = ADService(db)
 auto_scheduler = AutoMeetingScheduler(db)
 auto_schedule_service = AutoScheduleService(db)
-constraints_service = ConstraintsService(db)
+audit_logger = AuditLogger(db)
+constraints_service = ConstraintsService(db, audit_logger)
 committee_types_service = CommitteeTypesService(db)
 committee_recommendation_service = CommitteeRecommendationService(db)
 auth_manager = AuthManager(db, ad_service)
-audit_logger = AuditLogger(db)
 
 # Initialize calendar sync components
 calendar_service = CalendarService(ad_service, db)
@@ -548,11 +548,19 @@ def toggle_editing_period():
     try:
         current_status = db.get_system_setting('editing_period_active')
         new_status = '0' if current_status == '1' else '1'
-        
+
         user_id = session['user_id']
         db.update_system_setting('editing_period_active', new_status, user_id)
-        
+
         status_text = "פעילה" if new_status == '1' else "סגורה"
+
+        # Log the change
+        audit_logger.log_system_setting_updated(
+            'editing_period_active',
+            current_status,
+            new_status
+        )
+
         return jsonify({
             'success': True,
             'message': f'תקופת העריכה הכללית עכשיו {status_text}',
@@ -568,11 +576,19 @@ def toggle_deadline_dates():
     try:
         current_status = db.get_system_setting('show_deadline_dates_in_calendar')
         new_status = '0' if current_status == '1' else '1'
-        
+
         user_id = session['user_id']
         db.update_system_setting('show_deadline_dates_in_calendar', new_status, user_id)
-        
+
         status_text = "מוצגים" if new_status == '1' else "מוסתרים"
+
+        # Log the change
+        audit_logger.log_system_setting_updated(
+            'show_deadline_dates_in_calendar',
+            current_status,
+            new_status
+        )
+
         return jsonify({
             'success': True,
             'message': f'תאריכי דדליין עכשיו {status_text}',
@@ -1975,20 +1991,24 @@ def update_hativa_color():
     """Update division color"""
     hativa_id = request.form.get('hativa_id')
     color = request.form.get('color')
-    
+
     if not all([hativa_id, color]):
         flash('חטיבה וצבע הם שדות חובה', 'error')
         return redirect(url_for('index'))
-    
+
     try:
         success = db.update_hativa_color(int(hativa_id), color)
         if success:
+            # Log the color update
+            hativa = next((h for h in db.get_hativot() if h['hativa_id'] == int(hativa_id)), None)
+            if hativa:
+                audit_logger.log_hativa_updated(int(hativa_id), hativa['name'], f'עדכון צבע ל-{color}')
             flash('צבע החטיבה עודכן בהצלחה', 'success')
         else:
             flash('שגיאה בעדכון צבע החטיבה', 'error')
     except Exception as e:
         flash(f'שגיאה בעדכון צבע החטיבה: {str(e)}', 'error')
-    
+
     return redirect(url_for('index'))
 
 
