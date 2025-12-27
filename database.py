@@ -1020,6 +1020,21 @@ class DatabaseManager:
                     conn.close()
                     raise ValueError(f'כבר קיימת ועדה מסוג "{existing_name}" בחטיבת "{existing_hativa}" בתאריך {vaada_date}. לא ניתן ליצור ועדה נוספת מאותו סוג באותה חטיבה באותו תאריך.')
 
+            # Set default times based on committee type if not provided
+            if start_time is None or end_time is None:
+                cursor.execute('''
+                    SELECT is_operational FROM committee_types
+                    WHERE committee_type_id = ?
+                ''', (committee_type_id,))
+                committee_type = cursor.fetchone()
+                if committee_type:
+                    is_operational = committee_type[0]
+                    # Set defaults: Regular committee 09:00-15:00, Operational 09:00-11:00
+                    if start_time is None:
+                        start_time = '09:00'
+                    if end_time is None:
+                        end_time = '11:00' if is_operational else '15:00'
+
             cursor.execute('''
                 INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, notes, start_time, end_time)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -1210,6 +1225,21 @@ class DatabaseManager:
             if weekly_count >= weekly_limit:
                 new_count = weekly_count + 1
                 raise ValueError(f"השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. העברת הועדה תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit})")
+
+            # Set default times based on committee type if not provided
+            if start_time is None or end_time is None:
+                cursor.execute('''
+                    SELECT is_operational FROM committee_types
+                    WHERE committee_type_id = ?
+                ''', (committee_type_id,))
+                committee_type = cursor.fetchone()
+                if committee_type:
+                    is_operational = committee_type[0]
+                    # Set defaults: Regular committee 09:00-15:00, Operational 09:00-11:00
+                    if start_time is None:
+                        start_time = '09:00'
+                    if end_time is None:
+                        end_time = '11:00' if is_operational else '15:00'
 
             cursor.execute('''
                 UPDATE vaadot
