@@ -1676,7 +1676,7 @@ class DatabaseManager:
         """Update an existing event"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        
+
         # Process manual call deadline date if provided
         if manual_call_deadline_date in ("", None):
             manual_call_deadline_date = None
@@ -1684,7 +1684,26 @@ class DatabaseManager:
             manual_call_deadline_date = datetime.strptime(manual_call_deadline_date, '%Y-%m-%d').date()
         elif isinstance(manual_call_deadline_date, datetime):
             manual_call_deadline_date = manual_call_deadline_date.date()
-        
+
+        # Get existing call deadline date to validate against
+        cursor.execute('SELECT call_deadline_date FROM events WHERE event_id = ?', (event_id,))
+        existing_event = cursor.fetchone()
+        if not existing_event:
+            conn.close()
+            raise ValueError("האירוע לא נמצא במערכת")
+
+        existing_call_deadline = existing_event[0]
+
+        # Validate that call deadline date can only be postponed, not advanced
+        if is_call_deadline_manual and manual_call_deadline_date and existing_call_deadline:
+            # Convert existing deadline to date object if it's a string
+            if isinstance(existing_call_deadline, str):
+                existing_call_deadline = datetime.strptime(existing_call_deadline, '%Y-%m-%d').date()
+
+            if manual_call_deadline_date < existing_call_deadline:
+                conn.close()
+                raise ValueError(f'אסור להקדים את תאריך סיום הקול קורא. התאריך הנוכחי הוא {existing_call_deadline}, ניתן רק לדחות את התאריך (לא להקדים אותו)')
+
         # Validate that the route belongs to the same division as the committee and get stage data
         cursor.execute('''
             SELECT v.hativa_id as vaada_hativa_id, m.hativa_id as maslul_hativa_id,
