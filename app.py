@@ -65,6 +65,28 @@ def format_datetime_filter(value):
         return value.strftime('%Y-%m-%d %H:%M')
     return str(value)
 
+@app.template_filter('format_date')
+def format_date_filter(value):
+    """Format date to DD/MM/YYYY"""
+    if value is None:
+        return ''
+    if isinstance(value, str):
+        try:
+            # Try to parse the string as a date
+            from datetime import date as date_type
+            for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
+                try:
+                    value = datetime.strptime(value, fmt).date()
+                    break
+                except ValueError:
+                    continue
+        except:
+            return value
+    # Handle both date and datetime objects
+    if hasattr(value, 'strftime'):
+        return value.strftime('%d/%m/%Y')
+    return str(value)
+
 # Mobile device detection middleware
 def is_mobile_device():
     """Detect if the request is from a mobile device"""
