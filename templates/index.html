@@ -1890,12 +1890,28 @@
         setTimeout(() => {
             if (editCommitteeTypeSelect) {
                 editCommitteeTypeSelect.value = committee.committee_type_id;
+                // Trigger change event to populate default times if needed
+                const changeEvent = new Event('change');
+                editCommitteeTypeSelect.dispatchEvent(changeEvent);
             }
         }, 0);
 
         document.getElementById('edit_vaada_date').value = committee.vaada_date;
-        document.getElementById('edit_start_time').value = committee.start_time || '';
-        document.getElementById('edit_end_time').value = committee.end_time || '';
+
+        // Set times after a delay to ensure committee type change event completes
+        setTimeout(() => {
+            // Only override if the fields are still empty after change event
+            const startTimeInput = document.getElementById('edit_start_time');
+            const endTimeInput = document.getElementById('edit_end_time');
+
+            if (startTimeInput && committee.start_time) {
+                startTimeInput.value = committee.start_time;
+            }
+            if (endTimeInput && committee.end_time) {
+                endTimeInput.value = committee.end_time;
+            }
+        }, 50);
+
         document.getElementById('edit_notes').value = committee.notes || '';
 
         // Set form action with the committee ID
