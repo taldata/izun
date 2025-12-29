@@ -461,6 +461,9 @@ function formatDate(dateString, locale = 'he-IL') {
         activeEl = null;
     }
 
+    // Expose hidePopover globally for drag-and-drop handlers (for committee rows)
+    window.hideCommitteeRowPopover = hidePopover;
+
     // Delegate hover on committee rows (works with dynamic rows)
     document.addEventListener('mouseover', function (e) {
         var row = e.target && (e.target.closest && e.target.closest('.committee-row'));
@@ -636,6 +639,9 @@ function formatDate(dateString, locale = 'he-IL') {
         activeEl = null;
     }
 
+    // Expose hidePopover globally for drag-and-drop handlers (for calendar badges)
+    window.hideCalendarBadgePopover = hidePopover;
+
     // Delegate to dynamically created calendar badges
     document.addEventListener('mouseover', function (e) {
         var el = e.target && (e.target.closest && e.target.closest('.committee-badge'));
@@ -649,6 +655,9 @@ function formatDate(dateString, locale = 'he-IL') {
             hoverTimer = setTimeout(function () {
                 // Verify element still exists and is in DOM before showing
                 if (!el || !document.body.contains(el)) return;
+
+                // Don't show popover if element is being dragged
+                if (el.style.opacity === '0.5' || el.style.cursor === 'grabbing') return;
 
                 showPopover(el, '<div class="small text-muted">טוען...</div>');
 
