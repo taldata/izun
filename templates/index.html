@@ -1680,7 +1680,12 @@
                 'Content-Type': 'application/json'
             }
         })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     console.log('Deadline dates display toggled:', showDeadlineDates);
@@ -1765,9 +1770,14 @@
 
             try {
                 const response = await fetch(`/api/available_dates?${params.toString()}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const data = await response.json();
 
-                if (!response.ok || !data.success) {
+                if (!data.success) {
                     const message = data && data.message ? data.message : 'שגיאה בשליפת הנתונים';
                     resultsContainer.innerHTML = `<div class="alert alert-danger mb-2">${message}</div>`;
                     return;
@@ -1956,7 +1966,12 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ source_vaada_id: parseInt(sourceId, 10), target_date: targetDate })
         })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error(`HTTP error! status: ${res.status}`);
+                }
+                return res.json();
+            })
             .then(data => {
                 if (data.success) {
                     showAlert(data.message || 'הועדה שוכפלה בהצלחה', 'success');
@@ -2588,6 +2603,9 @@
         })
             .then(response => {
                 console.log('Move committee response:', response.status); // Debug
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 return response.json();
             })
             .then(data => {
@@ -2631,7 +2649,12 @@
                 target_vaada_id: targetCommittee.vaadot_id
             })
         })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     showAlert(data.message, 'success');
@@ -2667,7 +2690,12 @@
                 target_vaada_id: targetVaadaId
             })
         })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     showAlert(data.message, 'success');
@@ -3136,7 +3164,12 @@
 
         // Fetch SLA information
         fetch(`/api/sla_info/${vaadotId}`)
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.error) {
                     modalBody.innerHTML = `
@@ -4282,7 +4315,12 @@
 
             // Fetch recommendations from API
             fetch(`/api/recommend_committees?maslul_id=${maslulId}&expected_requests=${expectedRequests}&event_name=${encodeURIComponent(eventName)}`)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     document.getElementById('recommendationsLoading').style.display = 'none';
 
