@@ -11,6 +11,7 @@ import requests
 import logging
 import hashlib
 import json
+import threading
 from typing import Optional, Dict, List, Tuple
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
@@ -34,6 +35,9 @@ class CalendarService:
         self.ad_service = ad_service
         self.db = db_manager
         self.graph_endpoint = 'https://graph.microsoft.com/v1.0'
+
+        # Thread lock to prevent concurrent sync/reset operations
+        self._sync_lock = threading.Lock()
 
         # Get calendar settings from database
         self.calendar_email = self.db.get_system_setting('calendar_sync_email') or 'plan@innovationisrael.org.il'
@@ -663,22 +667,14 @@ class CalendarService:
             logger.error(f"Error syncing event deadlines {event_id}: {e}", exc_info=True)
             return False, str(e)
 
-    def sync_all(self) -> Dict[str, any]:
+    def _sync_all_internal(self) -> Dict[str, any]:
         """
-        Perform full calendar sync of all committees and events
+        Internal method to perform full calendar sync without acquiring lock
+        Should only be called when lock is already held or from sync_all()
 
         Returns:
             Dictionary with sync statistics
         """
-        if not self.is_enabled():
-            return {
-                'success': False,
-                'message': 'Calendar sync is disabled',
-                'committees_synced': 0,
-                'events_synced': 0,
-                'failures': 0
-            }
-
         logger.info("Starting full calendar sync...")
 
         committees_synced = 0
@@ -738,6 +734,42 @@ class CalendarService:
                 'failures': failures
             }
 
+    def sync_all(self) -> Dict[str, any]:
+        """
+        Perform full calendar sync of all committees and events
+
+        Returns:
+            Dictionary with sync statistics
+        """
+        if not self.is_enabled():
+            return {
+                'success': False,
+                'message': 'Calendar sync is disabled',
+                'committees_synced': 0,
+                'events_synced': 0,
+                'failures': 0
+            }
+
+        # Acquire lock to prevent concurrent sync/reset operations
+        # Use non-blocking acquire to avoid blocking the scheduler if a reset is in progress
+        lock_acquired = self._sync_lock.acquire(blocking=False)
+        if not lock_acquired:
+            logger.warning("Calendar sync skipped - another sync or reset operation is in progress")
+            return {
+                'success': False,
+                'message': 'Calendar sync skipped - another operation in progress',
+                'committees_synced': 0,
+                'events_synced': 0,
+                'failures': 0
+            }
+
+        try:
+            return self._sync_all_internal()
+        finally:
+            # Always release the lock
+            self._sync_lock.release()
+            logger.debug("Calendar sync lock released")
+
     def delete_all_calendar_events_and_reset(self) -> Dict[str, any]:
         """
         Delete all calendar events created by the system and reset sync records
@@ -757,61 +789,68 @@ class CalendarService:
                 'failures': 0
             }
 
-        logger.info("Starting deletion of all calendar events and reset...")
+        # Acquire lock to prevent concurrent sync operations during reset
+        # Use blocking acquire since reset is a critical operation that should wait
+        logger.info("Acquiring lock for calendar reset operation...")
+        with self._sync_lock:
+            logger.info("Lock acquired - starting deletion of all calendar events and reset...")
 
-        events_deleted = 0
-        deletion_failures = 0
-        records_cleared = 0
+            events_deleted = 0
+            deletion_failures = 0
+            records_cleared = 0
 
-        try:
-            # Get all synced calendar events
-            sync_records = self.db.get_all_synced_calendar_events(self.calendar_email)
+            try:
+                # Get all synced calendar events
+                sync_records = self.db.get_all_synced_calendar_events(self.calendar_email)
 
-            logger.info(f"Found {len(sync_records)} calendar events to delete")
+                logger.info(f"Found {len(sync_records)} calendar events to delete")
 
-            # Delete each calendar event
-            for record in sync_records:
-                calendar_event_id = record.get('calendar_event_id')
-                if calendar_event_id:
-                    try:
-                        success, message = self.delete_calendar_event(calendar_event_id)
-                        if success:
-                            events_deleted += 1
-                        else:
-                            logger.warning(f"Failed to delete calendar event {calendar_event_id}: {message}")
+                # Delete each calendar event
+                for record in sync_records:
+                    calendar_event_id = record.get('calendar_event_id')
+                    if calendar_event_id:
+                        try:
+                            success, message = self.delete_calendar_event(calendar_event_id)
+                            if success:
+                                events_deleted += 1
+                            else:
+                                logger.warning(f"Failed to delete calendar event {calendar_event_id}: {message}")
+                                deletion_failures += 1
+                        except Exception as e:
+                            logger.error(f"Error deleting calendar event {calendar_event_id}: {e}")
                             deletion_failures += 1
-                    except Exception as e:
-                        logger.error(f"Error deleting calendar event {calendar_event_id}: {e}")
-                        deletion_failures += 1
 
-            # Clear all sync records
-            records_cleared = self.db.clear_all_calendar_sync_records(self.calendar_email)
-            logger.info(f"Cleared {records_cleared} sync records from database")
+                # Clear all sync records
+                records_cleared = self.db.clear_all_calendar_sync_records(self.calendar_email)
+                logger.info(f"Cleared {records_cleared} sync records from database")
 
-            # Now perform full sync to recreate all events
-            logger.info("Starting full sync to recreate all events...")
-            sync_result = self.sync_all()
+                # Now perform full sync to recreate all events
+                # Call internal method since we already hold the lock
+                logger.info("Starting full sync to recreate all events...")
+                sync_result = self._sync_all_internal()
 
-            return {
-                'success': True,
-                'message': f'Reset complete: Deleted {events_deleted} events, cleared {records_cleared} records. Re-synced: {sync_result["committees_synced"]} committees, {sync_result["events_synced"]} events',
-                'events_deleted': events_deleted,
-                'deletion_failures': deletion_failures,
-                'records_cleared': records_cleared,
-                'committees_synced': sync_result.get('committees_synced', 0),
-                'events_synced': sync_result.get('events_synced', 0),
-                'failures': sync_result.get('failures', 0) + deletion_failures
-            }
+                logger.info("Calendar reset and re-sync complete - lock will be released")
 
-        except Exception as e:
-            logger.error(f"Error in delete_all_calendar_events_and_reset: {e}", exc_info=True)
-            return {
-                'success': False,
-                'message': str(e),
-                'events_deleted': events_deleted,
-                'deletion_failures': deletion_failures,
-                'records_cleared': records_cleared,
-                'committees_synced': 0,
-                'events_synced': 0,
-                'failures': deletion_failures
-            }
+                return {
+                    'success': True,
+                    'message': f'Reset complete: Deleted {events_deleted} events, cleared {records_cleared} records. Re-synced: {sync_result["committees_synced"]} committees, {sync_result["events_synced"]} events',
+                    'events_deleted': events_deleted,
+                    'deletion_failures': deletion_failures,
+                    'records_cleared': records_cleared,
+                    'committees_synced': sync_result.get('committees_synced', 0),
+                    'events_synced': sync_result.get('events_synced', 0),
+                    'failures': sync_result.get('failures', 0) + deletion_failures
+                }
+
+            except Exception as e:
+                logger.error(f"Error in delete_all_calendar_events_and_reset: {e}", exc_info=True)
+                return {
+                    'success': False,
+                    'message': str(e),
+                    'events_deleted': events_deleted,
+                    'deletion_failures': deletion_failures,
+                    'records_cleared': records_cleared,
+                    'committees_synced': 0,
+                    'events_synced': 0,
+                    'failures': deletion_failures
+                }
