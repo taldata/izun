@@ -829,6 +829,20 @@ class CalendarService:
                 logger.info("Starting full sync to recreate all events...")
                 sync_result = self._sync_all_internal()
 
+                # Check if sync was successful
+                if not sync_result.get('success', False):
+                    logger.error(f"Calendar reset completed but re-sync failed: {sync_result.get('message')}")
+                    return {
+                        'success': False,
+                        'message': f'Reset partially complete: Deleted {events_deleted} events, cleared {records_cleared} records. But re-sync failed: {sync_result.get("message", "Unknown error")}',
+                        'events_deleted': events_deleted,
+                        'deletion_failures': deletion_failures,
+                        'records_cleared': records_cleared,
+                        'committees_synced': sync_result.get('committees_synced', 0),
+                        'events_synced': sync_result.get('events_synced', 0),
+                        'failures': sync_result.get('failures', 0) + deletion_failures
+                    }
+
                 logger.info("Calendar reset and re-sync complete - lock will be released")
 
                 return {
