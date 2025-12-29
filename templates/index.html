@@ -2312,6 +2312,10 @@
         isDragging = true;
         draggedElement = e.target;
 
+        // Hide any active popovers when drag starts
+        if (window.hideCommitteeRowPopover) window.hideCommitteeRowPopover();
+        if (window.hideCalendarBadgePopover) window.hideCalendarBadgePopover();
+
         // Extract committee data from the badge
         const vaadaId = draggedElement.getAttribute('data-vaada-id');
         const committeeDate = draggedElement.getAttribute('data-date');
@@ -2343,6 +2347,10 @@
     function handleEventDragStart(e) {
         isDragging = true;
         draggedElement = e.target;
+
+        // Hide any active popovers when drag starts
+        if (window.hideCommitteeRowPopover) window.hideCommitteeRowPopover();
+        if (window.hideCalendarBadgePopover) window.hideCalendarBadgePopover();
 
         // Extract event data from the badge
         const eventId = draggedElement.getAttribute('data-event-id');
