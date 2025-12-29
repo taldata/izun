@@ -64,7 +64,7 @@ class CalendarService:
 
     def create_calendar_event(self, subject: str, start_date: date, end_date: date = None,
                              body: str = "", location: str = "", is_all_day: bool = True,
-                             user_email: str = None) -> Tuple[bool, Optional[str], str]:
+                             user_email: str = None, start_time: str = None, end_time: str = None) -> Tuple[bool, Optional[str], str]:
         """
         Create a calendar event in the shared calendar
 
@@ -76,6 +76,8 @@ class CalendarService:
             location: Event location
             is_all_day: Whether this is an all-day event
             user_email: Target calendar user email (defaults to self.calendar_email)
+            start_time: Start time in HH:MM format (e.g., "09:00"), only used if is_all_day=False
+            end_time: End time in HH:MM format (e.g., "15:00"), only used if is_all_day=False
 
         Returns:
             Tuple of (success, event_id, message)
@@ -91,12 +93,32 @@ class CalendarService:
             if end_date is None:
                 end_date = start_date
 
-            # For all-day events, Microsoft Graph requires duration of at least 24 hours.
-            # Ensure end_date is at least start_date + 1 day for single-day all-day events.
-            if is_all_day and end_date <= start_date:
-                end_date = start_date + timedelta(days=1)
-
             target_email = user_email or self.calendar_email
+
+            # Build start and end datetime based on whether it's an all-day event
+            if is_all_day:
+                # For all-day events, Microsoft Graph requires duration of at least 24 hours.
+                # Ensure end_date is at least start_date + 1 day for single-day all-day events.
+                if end_date <= start_date:
+                    end_date = start_date + timedelta(days=1)
+
+                start_datetime = datetime.combine(start_date, datetime.min.time())
+                end_datetime = datetime.combine(end_date, datetime.min.time())
+            else:
+                # For timed events, parse the time strings
+                if start_time:
+                    start_hour, start_minute = map(int, start_time.split(':'))
+                    start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=start_hour, minute=start_minute))
+                else:
+                    # Default to 09:00 if no time specified
+                    start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=9, minute=0))
+
+                if end_time:
+                    end_hour, end_minute = map(int, end_time.split(':'))
+                    end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
+                else:
+                    # Default to 15:00 if no time specified
+                    end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=15, minute=0))
 
             # Build event object
             event = {
@@ -106,11 +128,11 @@ class CalendarService:
                     "content": body
                 },
                 "start": {
-                    "dateTime": datetime.combine(start_date, datetime.min.time()).isoformat(),
+                    "dateTime": start_datetime.isoformat(),
                     "timeZone": "Asia/Jerusalem"
                 },
                 "end": {
-                    "dateTime": datetime.combine(end_date, datetime.min.time()).isoformat(),
+                    "dateTime": end_datetime.isoformat(),
                     "timeZone": "Asia/Jerusalem"
                 },
                 "isAllDay": is_all_day,
@@ -142,7 +164,8 @@ class CalendarService:
 
     def update_calendar_event(self, event_id: str, subject: str = None, start_date: date = None,
                               end_date: date = None, body: str = None, location: str = None,
-                              is_all_day: bool = True, user_email: str = None) -> Tuple[bool, str]:
+                              is_all_day: bool = True, user_email: str = None, start_time: str = None,
+                              end_time: str = None) -> Tuple[bool, str]:
         """
         Update an existing calendar event
 
@@ -155,6 +178,8 @@ class CalendarService:
             location: New location (optional)
             is_all_day: Whether this is an all-day event
             user_email: Target calendar user email (defaults to self.calendar_email)
+            start_time: Start time in HH:MM format (e.g., "09:00"), only used if is_all_day=False
+            end_time: End time in HH:MM format (e.g., "15:00"), only used if is_all_day=False
 
         Returns:
             Tuple of (success, message)
@@ -182,30 +207,55 @@ class CalendarService:
                 }
 
             if start_date is not None:
-                # For all-day events, ensure at least 24 hours duration by default
-                effective_end_date = end_date
+                effective_end_date = end_date if end_date is not None else start_date
+
+                # Build start and end datetime based on whether it's an all-day event
                 if is_all_day:
-                    if effective_end_date is None:
-                        effective_end_date = start_date + timedelta(days=1)
-                    elif effective_end_date <= start_date:
+                    # For all-day events, ensure at least 24 hours duration by default
+                    if effective_end_date <= start_date:
                         effective_end_date = start_date + timedelta(days=1)
 
+                    start_datetime = datetime.combine(start_date, datetime.min.time())
+                    end_datetime = datetime.combine(effective_end_date, datetime.min.time())
+                else:
+                    # For timed events, parse the time strings
+                    if start_time:
+                        start_hour, start_minute = map(int, start_time.split(':'))
+                        start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=start_hour, minute=start_minute))
+                    else:
+                        # Default to 09:00 if no time specified
+                        start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=9, minute=0))
+
+                    if end_time:
+                        end_hour, end_minute = map(int, end_time.split(':'))
+                        end_datetime = datetime.combine(effective_end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
+                    else:
+                        # Default to 15:00 if no time specified
+                        end_datetime = datetime.combine(effective_end_date, datetime.min.time().replace(hour=15, minute=0))
+
                 event_update["start"] = {
-                    "dateTime": datetime.combine(start_date, datetime.min.time()).isoformat(),
+                    "dateTime": start_datetime.isoformat(),
+                    "timeZone": "Asia/Jerusalem"
+                }
+                event_update["end"] = {
+                    "dateTime": end_datetime.isoformat(),
                     "timeZone": "Asia/Jerusalem"
                 }
                 event_update["isAllDay"] = is_all_day
 
-                if effective_end_date is not None:
-                    event_update["end"] = {
-                        "dateTime": datetime.combine(effective_end_date, datetime.min.time()).isoformat(),
-                        "timeZone": "Asia/Jerusalem"
-                    }
-
             # If only end_date is provided (rare), update it directly
-            if start_date is None and end_date is not None:
+            elif end_date is not None:
+                if is_all_day:
+                    end_datetime = datetime.combine(end_date, datetime.min.time())
+                else:
+                    if end_time:
+                        end_hour, end_minute = map(int, end_time.split(':'))
+                        end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
+                    else:
+                        end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=15, minute=0))
+
                 event_update["end"] = {
-                    "dateTime": datetime.combine(end_date, datetime.min.time()).isoformat(),
+                    "dateTime": end_datetime.isoformat(),
                     "timeZone": "Asia/Jerusalem"
                 }
 
@@ -308,6 +358,8 @@ class CalendarService:
             notes = committee.get('notes', '')
             is_operational = committee.get('is_operational', 0)
             status = committee.get('status', '')
+            start_time = committee.get('start_time')
+            end_time = committee.get('end_time')
 
             if not vaada_date:
                 return False, "Committee has no date"
@@ -315,6 +367,9 @@ class CalendarService:
             # Parse date
             if isinstance(vaada_date, str):
                 vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+
+            # Determine if this should be an all-day event or timed event
+            is_all_day = not (start_time and end_time)
 
             # Build event title and description
             subject = f"{committee_type_name} - {hativa_name}"
@@ -325,8 +380,14 @@ class CalendarService:
                 f"<p><strong>סוג ועדה:</strong> {committee_type_name}</p>",
                 f"<p><strong>חטיבה:</strong> {hativa_name}</p>",
                 f"<p><strong>תאריך:</strong> {vaada_date.strftime('%d/%m/%Y')}</p>",
-                f"<p><strong>סטטוס:</strong> {status}</p>",
             ]
+
+            # Add time information if available
+            if start_time and end_time:
+                body_parts.append(f"<p><strong>שעת התחלה:</strong> {start_time}</p>")
+                body_parts.append(f"<p><strong>שעת סיום:</strong> {end_time}</p>")
+
+            body_parts.append(f"<p><strong>סטטוס:</strong> {status}</p>")
 
             if is_operational:
                 body_parts.append("<p><strong>ועדה תפעולית</strong></p>")
@@ -340,6 +401,8 @@ class CalendarService:
             content_data = {
                 'subject': subject,
                 'start_date': str(vaada_date),
+                'start_time': start_time,
+                'end_time': end_time,
                 'body': body
             }
             content_hash = hashlib.md5(json.dumps(content_data, sort_keys=True).encode('utf-8')).hexdigest()
@@ -361,7 +424,9 @@ class CalendarService:
                     subject=subject,
                     start_date=vaada_date,
                     body=body,
-                    is_all_day=True
+                    is_all_day=is_all_day,
+                    start_time=start_time,
+                    end_time=end_time
                 )
 
                 if success:
@@ -378,7 +443,9 @@ class CalendarService:
                             subject=subject,
                             start_date=vaada_date,
                             body=body,
-                            is_all_day=True
+                            is_all_day=is_all_day,
+                            start_time=start_time,
+                            end_time=end_time
                         )
                         if success2:
                             self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', new_event_id, content_hash=content_hash)
@@ -396,7 +463,9 @@ class CalendarService:
                     subject=subject,
                     start_date=vaada_date,
                     body=body,
-                    is_all_day=True
+                    is_all_day=is_all_day,
+                    start_time=start_time,
+                    end_time=end_time
                 )
 
                 if success:
