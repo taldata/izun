@@ -500,7 +500,12 @@ function resetCalendarSync() {
             'Content-Type': 'application/json'
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
             resultDiv.className = 'alert alert-success mt-3';
@@ -512,7 +517,7 @@ function resetCalendarSync() {
     })
     .catch(error => {
         resultDiv.className = 'alert alert-danger mt-3';
-        resultDiv.innerHTML = `<i class="bi bi-x-circle me-2"></i>שגיאה: ${error}`;
+        resultDiv.innerHTML = `<i class="bi bi-x-circle me-2"></i>שגיאה: ${error.message || error}`;
     });
 }
 
