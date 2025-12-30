@@ -92,30 +92,24 @@ output "db_password_secret_arn" {
   value       = aws_secretsmanager_secret.db_password.arn
 }
 
-# Next Steps
+# CloudFront (managed externally)
+# Using existing CloudFront: d2skbotj2u5z8s.cloudfront.net (not managed by Terraform)
+
+output "production_url" {
+  description = "Production URL with HTTPS (CloudFront)"
+  value       = "https://d2skbotj2u5z8s.cloudfront.net"
+}
+
 output "next_steps" {
   description = "Next steps after deployment"
   value       = <<-EOT
     
-    ✅ Infrastructure deployed successfully!
+    Infrastructure deployed successfully!
     
-    Next steps:
-    1. Get the database password:
-       terraform output -raw database_url_full
+    Production URL: https://d2skbotj2u5z8s.cloudfront.net
+    EB URL: http://${aws_elastic_beanstalk_environment.production.cname}
     
-    2. Deploy your application:
-       cd ..
-       eb deploy ${aws_elastic_beanstalk_environment.production.name}
-    
-    3. Migrate data (if coming from Render):
-       export DATABASE_URL=$(terraform output -raw database_url_full)
-       python migrate_to_postgres.py db_export.json
-    
-    4. Update Azure AD redirect URI:
-       ${aws_elastic_beanstalk_environment.production.cname}/auth/callback
-    
-    5. Open the application:
-       eb open
+    To deploy: eb deploy ${aws_elastic_beanstalk_environment.production.name}
     
   EOT
 }

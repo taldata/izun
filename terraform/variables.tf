@@ -118,3 +118,23 @@ variable "existing_vpc_id" {
   type        = string
   default     = ""
 }
+
+# HTTPS Configuration
+variable "enable_https" {
+  description = "Whether to enable HTTPS with Load Balancer"
+  type        = bool
+  default     = true
+}
+
+variable "domain_name" {
+  description = "Domain name for SSL certificate (e.g., izun.example.com). Leave empty for EB default domain."
+  type        = string
+  default     = ""
+}
+
+# CloudFront Configuration (external)
+variable "cloudfront_domain" {
+  description = "CloudFront distribution domain (e.g., d2skbotj2u5z8s.cloudfront.net). Used for Azure AD redirect URI."
+  type        = string
+  default     = "d2skbotj2u5z8s.cloudfront.net"
+}

@@ -131,7 +131,7 @@ resource "aws_elastic_beanstalk_environment" "production" {
     value     = aws_security_group.eb.id
   }
 
-  # Environment Type (single instance for cost savings)
+  # Environment Type (single instance for cost savings - HTTPS via CloudFront)
   setting {
     namespace = "aws:elasticbeanstalk:environment"
     name      = "EnvironmentType"
@@ -191,7 +191,8 @@ resource "aws_elastic_beanstalk_environment" "production" {
   setting {
     namespace = "aws:elasticbeanstalk:application:environment"
     name      = "AZURE_REDIRECT_URI"
-    value     = "https://${var.app_name}-${var.environment}.${var.aws_region}.elasticbeanstalk.com/auth/callback"
+    # Use CloudFront domain for redirect URI since users access via CloudFront
+    value     = var.cloudfront_domain != "" ? "https://${var.cloudfront_domain}/auth/callback" : (var.enable_https ? "https://${var.app_name}-${var.environment}.${var.aws_region}.elasticbeanstalk.com/auth/callback" : "http://${var.app_name}-${var.environment}.${var.aws_region}.elasticbeanstalk.com/auth/callback")
   }
 
   # Health Reporting

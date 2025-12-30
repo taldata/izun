@@ -287,6 +287,84 @@ class DatabaseManager:
                     VALUES ({ph}, {ph}, {ph})
                 ''', (key, val, desc))
 
+    def _pg_migrate_columns(self, conn):
+        """Migrate PostgreSQL database to add new columns if they don't exist"""
+        cursor = conn.cursor()
+        
+        def column_exists(table_name, column_name):
+            cursor.execute("""
+                SELECT COUNT(*) FROM information_schema.columns 
+                WHERE table_name = %s AND column_name = %s
+            """, (table_name, column_name))
+            return cursor.fetchone()[0] > 0
+        
+        def add_column_if_missing(table_name, column_name, column_def):
+            if not column_exists(table_name, column_name):
+                try:
+                    cursor.execute(f'ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}')
+                    print(f"Added column {column_name} to {table_name}")
+                except Exception as e:
+                    print(f"Warning: Could not add column {column_name} to {table_name}: {e}")
+        
+        try:
+            # Add columns to vaadot table
+            add_column_if_missing('vaadot', 'vaada_date', 'DATE')
+            add_column_if_missing('vaadot', 'exception_date_id', 'INTEGER REFERENCES exception_dates(date_id)')
+            add_column_if_missing('vaadot', 'is_deleted', 'INTEGER DEFAULT 0')
+            add_column_if_missing('vaadot', 'deleted_at', 'TIMESTAMP')
+            add_column_if_missing('vaadot', 'deleted_by', 'INTEGER')
+            
+            # Add columns to committee_types table
+            add_column_if_missing('committee_types', 'hativa_id', 'INTEGER DEFAULT 1')
+            add_column_if_missing('committee_types', 'is_active', 'INTEGER DEFAULT 1')
+            add_column_if_missing('committee_types', 'description', 'TEXT')
+            add_column_if_missing('committee_types', 'is_operational', 'INTEGER DEFAULT 0')
+            
+            # Add columns to hativot table
+            add_column_if_missing('hativot', 'color', 'TEXT DEFAULT \'#007bff\'')
+            add_column_if_missing('hativot', 'is_active', 'INTEGER DEFAULT 1')
+            
+            # Add columns to users table
+            add_column_if_missing('users', 'auth_source', 'TEXT DEFAULT \'local\'')
+            add_column_if_missing('users', 'ad_dn', 'TEXT')
+            
+            # Add columns to maslulim table
+            add_column_if_missing('maslulim', 'is_active', 'INTEGER DEFAULT 1')
+            add_column_if_missing('maslulim', 'stage_a_easy_days', 'INTEGER DEFAULT 5')
+            add_column_if_missing('maslulim', 'stage_a_review_days', 'INTEGER DEFAULT 5')
+            add_column_if_missing('maslulim', 'stage_b_easy_days', 'INTEGER DEFAULT 8')
+            add_column_if_missing('maslulim', 'stage_b_review_days', 'INTEGER DEFAULT 7')
+            add_column_if_missing('maslulim', 'stage_c_easy_days', 'INTEGER DEFAULT 5')
+            add_column_if_missing('maslulim', 'stage_c_review_days', 'INTEGER DEFAULT 5')
+            add_column_if_missing('maslulim', 'stage_d_easy_days', 'INTEGER DEFAULT 5')
+            add_column_if_missing('maslulim', 'stage_d_review_days', 'INTEGER DEFAULT 5')
+            add_column_if_missing('maslulim', 'call_publication_date', 'DATE')
+            
+            # Add columns to events table
+            add_column_if_missing('events', 'call_publication_date', 'DATE')
+            add_column_if_missing('events', 'call_deadline_date', 'DATE')
+            add_column_if_missing('events', 'intake_deadline_date', 'DATE')
+            add_column_if_missing('events', 'review_deadline_date', 'DATE')
+            add_column_if_missing('events', 'response_deadline_date', 'DATE')
+            add_column_if_missing('events', 'is_call_deadline_manual', 'INTEGER DEFAULT 0')
+            add_column_if_missing('events', 'actual_submissions', 'INTEGER DEFAULT 0')
+            add_column_if_missing('events', 'scheduled_date', 'DATE')
+            add_column_if_missing('events', 'is_deleted', 'INTEGER DEFAULT 0')
+            add_column_if_missing('events', 'deleted_at', 'TIMESTAMP')
+            add_column_if_missing('events', 'deleted_by', 'INTEGER')
+            
+            # Map old roles to new roles
+            try:
+                cursor.execute("UPDATE users SET role = 'editor' WHERE role = 'manager'")
+                cursor.execute("UPDATE users SET role = 'viewer' WHERE role = 'user'")
+            except Exception:
+                pass
+            
+            conn.commit()
+        except Exception as e:
+            print(f"PostgreSQL migration error: {e}")
+            conn.rollback()
+
     def _migrate_database(self, cursor, conn=None):
         """Migrate existing database to add new columns if they don't exist"""
         if self.db_type == 'postgresql':
