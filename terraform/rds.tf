@@ -16,7 +16,7 @@ locals {
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
   name       = "${var.app_name}-db-subnet-group"
-  subnet_ids = var.create_new_vpc ? local.private_subnet_ids : local.public_subnet_ids
+  subnet_ids = var.db_publicly_accessible ? local.public_subnet_ids : local.private_subnet_ids
 
   tags = {
     Name = "${var.app_name}-db-subnet-group"

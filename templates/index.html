@@ -852,6 +852,18 @@
     committeesData.forEach(c => {
         // Coerce is_operational to boolean
         c.is_operational = (c.is_operational === true) || (c.is_operational === 1) || (c.is_operational === '1');
+        
+        // Normalize vaada_date to YYYY-MM-DD if it's in a different format (e.g., HTTP Date from Postgres)
+        if (c.vaada_date && c.vaada_date.length > 10) {
+            try {
+                const d = new Date(c.vaada_date);
+                if (!isNaN(d.getTime())) {
+                     c.vaada_date = d.toISOString().split('T')[0];
+                }
+            } catch (e) {
+                console.warn('Failed to normalize date:', c.vaada_date);
+            }
+        }
     });
 
     console.log('Committees data loaded:', committeesData.length, committeesData);
@@ -1518,7 +1530,38 @@
         if (savedYear && savedMonth) {
             currentDate = new Date(parseInt(savedYear), parseInt(savedMonth), 1);
         } else {
+            // Default to today
             currentDate = new Date();
+            
+            // Smart default: If current month has no events, jump to first future month with events
+            // This is helpful for new deployments (Jan 2026 data vs Dec 2025 today)
+            if (typeof committeesData !== 'undefined' && committeesData.length > 0) {
+                const currentMonth = currentDate.getMonth();
+                const currentYear = currentDate.getFullYear();
+                
+                // Check if we have events this month
+                const hasEventsThisMonth = committeesData.some(c => {
+                    if (!c.vaada_date) return false;
+                    const d = new Date(c.vaada_date);
+                    return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+                });
+                
+                if (!hasEventsThisMonth) {
+                    // Find first future committee
+                    const todayStr = currentDate.toISOString().slice(0, 10);
+                    // Filter for future dates and sort ascending
+                    const futureCommittees = committeesData
+                        .filter(c => c.vaada_date && c.vaada_date >= todayStr)
+                        .sort((a, b) => a.vaada_date.localeCompare(b.vaada_date));
+                    
+                    if (futureCommittees.length > 0) {
+                        const firstDate = new Date(futureCommittees[0].vaada_date);
+                        // Update currentDate to the 1st of that month
+                        currentDate = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
+                        console.log('Smart Calendar: Auto-navigated to first data found at', currentDate.toISOString().slice(0, 7));
+                    }
+                }
+            }
         }
 
         if (savedMonthsToShow) {

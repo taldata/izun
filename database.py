@@ -40,6 +40,9 @@ class PG_CursorWrapper:
         self.lastrowid = None
         self.rowcount = 0
         
+    def __getattr__(self, name):
+        return getattr(self.cursor, name)
+        
     def execute(self, sql, params=None):
         # Convert sqlite placeholders (?) to postgres placeholders (%s)
         pg_sql = sql.replace('?', '%s')
@@ -190,7 +193,7 @@ class DatabaseManager:
         else:
             auto_inc_pk = "INTEGER PRIMARY KEY AUTOINCREMENT"
         
-        self._migrate_database(cursor)
+        # self._migrate_database(cursor) - Moved to end of function
         
         cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS hativot (
@@ -232,6 +235,16 @@ class DatabaseManager:
         ''')
         
         cursor.execute(f'''
+            CREATE TABLE IF NOT EXISTS exception_dates (
+                date_id {auto_inc_pk},
+                exception_date DATE NOT NULL UNIQUE,
+                description TEXT,
+                type TEXT DEFAULT 'holiday',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS vaadot (
                 vaadot_id {auto_inc_pk},
                 committee_type_id INTEGER NOT NULL,
@@ -247,15 +260,7 @@ class DatabaseManager:
             )
         ''')
         
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS exception_dates (
-                date_id {auto_inc_pk},
-                exception_date DATE NOT NULL UNIQUE,
-                description TEXT,
-                type TEXT DEFAULT 'holiday',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+        # exception_dates creation moved up
         
         cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS events (
@@ -464,6 +469,7 @@ class DatabaseManager:
         
         cursor.execute(settings_sql)
         
+        self._migrate_database(cursor)
         conn.commit()
         conn.close()
         
@@ -583,6 +589,12 @@ class DatabaseManager:
                     
             except Exception as e:
                 print(f"Role migration note: {e}")
+                # For Postgres, we must rollback the failed transaction
+                if hasattr(cursor, 'connection'):
+                    try:
+                        cursor.connection.rollback()
+                    except:
+                        pass
             
             tables_columns = {
                 'hativot': [('is_active', 'INTEGER DEFAULT 1')],
@@ -633,12 +645,23 @@ class DatabaseManager:
             for table_name, columns in tables_columns.items():
                 existing_columns = self.get_table_columns(cursor, table_name)
                 
+                # If table doesn't exist, skip migration (init_database will create it)
+                if not existing_columns:
+                    continue
+                
                 for column_name, column_def in columns:
                     if column_name not in existing_columns:
+                        print(f"Migrating {table_name}: Adding {column_name}")
                         cursor.execute(f'ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}')
                 
         except Exception as e:
             print(f"Migration error: {e}")
+            # For Postgres, rollback failed transaction
+            if hasattr(cursor, 'connection'):
+                try:
+                    cursor.connection.rollback()
+                except:
+                    pass
     
     def add_hativa(self, name: str, description: str = "", color: str = "#007bff") -> int:
         """Add a new division"""
@@ -3449,20 +3472,22 @@ class DatabaseManager:
     def get_user_by_username_any_source(self, username: str) -> Optional[Dict]:
         """
         Get user by username regardless of auth source (case-insensitive)
-        
-        Args:
-            username: Username to search for
-            
-        Returns:
-            User dictionary or None
         """
         conn = self.get_connection()
         cursor = conn.cursor()
+        
+        # Join with user_hativot to get division context. 
+        # Falls back to picking one if multiple exist (via LIMIT 1 or implicit fetchone)
         cursor.execute('''
-            SELECT u.*, h.name as hativa_name
+            SELECT u.user_id, u.username, u.email, u.password_hash, 
+                   u.full_name, u.role, u.is_active, u.auth_source, u.ad_dn, 
+                   u.created_at, u.last_login,
+                   h.hativa_id, h.name as hativa_name
             FROM users u
-            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
+            LEFT JOIN user_hativot uh ON u.user_id = uh.user_id
+            LEFT JOIN hativot h ON uh.hativa_id = h.hativa_id
             WHERE LOWER(u.username) = LOWER(?)
+            ORDER BY h.hativa_id ASC
         ''', (username,))
         row = cursor.fetchone()
         conn.close()
@@ -3470,9 +3495,9 @@ class DatabaseManager:
         if row:
             return {
                 'user_id': row[0], 'username': row[1], 'email': row[2], 'password_hash': row[3],
-                'full_name': row[4], 'role': row[5], 'hativa_id': row[6], 'is_active': row[7],
-                'auth_source': row[8], 'ad_dn': row[9], 
-                'created_at': row[10], 'last_login': row[11], 'hativa_name': row[12]
+                'full_name': row[4], 'role': row[5], 'is_active': row[6], 'auth_source': row[7],
+                'ad_dn': row[8], 'created_at': row[9], 'last_login': row[10],
+                'hativa_id': row[11], 'hativa_name': row[12]
             }
         return None
     
@@ -3480,12 +3505,19 @@ class DatabaseManager:
         """Get all Active Directory users"""
         conn = self.get_connection()
         cursor = conn.cursor()
+        
+        # Use subquery to force unique user rows
         cursor.execute('''
             SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
-                   u.hativa_id, h.name as hativa_name, u.is_active, 
-                   u.created_at, u.last_login, u.ad_dn
+                   u.is_active, u.created_at, u.last_login, u.ad_dn,
+                   h.hativa_id, h.name as hativa_name
             FROM users u
-            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
+            LEFT JOIN (
+                SELECT user_id, MIN(hativa_id) as hativa_id
+                FROM user_hativot
+                GROUP BY user_id
+            ) first_hativa ON u.user_id = first_hativa.user_id
+            LEFT JOIN hativot h ON first_hativa.hativa_id = h.hativa_id
             WHERE u.auth_source = 'ad'
             ORDER BY u.created_at DESC
         ''')
@@ -3500,12 +3532,12 @@ class DatabaseManager:
                 'email': row[2],
                 'full_name': row[3],
                 'role': row[4],
-                'hativa_id': row[5],
-                'hativa_name': row[6],
-                'is_active': row[7],
-                'created_at': row[8],
-                'last_login': row[9],
-                'ad_dn': row[10],
+                'is_active': row[5],
+                'created_at': row[6],
+                'last_login': row[7],
+                'ad_dn': row[8],
+                'hativa_id': row[9],
+                'hativa_name': row[10],
                 'auth_source': 'ad'
             })
         return users
@@ -3514,12 +3546,19 @@ class DatabaseManager:
         """Get all local (non-AD) users"""
         conn = self.get_connection()
         cursor = conn.cursor()
+        
+        # Use subquery to force unique user rows
         cursor.execute('''
             SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
-                   u.hativa_id, h.name as hativa_name, u.is_active, 
-                   u.created_at, u.last_login
+                   u.is_active, u.created_at, u.last_login,
+                   h.hativa_id, h.name as hativa_name
             FROM users u
-            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
+            LEFT JOIN (
+                SELECT user_id, MIN(hativa_id) as hativa_id
+                FROM user_hativot
+                GROUP BY user_id
+            ) first_hativa ON u.user_id = first_hativa.user_id
+            LEFT JOIN hativot h ON first_hativa.hativa_id = h.hativa_id
             WHERE u.auth_source = 'local' OR u.auth_source IS NULL
             ORDER BY u.created_at DESC
         ''')
@@ -3534,11 +3573,11 @@ class DatabaseManager:
                 'email': row[2],
                 'full_name': row[3],
                 'role': row[4],
-                'hativa_id': row[5],
-                'hativa_name': row[6],
-                'is_active': row[7],
-                'created_at': row[8],
-                'last_login': row[9],
+                'is_active': row[5],
+                'created_at': row[6],
+                'last_login': row[7],
+                'hativa_id': row[8],
+                'hativa_name': row[9],
                 'auth_source': 'local'
             })
         return users

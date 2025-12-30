@@ -25,7 +25,26 @@ def get_postgres_connection(database_url: str):
 def load_json_data(json_path: str) -> dict:
     """Load exported data from JSON file"""
     with open(json_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        content = json.load(f)
+        # Handle API response format where data is nested under 'data' key
+        if 'data' in content and isinstance(content['data'], dict):
+            return content['data']
+        return content
+
+def get_table_columns(cursor, table_name):
+    """Get columns of the target table to filter invalid fields"""
+    try:
+        cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = %s", (table_name,))
+        return {row[0] for row in cursor.fetchall()}
+    except Exception as e:
+        print(f"Warning: Could not fetch columns for {table_name}: {e}")
+        # If fetch fails, return None to imply 'use all keys' or handle safely
+        # But failing to fetch info schema usually means connection issue
+        try:
+             cursor.connection.rollback()
+        except:
+             pass
+        return None
 
 def migrate_to_postgres(json_path: str, postgres_url: str):
     """Migrate data from JSON export to PostgreSQL"""
@@ -69,8 +88,18 @@ def migrate_to_postgres(json_path: str, postgres_url: str):
             print(f"   ⏭️  {table}: No records to import")
             continue
         
-        # Get column names from first record
-        columns = list(records[0].keys())
+        # Get valid columns from target database
+        valid_columns = get_table_columns(cursor, table)
+        if not valid_columns:
+            print(f"   ⚠️  Could not verify columns for {table}. Skipping table safety check.")
+            columns = list(records[0].keys())
+        else:
+            # Filter import keys to only those that exist in target table
+            columns = [col for col in list(records[0].keys()) if col in valid_columns]
+            
+        if not columns:
+             print(f"   ⚠️  No matching columns found for {table}. source_keys={list(records[0].keys())} target_cols={valid_columns}")
+             continue
         
         # Build parameterized insert query
         placeholders = ', '.join(['%s'] * len(columns))
@@ -90,11 +119,17 @@ def migrate_to_postgres(json_path: str, postgres_url: str):
             try:
                 values = [record.get(col) for col in columns]
                 cursor.execute(insert_query, values)
+                conn.commit()
                 success_count += 1
             except Exception as e:
                 error_count += 1
                 if error_count <= 3:
                     print(f"   ⚠️  Error in {table}: {e}")
+                # Rollback transaction so next insert can proceed
+                try:
+                    conn.rollback()
+                except:
+                    pass
         
         total_imported += success_count
         if error_count > 0:
@@ -102,7 +137,7 @@ def migrate_to_postgres(json_path: str, postgres_url: str):
         else:
             print(f"   ✓ {table}: {len(records)} records imported")
         
-        conn.commit()
+        # conn.commit() - moved inside loop
     
     # Reset sequences for PostgreSQL
     print("\n🔄 Resetting PostgreSQL sequences...")
