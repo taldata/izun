@@ -4507,7 +4507,7 @@ def export_all_data(secret_key):
     
     try:
         import json
-        from datetime import datetime
+        from datetime import datetime, date
         
         data = {}
         

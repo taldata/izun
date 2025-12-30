@@ -1,49 +1,200 @@
 import sqlite3
 import os
+import re
+import urllib.parse
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Optional, Tuple, Any
 
 from zoneinfo import ZoneInfo
 
+# Try to import psycopg2 for PostgreSQL support
+try:
+    import psycopg2
+    from psycopg2.extras import DictCursor
+    postgres_available = True
+except ImportError:
+    postgres_available = False
 
 ISRAEL_TZ = ZoneInfo('Asia/Jerusalem')
 
+# Map table names to their primary keys for RETURNING clause
+TABLE_PK_MAP = {
+    'hativot': 'hativa_id',
+    'maslulim': 'maslul_id',
+    'committee_types': 'committee_type_id',
+    'vaadot': 'vaadot_id',
+    'exception_dates': 'date_id',
+    'events': 'event_id',
+    'users': 'user_id',
+    'user_hativot': 'user_hativa_id',
+    'hativa_day_constraints': 'constraint_id',
+    'system_settings': 'setting_id',
+    'audit_logs': 'log_id',
+    'calendar_sync_events': 'sync_id'
+}
+
+class PG_CursorWrapper:
+    """Wrapper for psycopg2 cursor to emulate sqlite3 behavior"""
+    def __init__(self, cursor):
+        self.cursor = cursor
+        self.lastrowid = None
+        self.rowcount = 0
+        
+    def execute(self, sql, params=None):
+        # Convert sqlite placeholders (?) to postgres placeholders (%s)
+        pg_sql = sql.replace('?', '%s')
+        
+        # Handle INSERT OR IGNORE (SQLite) -> ON CONFLICT DO NOTHING (Postgres)
+        if 'INSERT OR IGNORE' in pg_sql.upper():
+            # Replace 'INSERT OR IGNORE INTO' with 'INSERT INTO'
+            pg_sql = re.sub(r'INSERT\s+OR\s+IGNORE\s+INTO', 'INSERT INTO', pg_sql, flags=re.IGNORECASE)
+            # Append ON CONFLICT DO NOTHING
+            # Ensure we don't have a trailing semicolon blocking the append (simple strip)
+            pg_sql = pg_sql.strip().rstrip(';') + " ON CONFLICT DO NOTHING"
+        
+        # Handle INSERT queries to capture lastrowid (logic for RETURNING PK)
+        is_insert = pg_sql.strip().upper().startswith('INSERT') and 'RETURNING' not in pg_sql.upper()
+        
+        if is_insert:
+            # Find table name to determine PK
+            match = re.search(r'INSERT\s+(?:OR\s+IGNORE\s+)?INTO\s+(\w+)', pg_sql, re.IGNORECASE)
+            if match:
+                table_name = match.group(1)
+                pk_col = TABLE_PK_MAP.get(table_name)
+                
+                if pk_col:
+                    pg_sql += f" RETURNING {pk_col}"
+        
+        try:
+            if params:
+                # Handle boolean conversion if needed (sqlite uses 0/1, postgres accepts 0/1 for int but consistent types are better)
+                # For now rely on postgres implicit casting or application using 0/1 ints
+                self.cursor.execute(pg_sql, params)
+            else:
+                self.cursor.execute(pg_sql)
+            
+            self.rowcount = self.cursor.rowcount
+            
+            if is_insert and match and pk_col:
+                result = self.cursor.fetchone()
+                if result:
+                    self.lastrowid = result[0]
+                    
+            return self
+        except Exception as e:
+            # Log query for debugging
+            # print(f"Error executing SQL: {pg_sql} with params: {params}")
+            raise e
+
+    def executemany(self, sql, params_list):
+        pg_sql = sql.replace('?', '%s')
+        self.cursor.executemany(pg_sql, params_list)
+        self.rowcount = self.cursor.rowcount
+        return self
+
+    def fetchone(self):
+        return self.cursor.fetchone()
+        
+    def fetchall(self):
+        return self.cursor.fetchall()
+        
+    def close(self):
+        self.cursor.close()
+        
+    @property
+    def description(self):
+        return self.cursor.description
+
+class PG_ConnectionWrapper:
+    """Wrapper for psycopg2 connection to return wrapped cursors"""
+    def __init__(self, conn):
+        self.conn = conn
+        self.row_factory = None  # sqlite3 attribute often accessed
+        
+    def cursor(self):
+        return PG_CursorWrapper(self.conn.cursor())
+        
+    def commit(self):
+        self.conn.commit()
+        
+    def rollback(self):
+        self.conn.rollback()
+        
+    def close(self):
+        self.conn.close()
+        
+    def __getattr__(self, attr):
+        return getattr(self.conn, attr)
+
 class DatabaseManager:
     def __init__(self, db_path: str = None):
-        # Use environment variable for database path, with fallback to local development path
-        if db_path is None:
-            db_path = os.environ.get('DATABASE_PATH', 'committee_system.db')
-        self.db_path = db_path
-        # Ensure directory exists for database file
-        db_dir = os.path.dirname(self.db_path)
-        if db_dir:
-            try:
-                if not os.path.exists(db_dir):
-                    os.makedirs(db_dir, exist_ok=True)
-            except (OSError, PermissionError) as e:
-                # On Render, /var/data might not be available during build phase
-                # This is okay - it will be available during runtime
-                print(f"Note: Could not create directory {db_dir}: {e}")
-                # Don't fail - the directory might already exist or will be created later
+        # Check for DATABASE_URL first (PostgreSQL)
+        self.database_url = os.environ.get('DATABASE_URL')
+        self.db_type = 'postgres' if self.database_url else 'sqlite'
+        
+        if self.db_type == 'sqlite':
+            # Use environment variable for database path, with fallback to local development path
+            if db_path is None:
+                db_path = os.environ.get('DATABASE_PATH', 'committee_system.db')
+            self.db_path = db_path
+            # Ensure directory exists for database file
+            db_dir = os.path.dirname(self.db_path)
+            if db_dir:
+                try:
+                    if not os.path.exists(db_dir):
+                        os.makedirs(db_dir, exist_ok=True)
+                except (OSError, PermissionError) as e:
+                    # On Render, /var/data might not be available during build phase
+                    print(f"Note: Could not create directory {db_dir}: {e}")
+        
         self.init_database()
     
     def get_connection(self):
         """Get database connection with timeout and optimizations"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for better concurrency
-        conn.execute("PRAGMA busy_timeout=30000")  # 30 seconds timeout
-        return conn
+        if self.db_type == 'postgres':
+            if not postgres_available:
+                raise ImportError("psycopg2 package is required for PostgreSQL connections")
+            
+            conn = psycopg2.connect(self.database_url)
+            return PG_ConnectionWrapper(conn)
+        else:
+            conn = sqlite3.connect(self.db_path, timeout=30.0)
+            conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for better concurrency
+            conn.execute("PRAGMA busy_timeout=30000")  # 30 seconds timeout
+            return conn
+
     
+    def get_table_columns(self, cursor, table_name: str) -> List[str]:
+        """Get column names for a table, handling dialect differences"""
+        if self.db_type == 'postgres':
+            # Use cursor.execute with %s (PG_CursorWrapper handles generic execute if needed, 
+            # but usually we are inside init_database with a wrapped cursor if PG, or raw if SQLite)
+            # The wrapper we added handles ? -> %s, so we can use ? safely if using the wrapper
+            # But let's use the underlying dialect safe approach
+            cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = %s", (table_name,))
+            return [row[0] for row in cursor.fetchall()]
+        else:
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            return [row[1] for row in cursor.fetchall()]
+
     def init_database(self):
         """Initialize database with all required tables"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
+        # Define dialect-specific PK
+        # SQLite uses INTEGER PRIMARY KEY AUTOINCREMENT
+        # PostgreSQL uses SERIAL PRIMARY KEY (or GENERATED BY DEFAULT AS IDENTITY)
+        if self.db_type == 'postgres':
+            auto_inc_pk = "SERIAL PRIMARY KEY"
+        else:
+            auto_inc_pk = "INTEGER PRIMARY KEY AUTOINCREMENT"
+        
         self._migrate_database(cursor)
         
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS hativot (
-                hativa_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hativa_id {auto_inc_pk},
                 name TEXT NOT NULL UNIQUE,
                 description TEXT,
                 color TEXT DEFAULT '#007bff',
@@ -52,9 +203,9 @@ class DatabaseManager:
             )
         ''')
         
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS maslulim (
-                maslul_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                maslul_id {auto_inc_pk},
                 hativa_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 description TEXT,
@@ -64,9 +215,9 @@ class DatabaseManager:
             )
         ''')
         
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS committee_types (
-                committee_type_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                committee_type_id {auto_inc_pk},
                 hativa_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 scheduled_day INTEGER NOT NULL,
@@ -80,9 +231,9 @@ class DatabaseManager:
             )
         ''')
         
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS vaadot (
-                vaadot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                vaadot_id {auto_inc_pk},
                 committee_type_id INTEGER NOT NULL,
                 hativa_id INTEGER NOT NULL,
                 vaada_date DATE NOT NULL,
@@ -96,9 +247,9 @@ class DatabaseManager:
             )
         ''')
         
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS exception_dates (
-                date_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date_id {auto_inc_pk},
                 exception_date DATE NOT NULL UNIQUE,
                 description TEXT,
                 type TEXT DEFAULT 'holiday',
@@ -106,9 +257,9 @@ class DatabaseManager:
             )
         ''')
         
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS events (
-                event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id {auto_inc_pk},
                 vaadot_id INTEGER NOT NULL,
                 maslul_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
@@ -121,9 +272,9 @@ class DatabaseManager:
             )
         ''')
         
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS users (
-                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id {auto_inc_pk},
                 username TEXT NOT NULL UNIQUE,
                 email TEXT NOT NULL UNIQUE,
                 password_hash TEXT,
@@ -138,9 +289,9 @@ class DatabaseManager:
         ''')
         
         # Create user_hativot table for many-to-many relationship
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS user_hativot (
-                user_hativa_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_hativa_id {auto_inc_pk},
                 user_id INTEGER NOT NULL,
                 hativa_id INTEGER NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -151,9 +302,9 @@ class DatabaseManager:
         ''')
         
         # Create hativa_day_constraints table for division day constraints
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS hativa_day_constraints (
-                constraint_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                constraint_id {auto_inc_pk},
                 hativa_id INTEGER NOT NULL,
                 day_of_week INTEGER NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -168,9 +319,9 @@ class DatabaseManager:
             ON hativa_day_constraints (hativa_id)
         ''')
         
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS system_settings (
-                setting_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setting_id {auto_inc_pk},
                 setting_key TEXT NOT NULL UNIQUE,
                 setting_value TEXT NOT NULL,
                 description TEXT,
@@ -181,9 +332,9 @@ class DatabaseManager:
         ''')
         
         # Create audit logs table
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS audit_logs (
-                log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                log_id {auto_inc_pk},
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 user_id INTEGER,
                 username TEXT,
@@ -212,9 +363,9 @@ class DatabaseManager:
         ''')
 
         # Create calendar sync tracking table
-        cursor.execute('''
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS calendar_sync_events (
-                sync_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sync_id {auto_inc_pk},
                 source_type TEXT NOT NULL CHECK (source_type IN ('vaadot', 'event_deadline')),
                 source_id INTEGER NOT NULL,
                 deadline_type TEXT,
@@ -242,12 +393,20 @@ class DatabaseManager:
 
         # Add content_hash column if it doesn't exist (for change detection)
         try:
-            cursor.execute('ALTER TABLE calendar_sync_events ADD COLUMN content_hash TEXT')
-        except sqlite3.OperationalError:
-            pass  # Column already exists
-
-        cursor.execute('''
-            INSERT OR IGNORE INTO system_settings (setting_key, setting_value, description)
+            if self.db_type == 'sqlite':
+                cursor.execute('ALTER TABLE calendar_sync_events ADD COLUMN content_hash TEXT')
+            else:
+                cursor.execute('ALTER TABLE calendar_sync_events ADD COLUMN IF NOT EXISTS content_hash TEXT')
+        except Exception:
+            pass  # Column already exists or error
+            
+        # Initial data for settings
+        # Use simple INSERT to be safe across dialects (no OR IGNORE in postgres standard, use ON CONFLICT)
+        # But for sqlite we use OR IGNORE.
+        # Postgres 9.5+ supports ON CONFLICT
+        
+        settings_sql = '''
+            INSERT INTO system_settings (setting_key, setting_value, description)
             VALUES 
                 ('editing_period_active', '1', 'Whether general editing is allowed (1=yes, 0=admin only)'),
                 ('academic_year_start', '2024-09-01', 'Start of current academic year'),
@@ -296,7 +455,14 @@ class DatabaseManager:
                 ('calendar_sync_enabled', '1', 'Enable automatic calendar synchronization (1=yes, 0=no)'),
                 ('calendar_sync_email', 'plan@innovationisrael.org.il', 'Email address of the shared calendar to sync to'),
                 ('calendar_sync_interval_hours', '1', 'How often to sync calendar (in hours)')
-        ''')
+        '''
+        
+        if self.db_type == 'postgres':
+             settings_sql += ' ON CONFLICT (setting_key) DO NOTHING'
+        else:
+             settings_sql = settings_sql.replace('INSERT INTO', 'INSERT OR IGNORE INTO')
+        
+        cursor.execute(settings_sql)
         
         conn.commit()
         conn.close()
@@ -328,32 +494,32 @@ class DatabaseManager:
     def _migrate_database(self, cursor):
         """Migrate existing database to add new columns if they don't exist"""
         try:
-            cursor.execute("PRAGMA table_info(vaadot)")
-            vaadot_columns = [column[1] for column in cursor.fetchall()]
+            vaadot_columns = self.get_table_columns(cursor, 'vaadot')
             
             if 'vaada_date' not in vaadot_columns:
                 cursor.execute('ALTER TABLE vaadot ADD COLUMN vaada_date DATE')
             
             if 'exception_date_id' not in vaadot_columns:
-                cursor.execute('ALTER TABLE vaadot ADD COLUMN exception_date_id INTEGER REFERENCES exception_dates(date_id)')
+                if self.db_type == 'postgres':
+                    cursor.execute('ALTER TABLE vaadot ADD COLUMN exception_date_id INTEGER REFERENCES exception_dates(date_id)')
+                else:
+                    cursor.execute('ALTER TABLE vaadot ADD COLUMN exception_date_id INTEGER REFERENCES exception_dates(date_id)')
             
-            cursor.execute("PRAGMA table_info(committee_types)")
-            committee_types_columns = [column[1] for column in cursor.fetchall()]
+            committee_types_columns = self.get_table_columns(cursor, 'committee_types')
             
             if 'hativa_id' not in committee_types_columns:
                 cursor.execute('ALTER TABLE committee_types ADD COLUMN hativa_id INTEGER DEFAULT 1')
             
-            cursor.execute("PRAGMA table_info(hativot)")
-            hativot_columns = [column[1] for column in cursor.fetchall()]
+            hativot_columns = self.get_table_columns(cursor, 'hativot')
             
             if 'color' not in hativot_columns:
-                cursor.execute('ALTER TABLE hativot ADD COLUMN color TEXT DEFAULT "#007bff"')
+                cursor.execute('ALTER TABLE hativot ADD COLUMN color TEXT DEFAULT \'#007bff\'')
             
             # Migrate users table for AD support
-            cursor.execute("PRAGMA table_info(users)")
-            users_columns = [column[1] for column in cursor.fetchall()]
+            users_columns = self.get_table_columns(cursor, 'users')
             
             if 'auth_source' not in users_columns:
+                # CHECK constraints might need separate handling in Postgres but basic ALTER ADD works
                 cursor.execute("ALTER TABLE users ADD COLUMN auth_source TEXT DEFAULT 'local' CHECK (auth_source IN ('local', 'ad'))")
             
             if 'ad_dn' not in users_columns:
@@ -362,8 +528,7 @@ class DatabaseManager:
             # Migrate user roles from old system (admin/manager/user) to new system (admin/editor/viewer)
             try:
                 # Check if hativa_id column exists in users table (legacy column)
-                cursor.execute("PRAGMA table_info(users)")
-                users_columns = [column[1] for column in cursor.fetchall()]
+                users_columns = self.get_table_columns(cursor, 'users')
                 has_hativa_id = 'hativa_id' in users_columns
                 
                 if has_hativa_id:
@@ -384,19 +549,33 @@ class DatabaseManager:
                         
                         # If user had a hativa_id, migrate it to user_hativot table
                         if hativa_id:
-                            cursor.execute("""
-                                INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
-                                VALUES (?, ?)
-                            """, (user_id, hativa_id))
+                            if self.db_type == 'postgres':
+                                cursor.execute("""
+                                    INSERT INTO user_hativot (user_id, hativa_id) 
+                                    VALUES (?, ?)
+                                    ON CONFLICT DO NOTHING
+                                """, (user_id, hativa_id))
+                            else:
+                                cursor.execute("""
+                                    INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
+                                    VALUES (?, ?)
+                                """, (user_id, hativa_id))
                     
                     # Also migrate admin users with hativa_id
                     cursor.execute("SELECT user_id, hativa_id FROM users WHERE role = 'admin' AND hativa_id IS NOT NULL")
                     admin_users = cursor.fetchall()
                     for user_id, hativa_id in admin_users:
-                        cursor.execute("""
-                            INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
-                            VALUES (?, ?)
-                        """, (user_id, hativa_id))
+                        if self.db_type == 'postgres':
+                            cursor.execute("""
+                                INSERT INTO user_hativot (user_id, hativa_id) 
+                                VALUES (?, ?)
+                                ON CONFLICT DO NOTHING
+                            """, (user_id, hativa_id))
+                        else:
+                            cursor.execute("""
+                                INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
+                                VALUES (?, ?)
+                            """, (user_id, hativa_id))
                 else:
                     # New schema: just migrate old role names if they exist
                     cursor.execute("UPDATE users SET role = 'editor' WHERE role = 'manager'")
@@ -452,8 +631,7 @@ class DatabaseManager:
             }
             
             for table_name, columns in tables_columns.items():
-                cursor.execute(f"PRAGMA table_info({table_name})")
-                existing_columns = [column[1] for column in cursor.fetchall()]
+                existing_columns = self.get_table_columns(cursor, table_name)
                 
                 for column_name, column_def in columns:
                     if column_name not in existing_columns:
