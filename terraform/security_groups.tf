@@ -15,15 +15,7 @@ resource "aws_security_group" "rds" {
     security_groups = [aws_security_group.eb.id]
   }
 
-  # Allow PostgreSQL from anywhere (for initial setup - can be restricted later)
-  # Allow PostgreSQL from anywhere (TEMPORARY: for admin update - REVERTED)
-  # ingress {
-  #   description = "PostgreSQL from anywhere"
-  #   from_port   = 5432
-  #   to_port     = 5432
-  #   protocol    = "tcp"
-  #   cidr_blocks = ["0.0.0.0/0"]
-  # }
+
 
   egress {
     from_port   = 0
