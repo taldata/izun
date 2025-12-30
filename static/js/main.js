@@ -413,6 +413,16 @@ function formatDate(dateString, locale = 'he-IL') {
             return;
         }
 
+        // Additional safety: check if element is visible and not being manipulated
+        try {
+            var computedStyle = window.getComputedStyle(targetEl);
+            if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
+                return;
+            }
+        } catch (e) {
+            return; // If we can't get computed style, bail out
+        }
+
         // Check for and dispose of any existing instance on this element
         try {
             var existingInstance = bootstrap.Popover.getInstance(targetEl);
@@ -429,9 +439,14 @@ function formatDate(dateString, locale = 'he-IL') {
                 html: true,
                 placement: 'auto',
                 customClass: 'committee-summary-popover',
-                content: content
+                content: content,
+                sanitize: false
             });
-            activePopover.show();
+
+            // Additional safety check before showing
+            if (activePopover && targetEl.isConnected && document.body.contains(targetEl)) {
+                activePopover.show();
+            }
         } catch (e) {
             console.warn('Failed to show popover:', e);
             activePopover = null;
@@ -460,6 +475,9 @@ function formatDate(dateString, locale = 'he-IL') {
         activePopover = null;
         activeEl = null;
     }
+
+    // Expose hidePopover globally for drag-and-drop handlers (for committee rows)
+    window.hideCommitteeRowPopover = hidePopover;
 
     // Delegate hover on committee rows (works with dynamic rows)
     document.addEventListener('mouseover', function (e) {
@@ -588,6 +606,16 @@ function formatDate(dateString, locale = 'he-IL') {
             return;
         }
 
+        // Additional safety: check if element is visible and not being manipulated
+        try {
+            var computedStyle = window.getComputedStyle(targetEl);
+            if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
+                return;
+            }
+        } catch (e) {
+            return; // If we can't get computed style, bail out
+        }
+
         // Check for and dispose of any existing instance on this element
         try {
             var existingInstance = bootstrap.Popover.getInstance(targetEl);
@@ -604,9 +632,14 @@ function formatDate(dateString, locale = 'he-IL') {
                 html: true,
                 placement: 'auto',
                 customClass: 'committee-summary-popover',
-                content: content
+                content: content,
+                sanitize: false
             });
-            activePopover.show();
+
+            // Additional safety check before showing
+            if (activePopover && targetEl.isConnected && document.body.contains(targetEl)) {
+                activePopover.show();
+            }
         } catch (e) {
             console.warn('Failed to show popover:', e);
             activePopover = null;
@@ -636,6 +669,9 @@ function formatDate(dateString, locale = 'he-IL') {
         activeEl = null;
     }
 
+    // Expose hidePopover globally for drag-and-drop handlers (for calendar badges)
+    window.hideCalendarBadgePopover = hidePopover;
+
     // Delegate to dynamically created calendar badges
     document.addEventListener('mouseover', function (e) {
         var el = e.target && (e.target.closest && e.target.closest('.committee-badge'));
@@ -649,6 +685,9 @@ function formatDate(dateString, locale = 'he-IL') {
             hoverTimer = setTimeout(function () {
                 // Verify element still exists and is in DOM before showing
                 if (!el || !document.body.contains(el)) return;
+
+                // Don't show popover if element is being dragged
+                if (el.style.opacity === '0.5' || el.style.cursor === 'grabbing') return;
 
                 showPopover(el, '<div class="small text-muted">טוען...</div>');
 

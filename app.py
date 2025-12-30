@@ -36,11 +36,11 @@ db = DatabaseManager()
 ad_service = ADService(db)
 auto_scheduler = AutoMeetingScheduler(db)
 auto_schedule_service = AutoScheduleService(db)
-constraints_service = ConstraintsService(db)
+audit_logger = AuditLogger(db)
+constraints_service = ConstraintsService(db, audit_logger)
 committee_types_service = CommitteeTypesService(db)
 committee_recommendation_service = CommitteeRecommendationService(db)
 auth_manager = AuthManager(db, ad_service)
-audit_logger = AuditLogger(db)
 
 # Initialize calendar sync components
 calendar_service = CalendarService(ad_service, db)
@@ -63,6 +63,28 @@ def format_datetime_filter(value):
             return value
     if isinstance(value, datetime):
         return value.strftime('%Y-%m-%d %H:%M')
+    return str(value)
+
+@app.template_filter('format_date')
+def format_date_filter(value):
+    """Format date to DD/MM/YYYY"""
+    if value is None:
+        return ''
+    if isinstance(value, str):
+        try:
+            # Try to parse the string as a date
+            from datetime import date as date_type
+            for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
+                try:
+                    value = datetime.strptime(value, fmt).date()
+                    break
+                except ValueError:
+                    continue
+        except:
+            return value
+    # Handle both date and datetime objects
+    if hasattr(value, 'strftime'):
+        return value.strftime('%d/%m/%Y')
     return str(value)
 
 # Mobile device detection middleware
@@ -483,11 +505,19 @@ def toggle_editing_period():
     try:
         current_status = db.get_system_setting('editing_period_active')
         new_status = '0' if current_status == '1' else '1'
-        
+
         user_id = session['user_id']
         db.update_system_setting('editing_period_active', new_status, user_id)
-        
+
         status_text = "פעילה" if new_status == '1' else "סגורה"
+
+        # Log the change
+        audit_logger.log_system_setting_updated(
+            'editing_period_active',
+            current_status,
+            new_status
+        )
+
         return jsonify({
             'success': True,
             'message': f'תקופת העריכה הכללית עכשיו {status_text}',
@@ -503,11 +533,19 @@ def toggle_deadline_dates():
     try:
         current_status = db.get_system_setting('show_deadline_dates_in_calendar')
         new_status = '0' if current_status == '1' else '1'
-        
+
         user_id = session['user_id']
         db.update_system_setting('show_deadline_dates_in_calendar', new_status, user_id)
-        
+
         status_text = "מוצגים" if new_status == '1' else "מוסתרים"
+
+        # Log the change
+        audit_logger.log_system_setting_updated(
+            'show_deadline_dates_in_calendar',
+            current_status,
+            new_status
+        )
+
         return jsonify({
             'success': True,
             'message': f'תאריכי דדליין עכשיו {status_text}',
@@ -1297,13 +1335,18 @@ def edit_maslul(maslul_id):
             # Recalculate deadlines for all events using this maslul
             updated_events = db.recalculate_event_deadlines_for_maslul(maslul_id)
             status_text = 'פעיל' if is_active else 'לא פעיל'
+
+            # Log the update
+            changes = f'SLA: {sla_days} ימים, שלבים: A={stage_a_days}, B={stage_b_days}, C={stage_c_days}, D={stage_d_days}, סטטוס: {status_text}'
+            audit_logger.log_maslul_updated(maslul_id, name, changes)
+
             if updated_events > 0:
                 flash(f'מסלול "{name}" עודכן בהצלחה (סטטוס: {status_text}). עודכנו תאריכי יעד ב-{updated_events} אירועים.', 'success')
             else:
                 flash(f'מסלול "{name}" עודכן בהצלחה (סטטוס: {status_text})', 'success')
         else:
             flash('המסלול לא נמצא במערכת', 'error')
-            
+
     except Exception as e:
         flash(f'שגיאה בעדכון המסלול: {str(e)}', 'error')
     
@@ -1357,6 +1400,8 @@ def delete_maslul(maslul_id):
         # Delete the maslul
         success = db.delete_maslul(maslul_id)
         if success:
+            # Log the deletion
+            audit_logger.log_maslul_deleted(maslul_id, maslul['name'])
             flash(f'מסלול "{maslul["name"]}" נמחק בהצלחה', 'success')
         else:
             flash('שגיאה במחיקת המסלול', 'error')
@@ -1505,6 +1550,8 @@ def add_committee_meeting():
     hativa_id = request.form.get('hativa_id')
     vaada_date = request.form.get('vaada_date')
     notes = request.form.get('notes', '').strip()
+    start_time = request.form.get('start_time', '').strip() or None
+    end_time = request.form.get('end_time', '').strip() or None
 
     if not all([committee_type_id, hativa_id, vaada_date]):
         flash('סוג ועדה, חטיבה ותאריך הם שדות חובה', 'error')
@@ -1549,10 +1596,12 @@ def add_committee_meeting():
         
         # Try to add meeting (admins get warnings instead of errors)
         vaadot_id, warning_message = db.add_vaada(
-            int(committee_type_id), 
-            int(hativa_id), 
-            meeting_date, 
-            notes=notes, 
+            int(committee_type_id),
+            int(hativa_id),
+            meeting_date,
+            notes=notes,
+            start_time=start_time,
+            end_time=end_time,
             override_constraints=is_admin
         )
         
@@ -1593,6 +1642,8 @@ def edit_committee_meeting(vaadot_id):
     hativa_id = request.form.get('hativa_id')
     vaada_date = request.form.get('vaada_date')
     notes = request.form.get('notes', '').strip()
+    start_time = request.form.get('start_time', '').strip() or None
+    end_time = request.form.get('end_time', '').strip() or None
 
     if not all([committee_type_id, hativa_id, vaada_date]):
         flash('סוג ועדה, חטיבה ותאריך הם שדות חובה', 'error')
@@ -1631,7 +1682,7 @@ def edit_committee_meeting(vaadot_id):
         
         # Get user role for constraint checking
         user_role = session.get('role')
-        success = db.update_vaada(vaadot_id, int(committee_type_id), target_hativa_id, meeting_date, notes=notes, user_role=user_role)
+        success = db.update_vaada(vaadot_id, int(committee_type_id), target_hativa_id, meeting_date, notes=notes, start_time=start_time, end_time=end_time, user_role=user_role)
         if success:
             # Get committee name for logging
             committee_types = db.get_committee_types()
@@ -1904,20 +1955,24 @@ def update_hativa_color():
     """Update division color"""
     hativa_id = request.form.get('hativa_id')
     color = request.form.get('color')
-    
+
     if not all([hativa_id, color]):
         flash('חטיבה וצבע הם שדות חובה', 'error')
         return redirect(url_for('index'))
-    
+
     try:
         success = db.update_hativa_color(int(hativa_id), color)
         if success:
+            # Log the color update
+            hativa = next((h for h in db.get_hativot() if h['hativa_id'] == int(hativa_id)), None)
+            if hativa:
+                audit_logger.log_hativa_updated(int(hativa_id), hativa['name'], f'עדכון צבע ל-{color}')
             flash('צבע החטיבה עודכן בהצלחה', 'success')
         else:
             flash('שגיאה בעדכון צבע החטיבה', 'error')
     except Exception as e:
         flash(f'שגיאה בעדכון צבע החטיבה: {str(e)}', 'error')
-    
+
     return redirect(url_for('index'))
 
 
@@ -2646,6 +2701,7 @@ def admin_audit_logs():
         action = request.args.get('action', '').strip() or None
         entity_type = request.args.get('entity_type', '').strip() or None
         status_filter = request.args.get('status', '').strip() or None
+        search_text = request.args.get('search_text', '').strip() or None
         start_date = request.args.get('start_date', '').strip()
         end_date = request.args.get('end_date', '').strip()
         
@@ -2682,6 +2738,7 @@ def admin_audit_logs():
             user_id=user_id_filter,
             entity_type=entity_type,
             action=action,
+            search_text=search_text,
             start_date=start_date_obj,
             end_date=end_date_obj
         )
@@ -2695,6 +2752,7 @@ def admin_audit_logs():
             user_id=user_id_filter,
             entity_type=entity_type,
             action=action,
+            search_text=search_text,
             start_date=start_date_obj,
             end_date=end_date_obj
         )
@@ -2735,6 +2793,7 @@ def export_audit_logs():
         username = request.args.get('username', '').strip() or None
         action = request.args.get('action', '').strip() or None
         entity_type = request.args.get('entity_type', '').strip() or None
+        search_text = request.args.get('search_text', '').strip() or None
         start_date = request.args.get('start_date', '').strip()
         end_date = request.args.get('end_date', '').strip()
         
@@ -2752,6 +2811,7 @@ def export_audit_logs():
             offset=0,
             entity_type=entity_type,
             action=action,
+            search_text=search_text,
             start_date=start_date_obj,
             end_date=end_date_obj
         )

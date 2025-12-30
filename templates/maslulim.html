@@ -527,7 +527,12 @@ document.addEventListener('DOMContentLoaded', function() {
             content.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
             
             fetch(`/api/maslulim/${maslulId}/details`)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         const maslul = data.data;

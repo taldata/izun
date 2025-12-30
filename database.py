@@ -10,83 +10,40 @@ ISRAEL_TZ = ZoneInfo('Asia/Jerusalem')
 
 class DatabaseManager:
     def __init__(self, db_path: str = None):
-        # Check for PostgreSQL DATABASE_URL (AWS RDS)
-        self.database_url = os.environ.get('DATABASE_URL')
-        
-        if self.database_url:
-            self.db_type = 'postgresql'
-            print("Using PostgreSQL database")
-        else:
-            self.db_type = 'sqlite'
-            if db_path is None:
-                db_path = os.environ.get('DATABASE_PATH', 'committee_system.db')
-            self.db_path = db_path
-            db_dir = os.path.dirname(self.db_path)
-            if db_dir:
-                try:
+        # Use environment variable for database path, with fallback to local development path
+        if db_path is None:
+            db_path = os.environ.get('DATABASE_PATH', 'committee_system.db')
+        self.db_path = db_path
+        # Ensure directory exists for database file
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir:
+            try:
+                if not os.path.exists(db_dir):
                     os.makedirs(db_dir, exist_ok=True)
-                except Exception as e:
-                    print(f"Note: Could not create directory {db_dir}: {e}")
-            print(f"Using SQLite database: {self.db_path}")
-        
+            except (OSError, PermissionError) as e:
+                # On Render, /var/data might not be available during build phase
+                # This is okay - it will be available during runtime
+                print(f"Note: Could not create directory {db_dir}: {e}")
+                # Don't fail - the directory might already exist or will be created later
         self.init_database()
     
     def get_connection(self):
-        """Get database connection based on db_type"""
-        if self.db_type == 'postgresql':
-            import psycopg2
-            import psycopg2.extras
-            return psycopg2.connect(self.database_url)
-        else:
-            conn = sqlite3.connect(self.db_path, timeout=30.0)
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA busy_timeout=30000")
-            return conn
-
-    def get_placeholder(self):
-        """Return the correct placeholder for the database type"""
-        return '%s' if self.db_type == 'postgresql' else '?'
-
-    def adapt_query(self, query: str) -> str:
-        """Adapt SQL query for the current database type"""
-        if self.db_type == 'postgresql':
-            count = query.count('?')
-            for i in range(count):
-                query = query.replace('?', f'%s', 1)
-            query = query.replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'SERIAL PRIMARY KEY')
-            query = query.replace('CURRENT_TIMESTAMP', 'NOW()')
-            query = query.replace('DATETIME', 'TIMESTAMP')
-            query = query.replace('INSERT OR IGNORE', 'INSERT') # Simple fix, but better to use ON CONFLICT
-        return query
-
-    def execute(self, cursor, query: str, params: tuple = None) -> Any:
-        """Helper to execute adapted query with parameters"""
-        # Manual check for INSERT OR IGNORE specifically for PostgreSQL
-        if self.db_type == 'postgresql' and 'INSERT OR IGNORE' in query:
-            # This is a very targeted fix for the common case in this codebase
-            query = query.replace('INSERT OR IGNORE', 'INSERT')
-            if 'VALUES' in query:
-                # Basic attempt to add ON CONFLICT DO NOTHING
-                # This logic is fragile but covers the main usage in this app
-                query += ' ON CONFLICT DO NOTHING'
-
-        adapted = self.adapt_query(query)
-        if params:
-            return cursor.execute(adapted, params)
-        return cursor.execute(adapted)
+        """Get database connection with timeout and optimizations"""
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for better concurrency
+        conn.execute("PRAGMA busy_timeout=30000")  # 30 seconds timeout
+        return conn
     
     def init_database(self):
         """Initialize database with all required tables"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        def exec_sql(sql):
-            self.execute(cursor, sql)
+        self._migrate_database(cursor)
         
-        # Primary tables first
-        exec_sql('''
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS hativot (
-                hativa_id SERIAL PRIMARY KEY,
+                hativa_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
                 description TEXT,
                 color TEXT DEFAULT '#007bff',
@@ -95,9 +52,9 @@ class DatabaseManager:
             )
         ''')
         
-        exec_sql('''
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS maslulim (
-                maslul_id SERIAL PRIMARY KEY,
+                maslul_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 hativa_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 description TEXT,
@@ -107,9 +64,9 @@ class DatabaseManager:
             )
         ''')
         
-        exec_sql('''
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS committee_types (
-                committee_type_id SERIAL PRIMARY KEY,
+                committee_type_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 hativa_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 scheduled_day INTEGER NOT NULL,
@@ -122,20 +79,10 @@ class DatabaseManager:
                 UNIQUE(hativa_id, name)
             )
         ''')
-
-        exec_sql('''
-            CREATE TABLE IF NOT EXISTS exception_dates (
-                date_id SERIAL PRIMARY KEY,
-                exception_date DATE NOT NULL UNIQUE,
-                description TEXT,
-                type TEXT DEFAULT 'holiday',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
         
-        exec_sql('''
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS vaadot (
-                vaadot_id SERIAL PRIMARY KEY,
+                vaadot_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 committee_type_id INTEGER NOT NULL,
                 hativa_id INTEGER NOT NULL,
                 vaada_date DATE NOT NULL,
@@ -149,9 +96,19 @@ class DatabaseManager:
             )
         ''')
         
-        exec_sql('''
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS exception_dates (
+                date_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exception_date DATE NOT NULL UNIQUE,
+                description TEXT,
+                type TEXT DEFAULT 'holiday',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS events (
-                event_id SERIAL PRIMARY KEY,
+                event_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 vaadot_id INTEGER NOT NULL,
                 maslul_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
@@ -164,9 +121,9 @@ class DatabaseManager:
             )
         ''')
         
-        exec_sql('''
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
-                user_id SERIAL PRIMARY KEY,
+                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL UNIQUE,
                 email TEXT NOT NULL UNIQUE,
                 password_hash TEXT,
@@ -180,9 +137,10 @@ class DatabaseManager:
             )
         ''')
         
-        exec_sql('''
+        # Create user_hativot table for many-to-many relationship
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS user_hativot (
-                user_hativa_id SERIAL PRIMARY KEY,
+                user_hativa_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 hativa_id INTEGER NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -192,9 +150,10 @@ class DatabaseManager:
             )
         ''')
         
-        exec_sql('''
+        # Create hativa_day_constraints table for division day constraints
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS hativa_day_constraints (
-                constraint_id SERIAL PRIMARY KEY,
+                constraint_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 hativa_id INTEGER NOT NULL,
                 day_of_week INTEGER NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -203,9 +162,15 @@ class DatabaseManager:
             )
         ''')
         
-        exec_sql('''
+        # Create index for faster queries
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_hativa_day_constraints_hativa 
+            ON hativa_day_constraints (hativa_id)
+        ''')
+        
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS system_settings (
-                setting_id SERIAL PRIMARY KEY,
+                setting_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 setting_key TEXT NOT NULL UNIQUE,
                 setting_value TEXT NOT NULL,
                 description TEXT,
@@ -215,9 +180,10 @@ class DatabaseManager:
             )
         ''')
         
-        exec_sql('''
+        # Create audit logs table
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS audit_logs (
-                log_id SERIAL PRIMARY KEY,
+                log_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 user_id INTEGER,
                 username TEXT,
@@ -233,188 +199,221 @@ class DatabaseManager:
                 FOREIGN KEY (user_id) REFERENCES users (user_id)
             )
         ''')
+        
+        # Create index for faster log queries
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs (timestamp DESC)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs (user_id)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs (entity_type, entity_id)
+        ''')
 
-        exec_sql('''
+        # Create calendar sync tracking table
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS calendar_sync_events (
-                sync_id SERIAL PRIMARY KEY,
-                vaada_id INTEGER NOT NULL,
-                calendar_event_id TEXT NOT NULL,
-                last_synced TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (vaada_id) REFERENCES vaadot (vaadot_id) ON DELETE CASCADE,
-                UNIQUE(vaada_id)
+                sync_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_type TEXT NOT NULL CHECK (source_type IN ('vaadot', 'event_deadline')),
+                source_id INTEGER NOT NULL,
+                deadline_type TEXT,
+                calendar_event_id TEXT,
+                calendar_email TEXT NOT NULL,
+                last_synced TIMESTAMP,
+                sync_status TEXT DEFAULT 'pending' CHECK (sync_status IN ('pending', 'synced', 'failed', 'deleted')),
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(source_type, source_id, deadline_type, calendar_email)
             )
         ''')
 
-        self._migrate_database(cursor, conn)
-        self._create_default_admin(cursor)
-        self._insert_default_settings(cursor)
+        # Create indexes for faster calendar sync queries
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_calendar_sync_source ON calendar_sync_events (source_type, source_id)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_calendar_sync_status ON calendar_sync_events (sync_status)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_calendar_sync_calendar_id ON calendar_sync_events (calendar_event_id)
+        ''')
+
+        # Add content_hash column if it doesn't exist (for change detection)
+        try:
+            cursor.execute('ALTER TABLE calendar_sync_events ADD COLUMN content_hash TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        cursor.execute('''
+            INSERT OR IGNORE INTO system_settings (setting_key, setting_value, description)
+            VALUES 
+                ('editing_period_active', '1', 'Whether general editing is allowed (1=yes, 0=admin only)'),
+                ('academic_year_start', '2024-09-01', 'Start of current academic year'),
+                ('editing_deadline', '2024-10-31', 'Deadline for general user editing'),
+                ('work_days', '6,0,1,2,3,4', 'Working days (Python weekday: 0=Monday ... 6=Sunday)'),
+                ('work_start_time', '08:00', 'Daily work start time'),
+                ('work_end_time', '17:00', 'Daily work end time'),
+                ('sla_days_before', '14', 'Default SLA days before committee meeting'),
+                ('max_meetings_per_day', '1', 'Maximum number of committee meetings per calendar day'),
+                ('max_weekly_meetings', '3', 'Maximum number of committee meetings per standard week'),
+                ('max_third_week_meetings', '4', 'Maximum number of committee meetings during the third week of a month'),
+                ('max_requests_committee_date', '100', 'Maximum total expected requests on committee meeting date'),
+                ('show_deadline_dates_in_calendar', '1', 'Show derived deadline dates in calendar (1=yes, 0=no)'),
+                ('rec_base_score', '100', 'Committee recommendation base score'),
+                ('rec_best_bonus', '25', 'Bonus for best recommendation'),
+                ('rec_space_bonus', '10', 'Bonus for available space'),
+                ('rec_sla_bonus', '20', 'Maximum bonus for SLA buffer'),
+                ('rec_optimal_range_bonus', '15', 'Bonus for optimal time range'),
+                ('rec_no_events_bonus', '5', 'Bonus for committee with no events'),
+                ('rec_high_load_penalty', '15', 'Penalty for high event load (7+ events)'),
+                ('rec_medium_load_penalty', '5', 'Penalty for medium event load (4-6 events)'),
+                ('rec_no_space_penalty', '50', 'Penalty for no available space'),
+                ('rec_no_sla_penalty', '30', 'Penalty for insufficient SLA time'),
+                ('rec_tight_sla_penalty', '10', 'Penalty for tight SLA time'),
+                ('rec_far_future_penalty', '10', 'Penalty for dates too far in future'),
+                ('rec_week_full_penalty', '20', 'Penalty for full week'),
+                ('rec_optimal_range_start', '0', 'Optimal range start (days after SLA)'),
+                ('rec_optimal_range_end', '30', 'Optimal range end (days after SLA)'),
+                ('rec_far_future_threshold', '60', 'Days considered too far in future (after optimal range)'),
+                ('ad_enabled', '0', 'Enable Active Directory authentication (1=yes, 0=no)'),
+                ('ad_server_url', '', 'Active Directory server URL (e.g., ad.domain.com)'),
+                ('ad_port', '636', 'AD server port (636 for LDAPS, 389 for LDAP)'),
+                ('ad_use_ssl', '1', 'Use SSL/LDAPS (1=yes, 0=no)'),
+                ('ad_use_tls', '0', 'Use STARTTLS (1=yes, 0=no)'),
+                ('ad_base_dn', '', 'Base DN (e.g., DC=domain,DC=com)'),
+                ('ad_bind_dn', '', 'Service account DN for binding'),
+                ('ad_bind_password', '', 'Service account password'),
+                ('ad_user_search_base', '', 'User search base DN (defaults to base_dn)'),
+                ('ad_user_search_filter', '(sAMAccountName={username})', 'LDAP filter for user search'),
+                ('ad_group_search_base', '', 'Group search base DN (defaults to base_dn)'),
+                ('ad_admin_group', '', 'AD group name/DN for admin role'),
+                ('ad_manager_group', '', 'AD group name/DN for manager role'),
+                ('ad_auto_create_users', '1', 'Automatically create users on first AD login (1=yes, 0=no)'),
+                ('ad_default_hativa_id', '', 'Default division ID for new AD users'),
+                ('ad_sync_on_login', '1', 'Sync user info from AD on each login (1=yes, 0=no)'),
+                ('calendar_sync_enabled', '1', 'Enable automatic calendar synchronization (1=yes, 0=no)'),
+                ('calendar_sync_email', 'plan@innovationisrael.org.il', 'Email address of the shared calendar to sync to'),
+                ('calendar_sync_interval_hours', '1', 'How often to sync calendar (in hours)')
+        ''')
         
         conn.commit()
         conn.close()
-
-    def _create_default_admin(self, cursor):
+        
+        self._create_default_admin()
+        
+    
+    def _create_default_admin(self):
         """Create default admin user if no users exist"""
-        self.execute(cursor, 'SELECT COUNT(*) FROM users')
-        if cursor.fetchone()[0] == 0:
-            import hashlib
-            pwd_hash = hashlib.sha256('admin123'.encode()).hexdigest()
-            ph = self.get_placeholder()
-            self.execute(cursor, f'''
-                INSERT INTO users (username, email, password_hash, full_name, role, is_active)
-                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, 1)
-            ''', ('admin', 'admin@example.com', pwd_hash, 'מנהל מערכת', 'admin'))
-
-    def _insert_default_settings(self, cursor):
-        """Insert default system settings if they don't exist"""
-        settings = [
-            ('editing_period_active', '1', 'Whether general editing is allowed'),
-            ('show_deadline_dates_in_calendar', '0', 'Show deadline dates in calendar'),
-            ('ad_auto_create_users', '1', 'Auto-create users from AD'),
-            ('calendar_sync_enabled', '1', 'Enable calendar sync'),
-            ('calendar_sync_email', 'plan@innovationisrael.org.il', 'Calendar sync email')
-        ]
-        ph = self.get_placeholder()
-        for key, val, desc in settings:
-            if self.db_type == 'postgresql':
-                self.execute(cursor, f'''
-                    INSERT INTO system_settings (setting_key, setting_value, description)
-                    VALUES ({ph}, {ph}, {ph})
-                    ON CONFLICT (setting_key) DO NOTHING
-                ''', (key, val, desc))
-            else:
-                self.execute(cursor, f'''
-                    INSERT OR IGNORE INTO system_settings (setting_key, setting_value, description)
-                    VALUES ({ph}, {ph}, {ph})
-                ''', (key, val, desc))
-
-    def _pg_migrate_columns(self, conn):
-        """Migrate PostgreSQL database to add new columns if they don't exist"""
+        conn = self.get_connection()
         cursor = conn.cursor()
         
-        def column_exists(table_name, column_name):
-            cursor.execute("""
-                SELECT COUNT(*) FROM information_schema.columns 
-                WHERE table_name = %s AND column_name = %s
-            """, (table_name, column_name))
-            return cursor.fetchone()[0] > 0
+        cursor.execute('SELECT COUNT(*) FROM users')
+        user_count = cursor.fetchone()[0]
         
-        def add_column_if_missing(table_name, column_name, column_def):
-            if not column_exists(table_name, column_name):
-                try:
-                    cursor.execute(f'ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}')
-                    print(f"Added column {column_name} to {table_name}")
-                except Exception as e:
-                    print(f"Warning: Could not add column {column_name} to {table_name}: {e}")
+        if user_count == 0:
+            import hashlib
+            password_hash = hashlib.sha256('admin123'.encode()).hexdigest()
+            
+            cursor.execute('''
+                INSERT INTO users (username, email, password_hash, full_name, role, is_active)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', ('admin', 'admin@example.com', password_hash, 'מנהל מערכת', 'admin', 1))
+            
         
-        try:
-            # Add columns to vaadot table
-            add_column_if_missing('vaadot', 'vaada_date', 'DATE')
-            add_column_if_missing('vaadot', 'exception_date_id', 'INTEGER REFERENCES exception_dates(date_id)')
-            add_column_if_missing('vaadot', 'is_deleted', 'INTEGER DEFAULT 0')
-            add_column_if_missing('vaadot', 'deleted_at', 'TIMESTAMP')
-            add_column_if_missing('vaadot', 'deleted_by', 'INTEGER')
-            
-            # Add columns to committee_types table
-            add_column_if_missing('committee_types', 'hativa_id', 'INTEGER DEFAULT 1')
-            add_column_if_missing('committee_types', 'is_active', 'INTEGER DEFAULT 1')
-            add_column_if_missing('committee_types', 'description', 'TEXT')
-            add_column_if_missing('committee_types', 'is_operational', 'INTEGER DEFAULT 0')
-            
-            # Add columns to hativot table
-            add_column_if_missing('hativot', 'color', 'TEXT DEFAULT \'#007bff\'')
-            add_column_if_missing('hativot', 'is_active', 'INTEGER DEFAULT 1')
-            
-            # Add columns to users table
-            add_column_if_missing('users', 'auth_source', 'TEXT DEFAULT \'local\'')
-            add_column_if_missing('users', 'ad_dn', 'TEXT')
-            
-            # Add columns to maslulim table
-            add_column_if_missing('maslulim', 'is_active', 'INTEGER DEFAULT 1')
-            add_column_if_missing('maslulim', 'stage_a_easy_days', 'INTEGER DEFAULT 5')
-            add_column_if_missing('maslulim', 'stage_a_review_days', 'INTEGER DEFAULT 5')
-            add_column_if_missing('maslulim', 'stage_b_easy_days', 'INTEGER DEFAULT 8')
-            add_column_if_missing('maslulim', 'stage_b_review_days', 'INTEGER DEFAULT 7')
-            add_column_if_missing('maslulim', 'stage_c_easy_days', 'INTEGER DEFAULT 5')
-            add_column_if_missing('maslulim', 'stage_c_review_days', 'INTEGER DEFAULT 5')
-            add_column_if_missing('maslulim', 'stage_d_easy_days', 'INTEGER DEFAULT 5')
-            add_column_if_missing('maslulim', 'stage_d_review_days', 'INTEGER DEFAULT 5')
-            add_column_if_missing('maslulim', 'call_publication_date', 'DATE')
-            
-            # Add columns to events table
-            add_column_if_missing('events', 'call_publication_date', 'DATE')
-            add_column_if_missing('events', 'call_deadline_date', 'DATE')
-            add_column_if_missing('events', 'intake_deadline_date', 'DATE')
-            add_column_if_missing('events', 'review_deadline_date', 'DATE')
-            add_column_if_missing('events', 'response_deadline_date', 'DATE')
-            add_column_if_missing('events', 'is_call_deadline_manual', 'INTEGER DEFAULT 0')
-            add_column_if_missing('events', 'actual_submissions', 'INTEGER DEFAULT 0')
-            add_column_if_missing('events', 'scheduled_date', 'DATE')
-            add_column_if_missing('events', 'is_deleted', 'INTEGER DEFAULT 0')
-            add_column_if_missing('events', 'deleted_at', 'TIMESTAMP')
-            add_column_if_missing('events', 'deleted_by', 'INTEGER')
-            
-            # Map old roles to new roles
-            try:
-                cursor.execute("UPDATE users SET role = 'editor' WHERE role = 'manager'")
-                cursor.execute("UPDATE users SET role = 'viewer' WHERE role = 'user'")
-            except Exception:
-                pass
-            
-            conn.commit()
-        except Exception as e:
-            print(f"PostgreSQL migration error: {e}")
-            conn.rollback()
-
-    def _migrate_database(self, cursor, conn=None):
+        conn.commit()
+        conn.close()
+    
+    def _migrate_database(self, cursor):
         """Migrate existing database to add new columns if they don't exist"""
-        if self.db_type == 'postgresql':
-            if conn:
-                self._pg_migrate_columns(conn)
-            return
-
         try:
-            self.execute(cursor, "PRAGMA table_info(vaadot)")
+            cursor.execute("PRAGMA table_info(vaadot)")
             vaadot_columns = [column[1] for column in cursor.fetchall()]
             
             if 'vaada_date' not in vaadot_columns:
-                self.execute(cursor, 'ALTER TABLE vaadot ADD COLUMN vaada_date DATE')
+                cursor.execute('ALTER TABLE vaadot ADD COLUMN vaada_date DATE')
             
             if 'exception_date_id' not in vaadot_columns:
-                self.execute(cursor, 'ALTER TABLE vaadot ADD COLUMN exception_date_id INTEGER REFERENCES exception_dates(date_id)')
+                cursor.execute('ALTER TABLE vaadot ADD COLUMN exception_date_id INTEGER REFERENCES exception_dates(date_id)')
             
-            self.execute(cursor, "PRAGMA table_info(committee_types)")
+            cursor.execute("PRAGMA table_info(committee_types)")
             committee_types_columns = [column[1] for column in cursor.fetchall()]
             
             if 'hativa_id' not in committee_types_columns:
-                self.execute(cursor, 'ALTER TABLE committee_types ADD COLUMN hativa_id INTEGER DEFAULT 1')
+                cursor.execute('ALTER TABLE committee_types ADD COLUMN hativa_id INTEGER DEFAULT 1')
             
-            self.execute(cursor, "PRAGMA table_info(hativot)")
+            cursor.execute("PRAGMA table_info(hativot)")
             hativot_columns = [column[1] for column in cursor.fetchall()]
             
             if 'color' not in hativot_columns:
-                self.execute(cursor, 'ALTER TABLE hativot ADD COLUMN color TEXT DEFAULT "#007bff"')
+                cursor.execute('ALTER TABLE hativot ADD COLUMN color TEXT DEFAULT "#007bff"')
             
-            self.execute(cursor, "PRAGMA table_info(users)")
+            # Migrate users table for AD support
+            cursor.execute("PRAGMA table_info(users)")
             users_columns = [column[1] for column in cursor.fetchall()]
             
             if 'auth_source' not in users_columns:
-                self.execute(cursor, "ALTER TABLE users ADD COLUMN auth_source TEXT DEFAULT 'local' CHECK (auth_source IN ('local', 'ad'))")
+                cursor.execute("ALTER TABLE users ADD COLUMN auth_source TEXT DEFAULT 'local' CHECK (auth_source IN ('local', 'ad'))")
             
             if 'ad_dn' not in users_columns:
-                self.execute(cursor, 'ALTER TABLE users ADD COLUMN ad_dn TEXT')
+                cursor.execute('ALTER TABLE users ADD COLUMN ad_dn TEXT')
             
-            # Map old roles to new roles
+            # Migrate user roles from old system (admin/manager/user) to new system (admin/editor/viewer)
             try:
-                self.execute(cursor, "UPDATE users SET role = 'editor' WHERE role = 'manager'")
-                self.execute(cursor, "UPDATE users SET role = 'viewer' WHERE role = 'user'")
-            except Exception:
-                pass
+                # Check if hativa_id column exists in users table (legacy column)
+                cursor.execute("PRAGMA table_info(users)")
+                users_columns = [column[1] for column in cursor.fetchall()]
+                has_hativa_id = 'hativa_id' in users_columns
+                
+                if has_hativa_id:
+                    # Legacy migration: migrate hativa_id from users table to user_hativot
+                    cursor.execute("SELECT user_id, role, hativa_id FROM users WHERE role IN ('manager', 'user')")
+                    old_role_users = cursor.fetchall()
+                    
+                    for user_id, old_role, hativa_id in old_role_users:
+                        # Map old roles to new roles
+                        if old_role == 'manager':
+                            new_role = 'editor'
+                        elif old_role == 'user':
+                            new_role = 'viewer'
+                        else:
+                            continue  # admin stays admin
+                        
+                        cursor.execute("UPDATE users SET role = ? WHERE user_id = ?", (new_role, user_id))
+                        
+                        # If user had a hativa_id, migrate it to user_hativot table
+                        if hativa_id:
+                            cursor.execute("""
+                                INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
+                                VALUES (?, ?)
+                            """, (user_id, hativa_id))
+                    
+                    # Also migrate admin users with hativa_id
+                    cursor.execute("SELECT user_id, hativa_id FROM users WHERE role = 'admin' AND hativa_id IS NOT NULL")
+                    admin_users = cursor.fetchall()
+                    for user_id, hativa_id in admin_users:
+                        cursor.execute("""
+                            INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
+                            VALUES (?, ?)
+                        """, (user_id, hativa_id))
+                else:
+                    # New schema: just migrate old role names if they exist
+                    cursor.execute("UPDATE users SET role = 'editor' WHERE role = 'manager'")
+                    cursor.execute("UPDATE users SET role = 'viewer' WHERE role = 'user'")
+                    
+            except Exception as e:
+                print(f"Role migration note: {e}")
             
-            # Add more table columns if needed
             tables_columns = {
                 'hativot': [('is_active', 'INTEGER DEFAULT 1')],
                 'maslulim': [
-                    ('is_active', 'INTEGER DEFAULT 1'),
+                    ('is_active', 'INTEGER DEFAULT 1'), 
+                    ('sla_days', 'INTEGER DEFAULT 45'),
+                    ('stage_a_days', 'INTEGER DEFAULT 10'),
+                    ('stage_b_days', 'INTEGER DEFAULT 15'),
+                    ('stage_c_days', 'INTEGER DEFAULT 10'),
+                    ('stage_d_days', 'INTEGER DEFAULT 10'),
                     ('stage_a_easy_days', 'INTEGER DEFAULT 5'),
                     ('stage_a_review_days', 'INTEGER DEFAULT 5'),
                     ('stage_b_easy_days', 'INTEGER DEFAULT 8'),
@@ -433,7 +432,9 @@ class DatabaseManager:
                 'vaadot': [
                     ('is_deleted', 'INTEGER DEFAULT 0'),
                     ('deleted_at', 'TIMESTAMP'),
-                    ('deleted_by', 'INTEGER')
+                    ('deleted_by', 'INTEGER'),
+                    ('start_time', 'TIME'),
+                    ('end_time', 'TIME')
                 ],
                 'events': [
                     ('call_publication_date', 'DATE'),
@@ -451,12 +452,12 @@ class DatabaseManager:
             }
             
             for table_name, columns in tables_columns.items():
-                self.execute(cursor, f"PRAGMA table_info({table_name})")
+                cursor.execute(f"PRAGMA table_info({table_name})")
                 existing_columns = [column[1] for column in cursor.fetchall()]
                 
                 for column_name, column_def in columns:
                     if column_name not in existing_columns:
-                        self.execute(cursor, f'ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}')
+                        cursor.execute(f'ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}')
                 
         except Exception as e:
             print(f"Migration error: {e}")
@@ -465,7 +466,7 @@ class DatabaseManager:
         """Add a new division"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, 'INSERT INTO hativot (name, description, color) VALUES (?, ?, ?)', (name, description, color))
+        cursor.execute('INSERT INTO hativot (name, description, color) VALUES (?, ?, ?)', (name, description, color))
         hativa_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -475,7 +476,7 @@ class DatabaseManager:
         """Get all divisions"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, 'SELECT hativa_id, name, description, color, is_active, created_at FROM hativot ORDER BY name')
+        cursor.execute('SELECT hativa_id, name, description, color, is_active, created_at FROM hativot ORDER BY name')
         rows = cursor.fetchall()
         conn.close()
         
@@ -492,7 +493,7 @@ class DatabaseManager:
         """Get allowed days of week for a division"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT day_of_week 
             FROM hativa_day_constraints 
             WHERE hativa_id = ?
@@ -514,11 +515,11 @@ class DatabaseManager:
                 raise ValueError(f'יום לא תקין: {day}. יש לבחור יום בין 0 (שני) ל-6 (ראשון)')
         
         # Delete existing constraints
-        self.execute(cursor, 'DELETE FROM hativa_day_constraints WHERE hativa_id = ?', (hativa_id,))
+        cursor.execute('DELETE FROM hativa_day_constraints WHERE hativa_id = ?', (hativa_id,))
         
         # Insert new constraints
         for day in allowed_days:
-            self.execute(cursor, '''
+            cursor.execute('''
                 INSERT INTO hativa_day_constraints (hativa_id, day_of_week)
                 VALUES (?, ?)
             ''', (hativa_id, day))
@@ -546,7 +547,7 @@ class DatabaseManager:
         """Update division color"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, 'UPDATE hativot SET color = ? WHERE hativa_id = ?', (color, hativa_id))
+        cursor.execute('UPDATE hativot SET color = ? WHERE hativa_id = ?', (color, hativa_id))
         success = cursor.rowcount > 0
         conn.commit()
         conn.close()
@@ -556,7 +557,7 @@ class DatabaseManager:
         """Update division details"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             UPDATE hativot 
             SET name = ?, description = ?, color = ?
             WHERE hativa_id = ?
@@ -572,7 +573,7 @@ class DatabaseManager:
         """Add a new route to a division"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''INSERT INTO maslulim (hativa_id, name, description, sla_days, stage_a_days, stage_b_days, stage_c_days, stage_d_days) 
+        cursor.execute('''INSERT INTO maslulim (hativa_id, name, description, sla_days, stage_a_days, stage_b_days, stage_c_days, stage_d_days) 
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
                       (hativa_id, name, description, sla_days, stage_a_days, stage_b_days, stage_c_days, stage_d_days))
         maslul_id = cursor.lastrowid
@@ -586,7 +587,7 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         if hativa_id:
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT m.maslul_id, m.hativa_id, m.name, m.description, m.is_active, m.created_at,
                        m.sla_days, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days,
                        h.name as hativa_name
@@ -596,7 +597,7 @@ class DatabaseManager:
                 ORDER BY m.name
             ''', (hativa_id,))
         else:
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT m.maslul_id, m.hativa_id, m.name, m.description, m.is_active, m.created_at,
                        m.sla_days, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days,
                        h.name as hativa_name
@@ -623,7 +624,7 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        self.execute(cursor, '''
+        cursor.execute('''
             UPDATE maslulim 
             SET name = ?, description = ?, sla_days = ?, stage_a_days = ?, stage_b_days = ?, stage_c_days = ?, stage_d_days = ?, is_active = ?
             WHERE maslul_id = ?
@@ -640,7 +641,7 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         # Check if maslul is used in any events (including deleted ones)
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT COUNT(*) FROM events WHERE maslul_id = ?
         ''', (maslul_id,))
         events_count = cursor.fetchone()[0]
@@ -649,7 +650,7 @@ class DatabaseManager:
             conn.close()
             raise ValueError(f'לא ניתן למחוק מסלול המשויך ל-{events_count} אירועים. יש למחוק תחילה את האירועים הקשורים.')
         
-        self.execute(cursor, 'DELETE FROM maslulim WHERE maslul_id = ?', (maslul_id,))
+        cursor.execute('DELETE FROM maslulim WHERE maslul_id = ?', (maslul_id,))
         
         success = cursor.rowcount > 0
         conn.commit()
@@ -661,7 +662,7 @@ class DatabaseManager:
         """Add an exception date (holiday, sabbath, etc.)"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, 'INSERT OR IGNORE INTO exception_dates (exception_date, description, type) VALUES (?, ?, ?)', 
+        cursor.execute('INSERT OR IGNORE INTO exception_dates (exception_date, description, type) VALUES (?, ?, ?)', 
                       (exception_date, description, date_type))
         conn.commit()
         conn.close()
@@ -672,10 +673,10 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         if include_past:
-            self.execute(cursor, 'SELECT * FROM exception_dates ORDER BY exception_date DESC')
+            cursor.execute('SELECT * FROM exception_dates ORDER BY exception_date DESC')
         else:
             today = date.today()
-            self.execute(cursor, 'SELECT * FROM exception_dates WHERE exception_date >= ? ORDER BY exception_date', (today,))
+            cursor.execute('SELECT * FROM exception_dates WHERE exception_date >= ? ORDER BY exception_date', (today,))
         
         rows = cursor.fetchall()
         conn.close()
@@ -687,7 +688,7 @@ class DatabaseManager:
         """Get a specific exception date by ID"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, 'SELECT * FROM exception_dates WHERE date_id = ?', (date_id,))
+        cursor.execute('SELECT * FROM exception_dates WHERE date_id = ?', (date_id,))
         row = cursor.fetchone()
         conn.close()
         
@@ -701,7 +702,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, '''
+            cursor.execute('''
                 UPDATE exception_dates 
                 SET exception_date = ?, description = ?, type = ?
                 WHERE date_id = ?
@@ -721,14 +722,14 @@ class DatabaseManager:
             cursor = conn.cursor()
             
             # Check if any committees are linked to this exception date (excluding deleted)
-            self.execute(cursor, 'SELECT COUNT(*) FROM vaadot WHERE exception_date_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (date_id,))
+            cursor.execute('SELECT COUNT(*) FROM vaadot WHERE exception_date_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (date_id,))
             linked_count = cursor.fetchone()[0]
             
             if linked_count > 0:
                 conn.close()
                 return False  # Cannot delete if committees are linked
             
-            self.execute(cursor, 'DELETE FROM exception_dates WHERE date_id = ?', (date_id,))
+            cursor.execute('DELETE FROM exception_dates WHERE date_id = ?', (date_id,))
             success = cursor.rowcount > 0
             conn.commit()
             conn.close()
@@ -741,7 +742,7 @@ class DatabaseManager:
         """Check if a date is an exception date"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, 'SELECT COUNT(*) FROM exception_dates WHERE exception_date = ?', (check_date,))
+        cursor.execute('SELECT COUNT(*) FROM exception_dates WHERE exception_date = ?', (check_date,))
         count = cursor.fetchone()[0]
         conn.close()
         return count > 0
@@ -752,7 +753,7 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         # Get all events with their committee dates and maslul stage information
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT e.event_id, v.vaada_date, 
                    m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days
             FROM events e
@@ -777,7 +778,7 @@ class DatabaseManager:
             stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
             
             # Update the event with new deadline dates
-            self.execute(cursor, '''
+            cursor.execute('''
                 UPDATE events 
                 SET call_deadline_date = ?,
                     intake_deadline_date = ?,
@@ -803,7 +804,7 @@ class DatabaseManager:
         cursor = conn.cursor()
 
         # Get the maslul's current stage information
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT stage_a_days, stage_b_days, stage_c_days, stage_d_days
             FROM maslulim
             WHERE maslul_id = ?
@@ -817,7 +818,7 @@ class DatabaseManager:
         stage_a_days, stage_b_days, stage_c_days, stage_d_days = maslul_row
 
         # Get all events for this maslul with their committee dates
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT e.event_id, v.vaada_date
             FROM events e
             JOIN vaadot v ON e.vaadot_id = v.vaadot_id
@@ -841,7 +842,7 @@ class DatabaseManager:
             stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
 
             # Update the event with new deadline dates
-            self.execute(cursor, '''
+            cursor.execute('''
                 UPDATE events
                 SET call_deadline_date = ?,
                     intake_deadline_date = ?,
@@ -867,7 +868,7 @@ class DatabaseManager:
         """Add a new committee type"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             INSERT INTO committee_types (hativa_id, name, scheduled_day, frequency, week_of_month, description, is_operational)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (hativa_id, name, scheduled_day, frequency, week_of_month, description, is_operational))
@@ -882,7 +883,7 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         if hativa_id:
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT ct.committee_type_id, ct.hativa_id, ct.name, ct.scheduled_day, 
                        ct.frequency, ct.week_of_month, ct.description, ct.is_operational, h.name as hativa_name 
                 FROM committee_types ct
@@ -891,7 +892,7 @@ class DatabaseManager:
                 ORDER BY ct.scheduled_day
             ''', (hativa_id,))
         else:
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT ct.committee_type_id, ct.hativa_id, ct.name, ct.scheduled_day, 
                        ct.frequency, ct.week_of_month, ct.description, ct.is_operational, h.name as hativa_name 
                 FROM committee_types ct
@@ -914,7 +915,7 @@ class DatabaseManager:
         """Update an existing committee type"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             UPDATE committee_types 
             SET hativa_id = ?, name = ?, scheduled_day = ?, frequency = ?, week_of_month = ?, description = ?, is_operational = ?
             WHERE committee_type_id = ?
@@ -930,22 +931,23 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         # Check if there are any vaadot using this committee type (excluding deleted)
-        self.execute(cursor, 'SELECT COUNT(*) FROM vaadot WHERE committee_type_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (committee_type_id,))
+        cursor.execute('SELECT COUNT(*) FROM vaadot WHERE committee_type_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (committee_type_id,))
         vaadot_count = cursor.fetchone()[0]
         
         if vaadot_count > 0:
             conn.close()
             return False  # Cannot delete committee type with existing meetings
         
-        self.execute(cursor, 'DELETE FROM committee_types WHERE committee_type_id = ?', (committee_type_id,))
+        cursor.execute('DELETE FROM committee_types WHERE committee_type_id = ?', (committee_type_id,))
         success = cursor.rowcount > 0
         conn.commit()
         conn.close()
         return success
     
     # Vaadot operations (specific meeting instances)
-    def add_vaada(self, committee_type_id: int, hativa_id: int, vaada_date: date, 
-                  notes: str = "", created_by: int = None, override_constraints: bool = False) -> tuple[int, str]:
+    def add_vaada(self, committee_type_id: int, hativa_id: int, vaada_date: date,
+                  notes: str = "", start_time: str = None, end_time: str = None,
+                  created_by: int = None, override_constraints: bool = False) -> tuple[int, str]:
         """
         Add a new committee meeting with constraint checking
         Returns: (vaadot_id, warning_message)
@@ -1000,7 +1002,7 @@ class DatabaseManager:
                     warning_message += f'\n⚠️ אזהרה: השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. הוספת ועדה נוספת תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit}).'
 
             # Check if a committee meeting with the same type, division, and date already exists
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT vaadot_id, ct.name as committee_name, h.name as hativa_name
                 FROM vaadot v
                 JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
@@ -1018,10 +1020,25 @@ class DatabaseManager:
                     conn.close()
                     raise ValueError(f'כבר קיימת ועדה מסוג "{existing_name}" בחטיבת "{existing_hativa}" בתאריך {vaada_date}. לא ניתן ליצור ועדה נוספת מאותו סוג באותה חטיבה באותו תאריך.')
 
-            self.execute(cursor, '''
-                INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, notes)
-                VALUES (?, ?, ?, ?)
-            ''', (committee_type_id, hativa_id, vaada_date, notes))
+            # Set default times based on committee type if not provided
+            if start_time is None or end_time is None:
+                cursor.execute('''
+                    SELECT is_operational FROM committee_types
+                    WHERE committee_type_id = ?
+                ''', (committee_type_id,))
+                committee_type = cursor.fetchone()
+                if committee_type:
+                    is_operational = committee_type[0]
+                    # Set defaults: Regular committee 09:00-15:00, Operational 09:00-11:00
+                    if start_time is None:
+                        start_time = '09:00'
+                    if end_time is None:
+                        end_time = '11:00' if is_operational else '15:00'
+
+            cursor.execute('''
+                INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, notes, start_time, end_time)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (committee_type_id, hativa_id, vaada_date, notes, start_time, end_time))
             vaadot_id = cursor.lastrowid
             conn.commit()
             conn.close()
@@ -1047,7 +1064,7 @@ class DatabaseManager:
         
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT COUNT(*) 
             FROM vaadot v
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
@@ -1066,10 +1083,11 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         query = '''
-            SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date, 
+            SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date,
                    v.exception_date_id, v.notes, v.created_at,
                    ct.name as committee_name, ct.is_operational, h.name as hativa_name,
-                   ed.exception_date, ed.description as exception_description, ed.type as exception_type
+                   ed.exception_date, ed.description as exception_description, ed.type as exception_type,
+                   v.start_time, v.end_time
             FROM vaadot v
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
             JOIN hativot h ON v.hativa_id = h.hativa_id
@@ -1095,15 +1113,15 @@ class DatabaseManager:
             
         query += ' ORDER BY v.vaada_date, ct.name'
         
-        self.execute(cursor, query, params)
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         conn.close()
         
         return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2],
                 'vaada_date': row[3], 'exception_date_id': row[4],
                 'notes': row[5], 'created_at': row[6], 'committee_name': row[7], 'is_operational': row[8], 'hativa_name': row[9],
-                'exception_date': row[10], 'exception_description': row[11], 
-                'exception_type': row[12]} for row in rows]
+                'exception_date': row[10], 'exception_description': row[11],
+                'exception_type': row[12], 'start_time': row[13], 'end_time': row[14]} for row in rows]
 
     def duplicate_vaada_with_events(self, source_vaadot_id: int, target_date: date, created_by: Optional[int] = None,
                                     override_constraints: bool = False) -> Dict:
@@ -1155,7 +1173,9 @@ class DatabaseManager:
     
     def update_vaada(self, vaadot_id: int, committee_type_id: int, hativa_id: int,
                      vaada_date: date,
-                     exception_date_id: Optional[int] = None, notes: str = "", user_role: Optional[str] = None) -> bool:
+                     exception_date_id: Optional[int] = None, notes: str = "",
+                     start_time: str = None, end_time: str = None,
+                     user_role: Optional[str] = None) -> bool:
         """Update committee meeting details including date, type, division, and notes"""
         conn = None
         try:
@@ -1166,7 +1186,7 @@ class DatabaseManager:
             cursor = conn.cursor()
 
             # Ensure committee type belongs to the same division as selected hativa
-            self.execute(cursor, 'SELECT hativa_id FROM committee_types WHERE committee_type_id = ?', (committee_type_id,))
+            cursor.execute('SELECT hativa_id FROM committee_types WHERE committee_type_id = ?', (committee_type_id,))
             ct_row = cursor.fetchone()
             if not ct_row:
                 raise ValueError("סוג הועדה לא נמצא")
@@ -1186,7 +1206,7 @@ class DatabaseManager:
             constraint_settings = self.get_constraint_settings()
 
             max_per_day = constraint_settings['max_meetings_per_day']
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT COUNT(*) FROM vaadot 
                 WHERE vaada_date = ? AND vaadot_id != ?
                   AND (is_deleted = 0 OR is_deleted IS NULL)
@@ -1206,12 +1226,27 @@ class DatabaseManager:
                 new_count = weekly_count + 1
                 raise ValueError(f"השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. העברת הועדה תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit})")
 
-            self.execute(cursor, '''
+            # Set default times based on committee type if not provided
+            if start_time is None or end_time is None:
+                cursor.execute('''
+                    SELECT is_operational FROM committee_types
+                    WHERE committee_type_id = ?
+                ''', (committee_type_id,))
+                committee_type = cursor.fetchone()
+                if committee_type:
+                    is_operational = committee_type[0]
+                    # Set defaults: Regular committee 09:00-15:00, Operational 09:00-11:00
+                    if start_time is None:
+                        start_time = '09:00'
+                    if end_time is None:
+                        end_time = '11:00' if is_operational else '15:00'
+
+            cursor.execute('''
                 UPDATE vaadot
                 SET committee_type_id = ?, hativa_id = ?, vaada_date = ?,
-                    exception_date_id = ?, notes = ?
+                    exception_date_id = ?, notes = ?, start_time = ?, end_time = ?
                 WHERE vaadot_id = ?
-            ''', (committee_type_id, hativa_id, vaada_date, exception_date_id, notes, vaadot_id))
+            ''', (committee_type_id, hativa_id, vaada_date, exception_date_id, notes, start_time, end_time, vaadot_id))
 
             success = cursor.rowcount > 0
             conn.commit()
@@ -1240,7 +1275,7 @@ class DatabaseManager:
             cursor = conn.cursor()
 
             # Get hativa_id for this committee to check day constraints
-            self.execute(cursor, 'SELECT hativa_id FROM vaadot WHERE vaadot_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (vaadot_id,))
+            cursor.execute('SELECT hativa_id FROM vaadot WHERE vaadot_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (vaadot_id,))
             hativa_row = cursor.fetchone()
             if hativa_row:
                 hativa_id = hativa_row[0]
@@ -1256,7 +1291,7 @@ class DatabaseManager:
             # Enforce daily limit excluding the current meeting
             constraint_settings = self.get_constraint_settings()
             max_per_day = constraint_settings['max_meetings_per_day']
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT COUNT(*) FROM vaadot
                 WHERE vaada_date = ? AND vaadot_id != ?
                   AND (is_deleted = 0 OR is_deleted IS NULL)
@@ -1275,7 +1310,7 @@ class DatabaseManager:
                 raise ValueError(f"השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. העברת הועדה תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit})")
 
             # Check constraints on derived dates for all events in this committee
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT e.event_id, e.expected_requests, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days
                 FROM events e
                 JOIN maslulim m ON e.maslul_id = m.maslul_id
@@ -1303,7 +1338,7 @@ class DatabaseManager:
             conn = self.get_connection()
             cursor = conn.cursor()
 
-            self.execute(cursor, '''
+            cursor.execute('''
                 UPDATE vaadot 
                 SET vaada_date = ?, exception_date_id = ?
                 WHERE vaadot_id = ?
@@ -1332,7 +1367,7 @@ class DatabaseManager:
             cursor = conn.cursor()
             
             # Soft delete the vaada
-            self.execute(cursor, '''
+            cursor.execute('''
                 UPDATE vaadot 
                 SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
                 WHERE vaadot_id = ?
@@ -1341,7 +1376,7 @@ class DatabaseManager:
             
             # Also soft delete related events
             if success:
-                self.execute(cursor, '''
+                cursor.execute('''
                     UPDATE events 
                     SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
                     WHERE vaadot_id = ? AND is_deleted = 0
@@ -1370,18 +1405,18 @@ class DatabaseManager:
         try:
             cursor = conn.cursor()
             # Count related events before deletion
-            self.execute(cursor, f'SELECT COUNT(*) FROM events WHERE vaadot_id IN ({placeholders}) AND is_deleted = 0', ids)
+            cursor.execute(f'SELECT COUNT(*) FROM events WHERE vaadot_id IN ({placeholders}) AND is_deleted = 0', ids)
             events_count = cursor.fetchone()[0] or 0
             
             # Soft delete related events first
-            self.execute(cursor, f'''
+            cursor.execute(f'''
                 UPDATE events 
                 SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
                 WHERE vaadot_id IN ({placeholders}) AND is_deleted = 0
             ''', [datetime.now(ISRAEL_TZ), user_id] + ids)
             
             # Soft delete committees
-            self.execute(cursor, f'''
+            cursor.execute(f'''
                 UPDATE vaadot 
                 SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
                 WHERE vaadot_id IN ({placeholders}) AND is_deleted = 0
@@ -1422,7 +1457,7 @@ class DatabaseManager:
         if exclude_vaada_id is not None:
             query += ' AND vaadot_id != ?'
             params.append(exclude_vaada_id)
-        self.execute(cursor, query, params)
+        cursor.execute(query, params)
         result = cursor.fetchone()
         return result[0] if result else 0
 
@@ -1439,7 +1474,7 @@ class DatabaseManager:
         """Get committees scheduled for a specific date"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date, v.status, v.notes, v.exception_date_id,
                    ct.name, ct.scheduled_day, ct.frequency, ct.week_of_month,
                    h.name as hativa_name,
@@ -1466,7 +1501,7 @@ class DatabaseManager:
         """Get committees scheduled for a specific date and hativa"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT v.*, ct.name as committee_name, h.name as hativa_name
             FROM vaadot v
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
@@ -1484,7 +1519,7 @@ class DatabaseManager:
         """Get committees affected by a specific exception date"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date, v.status, v.notes, v.exception_date_id,
                    ct.name, ct.scheduled_day, ct.frequency, ct.week_of_month,
                    h.name as hativa_name,
@@ -1532,7 +1567,7 @@ class DatabaseManager:
             manual_call_deadline_date = manual_call_deadline_date.date()
         
         # Validate that the route belongs to the same division as the committee and get stage data
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT v.hativa_id as vaada_hativa_id, m.hativa_id as maslul_hativa_id,
                    h1.name as vaada_hativa_name, h2.name as maslul_hativa_name,
                    ct.name as committee_name, m.name as maslul_name,
@@ -1589,7 +1624,7 @@ class DatabaseManager:
             conn.close()
             raise ValueError(derived_constraint_error)
         
-        self.execute(cursor, '''
+        cursor.execute('''
             INSERT INTO events (vaadot_id, maslul_id, name, event_type, expected_requests, actual_submissions,
                               call_publication_date, call_deadline_date, intake_deadline_date, review_deadline_date, 
                               response_deadline_date, is_call_deadline_manual)
@@ -1648,9 +1683,9 @@ class DatabaseManager:
             base_query = base_query.replace('WHERE (e.is_deleted = 0 OR e.is_deleted IS NULL)', 'WHERE 1=1')
 
         if vaadot_id:
-            self.execute(cursor, base_query + ' AND e.vaadot_id = ? ORDER BY e.created_at DESC', (vaadot_id,))
+            cursor.execute(base_query + ' AND e.vaadot_id = ? ORDER BY e.created_at DESC', (vaadot_id,))
         else:
-            self.execute(cursor, base_query + ' ORDER BY e.created_at DESC')
+            cursor.execute(base_query + ' ORDER BY e.created_at DESC')
         
         rows = cursor.fetchall()
         conn.close()
@@ -1671,7 +1706,7 @@ class DatabaseManager:
         """Update an existing event"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        
+
         # Process manual call deadline date if provided
         if manual_call_deadline_date in ("", None):
             manual_call_deadline_date = None
@@ -1679,9 +1714,28 @@ class DatabaseManager:
             manual_call_deadline_date = datetime.strptime(manual_call_deadline_date, '%Y-%m-%d').date()
         elif isinstance(manual_call_deadline_date, datetime):
             manual_call_deadline_date = manual_call_deadline_date.date()
-        
+
+        # Get existing call deadline date to validate against
+        cursor.execute('SELECT call_deadline_date FROM events WHERE event_id = ?', (event_id,))
+        existing_event = cursor.fetchone()
+        if not existing_event:
+            conn.close()
+            raise ValueError("האירוע לא נמצא במערכת")
+
+        existing_call_deadline = existing_event[0]
+
+        # Validate that call deadline date can only be postponed, not advanced
+        if is_call_deadline_manual and manual_call_deadline_date and existing_call_deadline:
+            # Convert existing deadline to date object if it's a string
+            if isinstance(existing_call_deadline, str):
+                existing_call_deadline = datetime.strptime(existing_call_deadline, '%Y-%m-%d').date()
+
+            if manual_call_deadline_date < existing_call_deadline:
+                conn.close()
+                raise ValueError(f'אסור להקדים את תאריך סיום הקול קורא. התאריך הנוכחי הוא {existing_call_deadline}, ניתן רק לדחות את התאריך (לא להקדים אותו)')
+
         # Validate that the route belongs to the same division as the committee and get stage data
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT v.hativa_id as vaada_hativa_id, m.hativa_id as maslul_hativa_id,
                    h1.name as vaada_hativa_name, h2.name as maslul_hativa_name,
                    ct.name as committee_name, m.name as maslul_name,
@@ -1738,7 +1792,7 @@ class DatabaseManager:
             conn.close()
             raise ValueError(derived_constraint_error)
         
-        self.execute(cursor, '''
+        cursor.execute('''
             UPDATE events 
             SET vaadot_id = ?, maslul_id = ?, name = ?, event_type = ?, expected_requests = ?, actual_submissions = ?,
                 call_publication_date = ?, call_deadline_date = ?, intake_deadline_date = ?,
@@ -1758,7 +1812,7 @@ class DatabaseManager:
         """Soft delete an event"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             UPDATE events 
             SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
             WHERE event_id = ? AND is_deleted = 0
@@ -1777,7 +1831,7 @@ class DatabaseManager:
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
-            self.execute(cursor, f'''
+            cursor.execute(f'''
                 UPDATE events 
                 SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
                 WHERE event_id IN ({placeholders}) AND is_deleted = 0
@@ -1798,7 +1852,7 @@ class DatabaseManager:
         """Create a new user with access to specified hativot"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             INSERT INTO users (username, email, password_hash, full_name, role)
             VALUES (?, ?, ?, ?, ?)
         ''', (username, email, password_hash, full_name, role))
@@ -1807,7 +1861,7 @@ class DatabaseManager:
         # Add hativot access
         if hativa_ids:
             for hativa_id in hativa_ids:
-                self.execute(cursor, '''
+                cursor.execute('''
                     INSERT INTO user_hativot (user_id, hativa_id) 
                     VALUES (?, ?)
                 ''', (user_id, hativa_id))
@@ -1820,7 +1874,7 @@ class DatabaseManager:
         """Get user by username with all their hativot (case-insensitive)"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT user_id, username, email, password_hash, full_name, role, 
                    is_active, auth_source, ad_dn, created_at, last_login
             FROM users
@@ -1835,7 +1889,7 @@ class DatabaseManager:
         user_id = row[0]
         
         # Get all hativot for this user
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT h.hativa_id, h.name
             FROM user_hativot uh
             JOIN hativot h ON uh.hativa_id = h.hativa_id
@@ -1868,7 +1922,7 @@ class DatabaseManager:
         """Get user by email"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT user_id, username, email, password_hash, full_name, role, 
                    is_active, auth_source, ad_dn, created_at, last_login
             FROM users
@@ -1898,7 +1952,7 @@ class DatabaseManager:
         """Update user's last login timestamp"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = ?
         ''', (user_id,))
         conn.commit()
@@ -1908,7 +1962,7 @@ class DatabaseManager:
         """Get all users with their division information"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
                    u.is_active, u.created_at, u.last_login, u.auth_source
             FROM users u
@@ -1920,7 +1974,7 @@ class DatabaseManager:
         for row in rows:
             user_id = row[0]
             # Get all hativot for this user
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT h.hativa_id, h.name
                 FROM user_hativot uh
                 JOIN hativot h ON uh.hativa_id = h.hativa_id
@@ -1953,7 +2007,7 @@ class DatabaseManager:
         """Get user by ID with all their hativot"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT user_id, username, email, password_hash, full_name, role, 
                    is_active, auth_source, ad_dn, created_at, last_login
             FROM users
@@ -1966,7 +2020,7 @@ class DatabaseManager:
             return None
         
         # Get all hativot for this user
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT h.hativa_id, h.name
             FROM user_hativot uh
             JOIN hativot h ON uh.hativa_id = h.hativa_id
@@ -2012,7 +2066,7 @@ class DatabaseManager:
 
             params.append(user_id)
 
-            self.execute(cursor, f'''
+            cursor.execute(f'''
                 UPDATE users 
                 SET {', '.join(update_fields)}
                 WHERE user_id = ?
@@ -2021,11 +2075,11 @@ class DatabaseManager:
             # Update user_hativot relationships
             if hativa_ids is not None:
                 # Remove existing hativot
-                self.execute(cursor, 'DELETE FROM user_hativot WHERE user_id = ?', (user_id,))
+                cursor.execute('DELETE FROM user_hativot WHERE user_id = ?', (user_id,))
                 
                 # Add new hativot
                 for hativa_id in hativa_ids:
-                    self.execute(cursor, '''
+                    cursor.execute('''
                         INSERT INTO user_hativot (user_id, hativa_id) 
                         VALUES (?, ?)
                     ''', (user_id, hativa_id))
@@ -2042,7 +2096,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, '''
+            cursor.execute('''
                 UPDATE users 
                 SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END
                 WHERE user_id = ?
@@ -2059,7 +2113,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, '''
+            cursor.execute('''
                 UPDATE users SET is_active = 0 WHERE user_id = ?
             ''', (user_id,))
             conn.commit()
@@ -2074,11 +2128,11 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         if exclude_user_id:
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?) AND user_id != ?
             ''', (username, exclude_user_id))
         else:
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?)
             ''', (username,))
         count = cursor.fetchone()[0]
@@ -2090,11 +2144,11 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         if exclude_user_id:
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT COUNT(*) FROM users WHERE email = ? AND user_id != ?
             ''', (email, exclude_user_id))
         else:
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT COUNT(*) FROM users WHERE email = ?
             ''', (email,))
         count = cursor.fetchone()[0]
@@ -2106,7 +2160,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, '''
+            cursor.execute('''
                 UPDATE users SET password_hash = ? WHERE user_id = ?
             ''', (new_password_hash, user_id))
             conn.commit()
@@ -2120,7 +2174,7 @@ class DatabaseManager:
         """Get all hativot that a user has access to"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT h.hativa_id, h.name, h.description, h.color
             FROM user_hativot uh
             JOIN hativot h ON uh.hativa_id = h.hativa_id
@@ -2139,14 +2193,14 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         # Admin has access to everything
-        self.execute(cursor, 'SELECT role FROM users WHERE user_id = ?', (user_id,))
+        cursor.execute('SELECT role FROM users WHERE user_id = ?', (user_id,))
         user = cursor.fetchone()
         if user and user[0] == 'admin':
             conn.close()
             return True
         
         # Check if user has specific access to this hativa
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT COUNT(*) FROM user_hativot 
             WHERE user_id = ? AND hativa_id = ?
         ''', (user_id, hativa_id))
@@ -2160,7 +2214,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, '''
+            cursor.execute('''
                 INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
                 VALUES (?, ?)
             ''', (user_id, hativa_id))
@@ -2176,7 +2230,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, '''
+            cursor.execute('''
                 DELETE FROM user_hativot 
                 WHERE user_id = ? AND hativa_id = ?
             ''', (user_id, hativa_id))
@@ -2191,7 +2245,7 @@ class DatabaseManager:
         """Get system setting value"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT setting_value FROM system_settings WHERE setting_key = ?
         ''', (setting_key,))
         row = cursor.fetchone()
@@ -2202,7 +2256,7 @@ class DatabaseManager:
         """Update system setting"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             UPDATE system_settings 
             SET setting_value = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
             WHERE setting_key = ?
@@ -2280,7 +2334,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, 'UPDATE hativot SET is_active = 0 WHERE hativa_id = ?', (hativa_id,))
+            cursor.execute('UPDATE hativot SET is_active = 0 WHERE hativa_id = ?', (hativa_id,))
             conn.commit()
             conn.close()
             return True
@@ -2292,7 +2346,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, 'UPDATE hativot SET is_active = 1 WHERE hativa_id = ?', (hativa_id,))
+            cursor.execute('UPDATE hativot SET is_active = 1 WHERE hativa_id = ?', (hativa_id,))
             conn.commit()
             conn.close()
             return True
@@ -2304,7 +2358,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, 'UPDATE maslulim SET is_active = 0 WHERE maslul_id = ?', (maslul_id,))
+            cursor.execute('UPDATE maslulim SET is_active = 0 WHERE maslul_id = ?', (maslul_id,))
             conn.commit()
             conn.close()
             return True
@@ -2316,7 +2370,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, 'UPDATE maslulim SET is_active = 1 WHERE maslul_id = ?', (maslul_id,))
+            cursor.execute('UPDATE maslulim SET is_active = 1 WHERE maslul_id = ?', (maslul_id,))
             conn.commit()
             conn.close()
             return True
@@ -2328,7 +2382,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, 'UPDATE committee_types SET is_active = 0 WHERE committee_type_id = ?', (committee_type_id,))
+            cursor.execute('UPDATE committee_types SET is_active = 0 WHERE committee_type_id = ?', (committee_type_id,))
             conn.commit()
             conn.close()
             return True
@@ -2340,7 +2394,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, 'UPDATE committee_types SET is_active = 1 WHERE committee_type_id = ?', (committee_type_id,))
+            cursor.execute('UPDATE committee_types SET is_active = 1 WHERE committee_type_id = ?', (committee_type_id,))
             conn.commit()
             conn.close()
             return True
@@ -2352,7 +2406,7 @@ class DatabaseManager:
         """Get only active divisions"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, 'SELECT hativa_id, name, description, color, is_active, created_at FROM hativot WHERE is_active = 1 ORDER BY name')
+        cursor.execute('SELECT hativa_id, name, description, color, is_active, created_at FROM hativot WHERE is_active = 1 ORDER BY name')
         rows = cursor.fetchall()
         conn.close()
         return [{'hativa_id': row[0], 'name': row[1], 'description': row[2], 'color': row[3],
@@ -2364,7 +2418,7 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         if hativa_id:
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT m.*, h.name as hativa_name 
                 FROM maslulim m 
                 JOIN hativot h ON m.hativa_id = h.hativa_id 
@@ -2372,7 +2426,7 @@ class DatabaseManager:
                 ORDER BY m.name
             ''', (hativa_id,))
         else:
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT m.*, h.name as hativa_name 
                 FROM maslulim m 
                 JOIN hativot h ON m.hativa_id = h.hativa_id 
@@ -2397,7 +2451,7 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         if hativa_id:
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT ct.*, h.name as hativa_name 
                 FROM committee_types ct 
                 JOIN hativot h ON ct.hativa_id = h.hativa_id 
@@ -2405,7 +2459,7 @@ class DatabaseManager:
                 ORDER BY ct.name
             ''', (hativa_id,))
         else:
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT ct.*, h.name as hativa_name 
                 FROM committee_types ct 
                 JOIN hativot h ON ct.hativa_id = h.hativa_id 
@@ -2431,7 +2485,7 @@ class DatabaseManager:
             vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT COUNT(*) 
             FROM vaadot v
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
@@ -2446,7 +2500,7 @@ class DatabaseManager:
         """Get number of meetings in an inclusive date range"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT COUNT(*) 
             FROM vaadot v
             JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
@@ -2527,7 +2581,7 @@ class DatabaseManager:
             query += ' AND e.event_id != ?'
             params.append(exclude_event_id)
         
-        self.execute(cursor, query, params)
+        cursor.execute(query, params)
         total = cursor.fetchone()[0]
         conn.close()
         
@@ -2577,7 +2631,7 @@ class DatabaseManager:
             query += ' AND e.event_id != ?'
             params.append(exclude_event_id)
         
-        self.execute(cursor, query, params)
+        cursor.execute(query, params)
         total = cursor.fetchone()[0]
         conn.close()
         
@@ -2659,7 +2713,7 @@ class DatabaseManager:
         
         where_clause = '' if include_deleted else 'WHERE (e.is_deleted = 0 OR e.is_deleted IS NULL) AND (v.is_deleted = 0 OR v.is_deleted IS NULL)'
 
-        self.execute(cursor, f'''
+        cursor.execute(f'''
             SELECT e.event_id, e.vaadot_id, e.maslul_id, e.name, e.event_type,
                    e.expected_requests, e.actual_submissions, e.call_publication_date,
                    e.call_deadline_date, e.intake_deadline_date, e.review_deadline_date,
@@ -2712,7 +2766,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, """
+            cursor.execute("""
                 SELECT e.*, m.name as maslul_name, m.hativa_id,
                        v.vaada_date, ct.name as committee_name, h.name as hativa_name
                 FROM events e
@@ -2757,21 +2811,22 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, """
-                SELECT 
+            cursor.execute("""
+                SELECT
                     v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date,
                     v.exception_date_id, v.notes, v.created_at,
-                    ct.name as committee_name, h.name as hativa_name
+                    ct.name as committee_name, h.name as hativa_name,
+                    v.start_time, v.end_time
                 FROM vaadot v
                 JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
                 JOIN hativot h ON v.hativa_id = h.hativa_id
                 WHERE v.vaadot_id = ?
                   AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
             """, (vaada_id,))
-            
+
             row = cursor.fetchone()
             conn.close()
-            
+
             if row:
                 return {
                     'vaadot_id': row[0],
@@ -2782,7 +2837,9 @@ class DatabaseManager:
                     'notes': row[5],
                     'created_at': row[6],
                     'committee_name': row[7],
-                    'hativa_name': row[8]
+                    'hativa_name': row[8],
+                    'start_time': row[9],
+                    'end_time': row[10]
                 }
             return None
         except Exception as e:
@@ -2796,7 +2853,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, """
+            cursor.execute("""
                 SELECT m.maslul_id, m.hativa_id, m.name, m.description, m.created_at, 
                        m.is_active, m.sla_days, m.stage_a_days, m.stage_b_days, 
                        m.stage_c_days, m.stage_d_days, h.name as hativa_name
@@ -2843,7 +2900,7 @@ class DatabaseManager:
         cursor = conn.cursor()
         timestamp = datetime.now(ISRAEL_TZ).strftime('%Y-%m-%d %H:%M:%S')
 
-        self.execute(cursor, '''
+        cursor.execute('''
             INSERT INTO audit_logs 
             (timestamp, user_id, username, action, entity_type, entity_id, entity_name, details, 
              ip_address, user_agent, status, error_message)
@@ -2855,10 +2912,11 @@ class DatabaseManager:
         conn.close()
         return log_id
     
-    def get_audit_logs(self, limit: int = 100, offset: int = 0, 
-                       user_id: Optional[int] = None, 
+    def get_audit_logs(self, limit: int = 100, offset: int = 0,
+                       user_id: Optional[int] = None,
                        entity_type: Optional[str] = None,
                        action: Optional[str] = None,
+                       search_text: Optional[str] = None,
                        start_date: Optional[date] = None,
                        end_date: Optional[date] = None) -> List[Dict]:
         """Get audit logs with optional filters"""
@@ -2880,23 +2938,28 @@ class DatabaseManager:
         if entity_type:
             query += ' AND entity_type = ?'
             params.append(entity_type)
-        
+
         if action:
             query += ' AND action = ?'
             params.append(action)
-        
+
+        if search_text:
+            query += ' AND (entity_name LIKE ? OR details LIKE ? OR entity_type LIKE ?)'
+            search_pattern = f'%{search_text}%'
+            params.extend([search_pattern, search_pattern, search_pattern])
+
         if start_date:
             query += ' AND DATE(timestamp) >= ?'
             params.append(start_date)
-        
+
         if end_date:
             query += ' AND DATE(timestamp) <= ?'
             params.append(end_date)
-        
+
         query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?'
         params.extend([limit, offset])
         
-        self.execute(cursor, query, params)
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         conn.close()
         
@@ -2919,6 +2982,7 @@ class DatabaseManager:
     def get_audit_logs_count(self, user_id: Optional[int] = None,
                             entity_type: Optional[str] = None,
                             action: Optional[str] = None,
+                            search_text: Optional[str] = None,
                             start_date: Optional[date] = None,
                             end_date: Optional[date] = None) -> int:
         """Get total count of audit logs matching filters"""
@@ -2927,28 +2991,33 @@ class DatabaseManager:
         
         query = 'SELECT COUNT(*) FROM audit_logs WHERE 1=1'
         params = []
-        
+
         if user_id:
             query += ' AND user_id = ?'
             params.append(user_id)
-        
+
         if entity_type:
             query += ' AND entity_type = ?'
             params.append(entity_type)
-        
+
         if action:
             query += ' AND action = ?'
             params.append(action)
-        
+
+        if search_text:
+            query += ' AND (entity_name LIKE ? OR details LIKE ? OR entity_type LIKE ?)'
+            search_pattern = f'%{search_text}%'
+            params.extend([search_pattern, search_pattern, search_pattern])
+
         if start_date:
             query += ' AND DATE(timestamp) >= ?'
             params.append(start_date)
-        
+
         if end_date:
             query += ' AND DATE(timestamp) <= ?'
             params.append(end_date)
         
-        self.execute(cursor, query, params)
+        cursor.execute(query, params)
         count = cursor.fetchone()[0]
         conn.close()
         return count
@@ -2959,11 +3028,11 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         # Total logs
-        self.execute(cursor, 'SELECT COUNT(*) FROM audit_logs')
+        cursor.execute('SELECT COUNT(*) FROM audit_logs')
         total_logs = cursor.fetchone()[0]
         
         # Logs by action
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT action, COUNT(*) as count 
             FROM audit_logs 
             GROUP BY action 
@@ -2973,7 +3042,7 @@ class DatabaseManager:
         actions = [{'action': row[0], 'count': row[1]} for row in cursor.fetchall()]
         
         # Logs by entity type
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT entity_type, COUNT(*) as count 
             FROM audit_logs 
             GROUP BY entity_type 
@@ -2982,7 +3051,7 @@ class DatabaseManager:
         entities = [{'entity_type': row[0], 'count': row[1]} for row in cursor.fetchall()]
         
         # Recent activity (last 24 hours)
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT COUNT(*) 
             FROM audit_logs 
             WHERE timestamp >= datetime('now', '-1 day')
@@ -2990,7 +3059,7 @@ class DatabaseManager:
         last_24h = cursor.fetchone()[0]
         
         # Failed operations
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT COUNT(*) 
             FROM audit_logs 
             WHERE status = 'error'
@@ -2998,7 +3067,7 @@ class DatabaseManager:
         failed_ops = cursor.fetchone()[0]
         
         # Most active users
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT username, COUNT(*) as count 
             FROM audit_logs 
             WHERE username IS NOT NULL
@@ -3030,7 +3099,7 @@ class DatabaseManager:
             cursor = conn.cursor()
             
             # Get event's current expected_requests, maslul_id and source vaada
-            self.execute(cursor, """
+            cursor.execute("""
                 SELECT e.expected_requests, e.vaadot_id, v.vaada_date, e.maslul_id
                 FROM events e
                 JOIN vaadot v ON e.vaadot_id = v.vaadot_id
@@ -3049,7 +3118,7 @@ class DatabaseManager:
             maslul_id = event_data[3]
             
             # Get target committee date and maslul stage durations
-            self.execute(cursor, """
+            cursor.execute("""
                 SELECT v.vaada_date, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days
                 FROM vaadot v
                 JOIN maslulim m ON m.maslul_id = ?
@@ -3088,7 +3157,7 @@ class DatabaseManager:
             cursor = conn.cursor()
             
             # Update event's committee meeting and derived dates
-            self.execute(cursor, """
+            cursor.execute("""
                 UPDATE events 
                 SET vaadot_id = ?,
                     call_deadline_date = ?,
@@ -3150,7 +3219,7 @@ class DatabaseManager:
                 # Azure AD users don't use password authentication, but DB requires a value
                 # Use a placeholder that cannot be used for login
                 dummy_password = 'AZURE_AD_NO_PASSWORD_AUTH'
-                self.execute(cursor, '''
+                cursor.execute('''
                     INSERT INTO users (username, email, password_hash, full_name, role, auth_source, ad_dn)
                     VALUES (?, ?, ?, ?, ?, 'ad', ?)
                 ''', (username, email, dummy_password, full_name, role, ad_dn))
@@ -3158,7 +3227,7 @@ class DatabaseManager:
                 
                 # If hativa_id provided, add to user_hativot table
                 if hativa_id:
-                    self.execute(cursor, '''
+                    cursor.execute('''
                         INSERT OR IGNORE INTO user_hativot (user_id, hativa_id)
                         VALUES (?, ?)
                     ''', (user_id, hativa_id))
@@ -3187,7 +3256,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            self.execute(cursor, '''
+            cursor.execute('''
                 UPDATE users 
                 SET email = ?, full_name = ?
                 WHERE user_id = ? AND auth_source = 'ad'
@@ -3211,129 +3280,89 @@ class DatabaseManager:
         """
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
-            SELECT u.user_id, u.username, u.email, u.password_hash, u.full_name, u.role,
-                   u.is_active, u.auth_source, u.ad_dn, u.created_at, u.last_login
+        cursor.execute('''
+            SELECT u.*, h.name as hativa_name
             FROM users u
+            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
             WHERE LOWER(u.username) = LOWER(?)
         ''', (username,))
         row = cursor.fetchone()
-        
-        if not row:
-            conn.close()
-            return None
-        
-        user_id = row[0]
-        
-        # Get user's hativot from junction table
-        self.execute(cursor, '''
-            SELECT h.hativa_id, h.name
-            FROM user_hativot uh
-            JOIN hativot h ON uh.hativa_id = h.hativa_id
-            WHERE uh.user_id = ?
-            ORDER BY h.name
-            LIMIT 1
-        ''', (user_id,))
-        hativa_row = cursor.fetchone()
         conn.close()
         
-        return {
-            'user_id': user_id, 'username': row[1], 'email': row[2], 'password_hash': row[3],
-            'full_name': row[4], 'role': row[5], 'hativa_id': hativa_row[0] if hativa_row else None, 
-            'is_active': row[6], 'auth_source': row[7], 'ad_dn': row[8], 
-            'created_at': row[9], 'last_login': row[10], 
-            'hativa_name': hativa_row[1] if hativa_row else None
-        }
+        if row:
+            return {
+                'user_id': row[0], 'username': row[1], 'email': row[2], 'password_hash': row[3],
+                'full_name': row[4], 'role': row[5], 'hativa_id': row[6], 'is_active': row[7],
+                'auth_source': row[8], 'ad_dn': row[9], 
+                'created_at': row[10], 'last_login': row[11], 'hativa_name': row[12]
+            }
+        return None
     
     def get_ad_users(self) -> List[Dict]:
         """Get all Active Directory users"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
-                   u.is_active, u.created_at, u.last_login, u.ad_dn
+                   u.hativa_id, h.name as hativa_name, u.is_active, 
+                   u.created_at, u.last_login, u.ad_dn
             FROM users u
+            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
             WHERE u.auth_source = 'ad'
             ORDER BY u.created_at DESC
         ''')
         rows = cursor.fetchall()
+        conn.close()
         
         users = []
         for row in rows:
-            user_id = row[0]
-            
-            # Get first hativa for this user
-            self.execute(cursor, '''
-                SELECT h.hativa_id, h.name
-                FROM user_hativot uh
-                JOIN hativot h ON uh.hativa_id = h.hativa_id
-                WHERE uh.user_id = ?
-                ORDER BY h.name
-                LIMIT 1
-            ''', (user_id,))
-            hativa_row = cursor.fetchone()
-            
             users.append({
-                'user_id': user_id,
+                'user_id': row[0],
                 'username': row[1],
                 'email': row[2],
                 'full_name': row[3],
                 'role': row[4],
-                'hativa_id': hativa_row[0] if hativa_row else None,
-                'hativa_name': hativa_row[1] if hativa_row else None,
-                'is_active': row[5],
-                'created_at': row[6],
-                'last_login': row[7],
-                'ad_dn': row[8],
+                'hativa_id': row[5],
+                'hativa_name': row[6],
+                'is_active': row[7],
+                'created_at': row[8],
+                'last_login': row[9],
+                'ad_dn': row[10],
                 'auth_source': 'ad'
             })
-        
-        conn.close()
         return users
     
     def get_local_users(self) -> List[Dict]:
         """Get all local (non-AD) users"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
-                   u.is_active, u.created_at, u.last_login
+                   u.hativa_id, h.name as hativa_name, u.is_active, 
+                   u.created_at, u.last_login
             FROM users u
+            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
             WHERE u.auth_source = 'local' OR u.auth_source IS NULL
             ORDER BY u.created_at DESC
         ''')
         rows = cursor.fetchall()
+        conn.close()
         
         users = []
         for row in rows:
-            user_id = row[0]
-            
-            # Get first hativa for this user
-            self.execute(cursor, '''
-                SELECT h.hativa_id, h.name
-                FROM user_hativot uh
-                JOIN hativot h ON uh.hativa_id = h.hativa_id
-                WHERE uh.user_id = ?
-                ORDER BY h.name
-                LIMIT 1
-            ''', (user_id,))
-            hativa_row = cursor.fetchone()
-            
             users.append({
-                'user_id': user_id,
+                'user_id': row[0],
                 'username': row[1],
                 'email': row[2],
                 'full_name': row[3],
                 'role': row[4],
-                'hativa_id': hativa_row[0] if hativa_row else None,
-                'hativa_name': hativa_row[1] if hativa_row else None,
-                'is_active': row[5],
-                'created_at': row[6],
-                'last_login': row[7],
+                'hativa_id': row[5],
+                'hativa_name': row[6],
+                'is_active': row[7],
+                'created_at': row[8],
+                'last_login': row[9],
                 'auth_source': 'local'
             })
-        
-        conn.close()
         return users
     
     # Recycle Bin Functions
@@ -3359,7 +3388,7 @@ class DatabaseManager:
         
         query += ' ORDER BY v.deleted_at DESC'
         
-        self.execute(cursor, query, params)
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         conn.close()
         
@@ -3401,7 +3430,7 @@ class DatabaseManager:
         
         query += ' ORDER BY e.deleted_at DESC'
         
-        self.execute(cursor, query, params)
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         conn.close()
         
@@ -3423,7 +3452,7 @@ class DatabaseManager:
             cursor = conn.cursor()
             
             # Restore the vaada
-            self.execute(cursor, '''
+            cursor.execute('''
                 UPDATE vaadot 
                 SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL 
                 WHERE vaadot_id = ? AND is_deleted = 1
@@ -3432,7 +3461,7 @@ class DatabaseManager:
             
             # Also restore related events
             if success:
-                self.execute(cursor, '''
+                cursor.execute('''
                     UPDATE events 
                     SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL 
                     WHERE vaadot_id = ? AND is_deleted = 1
@@ -3453,7 +3482,7 @@ class DatabaseManager:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            self.execute(cursor, '''
+            cursor.execute('''
                 UPDATE events 
                 SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL 
                 WHERE event_id = ? AND is_deleted = 1
@@ -3476,7 +3505,7 @@ class DatabaseManager:
             cursor = conn.cursor()
             
             # Delete the vaada (events will be cascade deleted due to foreign key)
-            self.execute(cursor, 'DELETE FROM vaadot WHERE vaadot_id = ? AND is_deleted = 1', (vaadot_id,))
+            cursor.execute('DELETE FROM vaadot WHERE vaadot_id = ? AND is_deleted = 1', (vaadot_id,))
             success = cursor.rowcount > 0
             
             conn.commit()
@@ -3494,7 +3523,7 @@ class DatabaseManager:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            self.execute(cursor, 'DELETE FROM events WHERE event_id = ? AND is_deleted = 1', (event_id,))
+            cursor.execute('DELETE FROM events WHERE event_id = ? AND is_deleted = 1', (event_id,))
             success = cursor.rowcount > 0
             
             conn.commit()
@@ -3514,23 +3543,23 @@ class DatabaseManager:
             
             # Delete events
             if hativa_id:
-                self.execute(cursor, '''
+                cursor.execute('''
                     DELETE FROM events 
                     WHERE is_deleted = 1 
                     AND maslul_id IN (SELECT maslul_id FROM maslulim WHERE hativa_id = ?)
                 ''', (hativa_id,))
             else:
-                self.execute(cursor, 'DELETE FROM events WHERE is_deleted = 1')
+                cursor.execute('DELETE FROM events WHERE is_deleted = 1')
             events_deleted = cursor.rowcount or 0
             
             # Delete vaadot
             if hativa_id:
-                self.execute(cursor, '''
+                cursor.execute('''
                     DELETE FROM vaadot 
                     WHERE is_deleted = 1 AND hativa_id = ?
                 ''', (hativa_id,))
             else:
-                self.execute(cursor, 'DELETE FROM vaadot WHERE is_deleted = 1')
+                cursor.execute('DELETE FROM vaadot WHERE is_deleted = 1')
             vaadot_deleted = cursor.rowcount or 0
             
             conn.commit()
@@ -3550,7 +3579,7 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
-            self.execute(cursor, '''
+            cursor.execute('''
                 INSERT INTO calendar_sync_events
                 (source_type, source_id, deadline_type, calendar_email, calendar_event_id, sync_status)
                 VALUES (?, ?, ?, ?, ?, 'pending')
@@ -3560,13 +3589,13 @@ class DatabaseManager:
             return sync_id
         except sqlite3.IntegrityError:
             # Record already exists, update it instead
-            self.execute(cursor, '''
+            cursor.execute('''
                 UPDATE calendar_sync_events
                 SET sync_status = 'pending', updated_at = CURRENT_TIMESTAMP
                 WHERE source_type = ? AND source_id = ? AND deadline_type = ? AND calendar_email = ?
             ''', (source_type, source_id, deadline_type, calendar_email))
             conn.commit()
-            self.execute(cursor, '''
+            cursor.execute('''
                 SELECT sync_id FROM calendar_sync_events
                 WHERE source_type = ? AND source_id = ? AND deadline_type = ? AND calendar_email = ?
             ''', (source_type, source_id, deadline_type, calendar_email))
@@ -3583,21 +3612,21 @@ class DatabaseManager:
 
         if calendar_event_id:
             if content_hash:
-                self.execute(cursor, '''
+                cursor.execute('''
                     UPDATE calendar_sync_events
                     SET sync_status = ?, calendar_event_id = ?, error_message = ?, content_hash = ?,
                         last_synced = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                     WHERE sync_id = ?
                 ''', (status, calendar_event_id, error_message, content_hash, sync_id))
             else:
-                self.execute(cursor, '''
+                cursor.execute('''
                 UPDATE calendar_sync_events
                 SET sync_status = ?, calendar_event_id = ?, error_message = ?,
                     last_synced = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                 WHERE sync_id = ?
                 ''', (status, calendar_event_id, error_message, sync_id))
         else:
-            self.execute(cursor, '''
+            cursor.execute('''
                 UPDATE calendar_sync_events
                 SET sync_status = ?, error_message = ?,
                     last_synced = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
@@ -3615,7 +3644,7 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT sync_id, source_type, source_id, deadline_type, calendar_event_id, calendar_email,
                    last_synced, sync_status, error_message, created_at, updated_at, content_hash
             FROM calendar_sync_events
@@ -3639,7 +3668,7 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT sync_id, source_type, source_id, deadline_type, calendar_event_id, calendar_email,
                    last_synced, sync_status, error_message, created_at, updated_at
             FROM calendar_sync_events
@@ -3666,7 +3695,7 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        self.execute(cursor, '''
+        cursor.execute('''
             DELETE FROM calendar_sync_events
             WHERE source_type = ? AND source_id = ? AND deadline_type IS ? AND calendar_email = ?
         ''', (source_type, source_id, deadline_type, calendar_email))
@@ -3683,7 +3712,7 @@ class DatabaseManager:
         cursor = conn.cursor()
 
         # Get all sync records for this source
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT sync_id, source_type, source_id, deadline_type, calendar_event_id, calendar_email,
                    last_synced, sync_status, error_message, created_at, updated_at
             FROM calendar_sync_events
@@ -3693,7 +3722,7 @@ class DatabaseManager:
         rows = cursor.fetchall()
 
         # Mark them as deleted
-        self.execute(cursor, '''
+        cursor.execute('''
             UPDATE calendar_sync_events
             SET sync_status = 'deleted', updated_at = CURRENT_TIMESTAMP
             WHERE source_type = ? AND source_id = ? AND calendar_email = ? AND sync_status != 'deleted'
@@ -3717,7 +3746,7 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        self.execute(cursor, '''
+        cursor.execute('''
             SELECT sync_id, source_type, source_id, deadline_type, calendar_event_id, calendar_email,
                    last_synced, sync_status, error_message, created_at, updated_at
             FROM calendar_sync_events
@@ -3742,7 +3771,7 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        self.execute(cursor, '''
+        cursor.execute('''
             DELETE FROM calendar_sync_events
             WHERE calendar_email = ?
         ''', (calendar_email,))

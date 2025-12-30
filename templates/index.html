@@ -254,7 +254,8 @@
                             <option value="">בחר סוג ועדה</option>
                             {% for committee_type in committee_types %}
                             <option value="{{ committee_type.committee_type_id }}"
-                                data-hativa-id="{{ committee_type.hativa_id }}">{{ committee_type.name }}</option>
+                                data-hativa-id="{{ committee_type.hativa_id }}"
+                                data-is-operational="{{ committee_type.is_operational }}">{{ committee_type.name }}</option>
                             {% endfor %}
                         </select>
                         <div class="form-text">
@@ -267,6 +268,18 @@
                         <input type="date" class="form-control" name="vaada_date" id="modalDate" required
                             pattern="\d{4}-\d{2}-\d{2}">
                         <div class="form-text">בחר תאריך לישיבת הועדה</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="start_time" class="form-label">שעת התחלה</label>
+                            <input type="time" class="form-control" name="start_time" id="start_time">
+                            <div class="form-text">שעת התחלת הועדה</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="end_time" class="form-label">שעת סיום</label>
+                            <input type="time" class="form-control" name="end_time" id="end_time">
+                            <div class="form-text">שעת סיום הועדה</div>
+                        </div>
                     </div>
                     <div class="d-flex align-items-center gap-2 mb-2">
                         <button type="button" class="btn btn-outline-primary btn-sm" id="findAvailableDatesBtn">
@@ -363,7 +376,7 @@
                             <option value="{{ committee.vaadot_id }}" data-hativa-id="{{ committee.hativa_id }}"
                                 data-is-operational="{{ 1 if committee.is_operational else 0 }}">
                                 {{ committee.committee_name }} - {{ committee.hativa_name }}
-                                {% if committee.vaada_date %} ({{ committee.vaada_date }}){% endif %}
+                                {% if committee.vaada_date %} ({{ committee.vaada_date|format_date }}){% endif %}
                             </option>
                             {% endfor %}
                         </select>
@@ -453,7 +466,8 @@
                             <option value="">בחר סוג ועדה</option>
                             {% for committee_type in committee_types %}
                             <option value="{{ committee_type.committee_type_id }}"
-                                data-hativa-id="{{ committee_type.hativa_id }}">{{ committee_type.name }}</option>
+                                data-hativa-id="{{ committee_type.hativa_id }}"
+                                data-is-operational="{{ committee_type.is_operational }}">{{ committee_type.name }}</option>
                             {% endfor %}
                         </select>
                         <div class="form-text">
@@ -464,6 +478,18 @@
                     <div class="mb-3">
                         <label for="edit_vaada_date" class="form-label">תאריך הישיבה</label>
                         <input type="date" class="form-control" name="vaada_date" id="edit_vaada_date" required>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="edit_start_time" class="form-label">שעת התחלה</label>
+                            <input type="time" class="form-control" name="start_time" id="edit_start_time">
+                            <div class="form-text">שעת התחלת הועדה</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_end_time" class="form-label">שעת סיום</label>
+                            <input type="time" class="form-control" name="end_time" id="edit_end_time">
+                            <div class="form-text">שעת סיום הועדה</div>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="edit_notes" class="form-label">הערות</label>
@@ -575,7 +601,7 @@
                             <option value="{{ committee.vaadot_id }}" data-hativa-id="{{ committee.hativa_id }}"
                                 data-is-operational="{{ 1 if committee.is_operational else 0 }}">
                                 {{ committee.committee_name }} - {{ committee.hativa_name }}
-                                {% if committee.vaada_date %} ({{ committee.vaada_date }}){% endif %}
+                                {% if committee.vaada_date %} ({{ committee.vaada_date|format_date }}){% endif %}
                             </option>
                             {% endfor %}
                         </select>
@@ -1654,7 +1680,12 @@
                 'Content-Type': 'application/json'
             }
         })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     console.log('Deadline dates display toggled:', showDeadlineDates);
@@ -1739,9 +1770,14 @@
 
             try {
                 const response = await fetch(`/api/available_dates?${params.toString()}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const data = await response.json();
 
-                if (!response.ok || !data.success) {
+                if (!data.success) {
                     const message = data && data.message ? data.message : 'שגיאה בשליפת הנתונים';
                     resultsContainer.innerHTML = `<div class="alert alert-danger mb-2">${message}</div>`;
                     return;
@@ -1864,10 +1900,28 @@
         setTimeout(() => {
             if (editCommitteeTypeSelect) {
                 editCommitteeTypeSelect.value = committee.committee_type_id;
+                // Trigger change event to populate default times if needed
+                const changeEvent = new Event('change');
+                editCommitteeTypeSelect.dispatchEvent(changeEvent);
             }
         }, 0);
 
         document.getElementById('edit_vaada_date').value = committee.vaada_date;
+
+        // Set times after a delay to ensure committee type change event completes
+        setTimeout(() => {
+            // Only override if the fields are still empty after change event
+            const startTimeInput = document.getElementById('edit_start_time');
+            const endTimeInput = document.getElementById('edit_end_time');
+
+            if (startTimeInput && committee.start_time) {
+                startTimeInput.value = committee.start_time;
+            }
+            if (endTimeInput && committee.end_time) {
+                endTimeInput.value = committee.end_time;
+            }
+        }, 50);
+
         document.getElementById('edit_notes').value = committee.notes || '';
 
         // Set form action with the committee ID
@@ -1912,7 +1966,12 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ source_vaada_id: parseInt(sourceId, 10), target_date: targetDate })
         })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error(`HTTP error! status: ${res.status}`);
+                }
+                return res.json();
+            })
             .then(data => {
                 if (data.success) {
                     showAlert(data.message || 'הועדה שוכפלה בהצלחה', 'success');
@@ -2253,6 +2312,10 @@
         isDragging = true;
         draggedElement = e.target;
 
+        // Hide any active popovers when drag starts
+        if (window.hideCommitteeRowPopover) window.hideCommitteeRowPopover();
+        if (window.hideCalendarBadgePopover) window.hideCalendarBadgePopover();
+
         // Extract committee data from the badge
         const vaadaId = draggedElement.getAttribute('data-vaada-id');
         const committeeDate = draggedElement.getAttribute('data-date');
@@ -2284,6 +2347,10 @@
     function handleEventDragStart(e) {
         isDragging = true;
         draggedElement = e.target;
+
+        // Hide any active popovers when drag starts
+        if (window.hideCommitteeRowPopover) window.hideCommitteeRowPopover();
+        if (window.hideCalendarBadgePopover) window.hideCalendarBadgePopover();
 
         // Extract event data from the badge
         const eventId = draggedElement.getAttribute('data-event-id');
@@ -2544,6 +2611,9 @@
         })
             .then(response => {
                 console.log('Move committee response:', response.status); // Debug
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 return response.json();
             })
             .then(data => {
@@ -2587,7 +2657,12 @@
                 target_vaada_id: targetCommittee.vaadot_id
             })
         })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     showAlert(data.message, 'success');
@@ -2623,7 +2698,12 @@
                 target_vaada_id: targetVaadaId
             })
         })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     showAlert(data.message, 'success');
@@ -3092,7 +3172,12 @@
 
         // Fetch SLA information
         fetch(`/api/sla_info/${vaadotId}`)
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.error) {
                     modalBody.innerHTML = `
@@ -3680,6 +3765,30 @@
             });
         }
 
+        // Add change listener to populate default times based on committee type (add form)
+        if (addCommitteeTypeSelect) {
+            addCommitteeTypeSelect.addEventListener('change', function () {
+                const selectedOption = this.options[this.selectedIndex];
+                if (selectedOption && selectedOption.value) {
+                    const isOperational = selectedOption.getAttribute('data-is-operational') === '1';
+                    const startTimeInput = document.getElementById('start_time');
+                    const endTimeInput = document.getElementById('end_time');
+
+                    if (startTimeInput && endTimeInput) {
+                        if (isOperational) {
+                            // Operational committee: 09:00-11:00
+                            startTimeInput.value = '09:00';
+                            endTimeInput.value = '11:00';
+                        } else {
+                            // Regular committee: 09:00-15:00
+                            startTimeInput.value = '09:00';
+                            endTimeInput.value = '15:00';
+                        }
+                    }
+                }
+            });
+        }
+
         // Add change listener to filter committee types by selected division in edit form
         const editCommitteeHativaSelect = document.getElementById('edit_hativa_id');
         const editCommitteeTypeSelect = document.getElementById('edit_committee_type_id');
@@ -3722,6 +3831,33 @@
                         const currentHativaId = currentSelection.getAttribute('data-hativa-id');
                         if (currentHativaId !== selectedHativaId) {
                             editCommitteeTypeSelect.value = '';
+                        }
+                    }
+                }
+            });
+        }
+
+        // Add change listener to populate default times based on committee type (edit form)
+        if (editCommitteeTypeSelect) {
+            editCommitteeTypeSelect.addEventListener('change', function () {
+                const selectedOption = this.options[this.selectedIndex];
+                if (selectedOption && selectedOption.value) {
+                    const isOperational = selectedOption.getAttribute('data-is-operational') === '1';
+                    const startTimeInput = document.getElementById('edit_start_time');
+                    const endTimeInput = document.getElementById('edit_end_time');
+
+                    // Only set default times if fields are empty
+                    if (startTimeInput && endTimeInput) {
+                        if (!startTimeInput.value && !endTimeInput.value) {
+                            if (isOperational) {
+                                // Operational committee: 09:00-11:00
+                                startTimeInput.value = '09:00';
+                                endTimeInput.value = '11:00';
+                            } else {
+                                // Regular committee: 09:00-15:00
+                                startTimeInput.value = '09:00';
+                                endTimeInput.value = '15:00';
+                            }
                         }
                     }
                 }
@@ -4187,7 +4323,12 @@
 
             // Fetch recommendations from API
             fetch(`/api/recommend_committees?maslul_id=${maslulId}&expected_requests=${expectedRequests}&event_name=${encodeURIComponent(eventName)}`)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     document.getElementById('recommendationsLoading').style.display = 'none';
 

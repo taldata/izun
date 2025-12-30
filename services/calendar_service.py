@@ -11,6 +11,7 @@ import requests
 import logging
 import hashlib
 import json
+import threading
 from typing import Optional, Dict, List, Tuple
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
@@ -34,6 +35,9 @@ class CalendarService:
         self.ad_service = ad_service
         self.db = db_manager
         self.graph_endpoint = 'https://graph.microsoft.com/v1.0'
+
+        # Thread lock to prevent concurrent sync/reset operations
+        self._sync_lock = threading.Lock()
 
         # Get calendar settings from database
         self.calendar_email = self.db.get_system_setting('calendar_sync_email') or 'plan@innovationisrael.org.il'
@@ -64,7 +68,7 @@ class CalendarService:
 
     def create_calendar_event(self, subject: str, start_date: date, end_date: date = None,
                              body: str = "", location: str = "", is_all_day: bool = True,
-                             user_email: str = None) -> Tuple[bool, Optional[str], str]:
+                             user_email: str = None, start_time: str = None, end_time: str = None) -> Tuple[bool, Optional[str], str]:
         """
         Create a calendar event in the shared calendar
 
@@ -76,6 +80,8 @@ class CalendarService:
             location: Event location
             is_all_day: Whether this is an all-day event
             user_email: Target calendar user email (defaults to self.calendar_email)
+            start_time: Start time in HH:MM format (e.g., "09:00"), only used if is_all_day=False
+            end_time: End time in HH:MM format (e.g., "15:00"), only used if is_all_day=False
 
         Returns:
             Tuple of (success, event_id, message)
@@ -91,12 +97,32 @@ class CalendarService:
             if end_date is None:
                 end_date = start_date
 
-            # For all-day events, Microsoft Graph requires duration of at least 24 hours.
-            # Ensure end_date is at least start_date + 1 day for single-day all-day events.
-            if is_all_day and end_date <= start_date:
-                end_date = start_date + timedelta(days=1)
-
             target_email = user_email or self.calendar_email
+
+            # Build start and end datetime based on whether it's an all-day event
+            if is_all_day:
+                # For all-day events, Microsoft Graph requires duration of at least 24 hours.
+                # Ensure end_date is at least start_date + 1 day for single-day all-day events.
+                if end_date <= start_date:
+                    end_date = start_date + timedelta(days=1)
+
+                start_datetime = datetime.combine(start_date, datetime.min.time())
+                end_datetime = datetime.combine(end_date, datetime.min.time())
+            else:
+                # For timed events, parse the time strings
+                if start_time:
+                    start_hour, start_minute = map(int, start_time.split(':'))
+                    start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=start_hour, minute=start_minute))
+                else:
+                    # Default to 09:00 if no time specified
+                    start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=9, minute=0))
+
+                if end_time:
+                    end_hour, end_minute = map(int, end_time.split(':'))
+                    end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
+                else:
+                    # Default to 15:00 if no time specified
+                    end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=15, minute=0))
 
             # Build event object
             event = {
@@ -106,11 +132,11 @@ class CalendarService:
                     "content": body
                 },
                 "start": {
-                    "dateTime": datetime.combine(start_date, datetime.min.time()).isoformat(),
+                    "dateTime": start_datetime.isoformat(),
                     "timeZone": "Asia/Jerusalem"
                 },
                 "end": {
-                    "dateTime": datetime.combine(end_date, datetime.min.time()).isoformat(),
+                    "dateTime": end_datetime.isoformat(),
                     "timeZone": "Asia/Jerusalem"
                 },
                 "isAllDay": is_all_day,
@@ -142,7 +168,8 @@ class CalendarService:
 
     def update_calendar_event(self, event_id: str, subject: str = None, start_date: date = None,
                               end_date: date = None, body: str = None, location: str = None,
-                              is_all_day: bool = True, user_email: str = None) -> Tuple[bool, str]:
+                              is_all_day: bool = True, user_email: str = None, start_time: str = None,
+                              end_time: str = None) -> Tuple[bool, str]:
         """
         Update an existing calendar event
 
@@ -155,6 +182,8 @@ class CalendarService:
             location: New location (optional)
             is_all_day: Whether this is an all-day event
             user_email: Target calendar user email (defaults to self.calendar_email)
+            start_time: Start time in HH:MM format (e.g., "09:00"), only used if is_all_day=False
+            end_time: End time in HH:MM format (e.g., "15:00"), only used if is_all_day=False
 
         Returns:
             Tuple of (success, message)
@@ -182,30 +211,55 @@ class CalendarService:
                 }
 
             if start_date is not None:
-                # For all-day events, ensure at least 24 hours duration by default
-                effective_end_date = end_date
+                effective_end_date = end_date if end_date is not None else start_date
+
+                # Build start and end datetime based on whether it's an all-day event
                 if is_all_day:
-                    if effective_end_date is None:
-                        effective_end_date = start_date + timedelta(days=1)
-                    elif effective_end_date <= start_date:
+                    # For all-day events, ensure at least 24 hours duration by default
+                    if effective_end_date <= start_date:
                         effective_end_date = start_date + timedelta(days=1)
 
+                    start_datetime = datetime.combine(start_date, datetime.min.time())
+                    end_datetime = datetime.combine(effective_end_date, datetime.min.time())
+                else:
+                    # For timed events, parse the time strings
+                    if start_time:
+                        start_hour, start_minute = map(int, start_time.split(':'))
+                        start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=start_hour, minute=start_minute))
+                    else:
+                        # Default to 09:00 if no time specified
+                        start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=9, minute=0))
+
+                    if end_time:
+                        end_hour, end_minute = map(int, end_time.split(':'))
+                        end_datetime = datetime.combine(effective_end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
+                    else:
+                        # Default to 15:00 if no time specified
+                        end_datetime = datetime.combine(effective_end_date, datetime.min.time().replace(hour=15, minute=0))
+
                 event_update["start"] = {
-                    "dateTime": datetime.combine(start_date, datetime.min.time()).isoformat(),
+                    "dateTime": start_datetime.isoformat(),
+                    "timeZone": "Asia/Jerusalem"
+                }
+                event_update["end"] = {
+                    "dateTime": end_datetime.isoformat(),
                     "timeZone": "Asia/Jerusalem"
                 }
                 event_update["isAllDay"] = is_all_day
 
-                if effective_end_date is not None:
-                    event_update["end"] = {
-                        "dateTime": datetime.combine(effective_end_date, datetime.min.time()).isoformat(),
-                        "timeZone": "Asia/Jerusalem"
-                    }
-
             # If only end_date is provided (rare), update it directly
-            if start_date is None and end_date is not None:
+            elif end_date is not None:
+                if is_all_day:
+                    end_datetime = datetime.combine(end_date, datetime.min.time())
+                else:
+                    if end_time:
+                        end_hour, end_minute = map(int, end_time.split(':'))
+                        end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
+                    else:
+                        end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=15, minute=0))
+
                 event_update["end"] = {
-                    "dateTime": datetime.combine(end_date, datetime.min.time()).isoformat(),
+                    "dateTime": end_datetime.isoformat(),
                     "timeZone": "Asia/Jerusalem"
                 }
 
@@ -308,6 +362,8 @@ class CalendarService:
             notes = committee.get('notes', '')
             is_operational = committee.get('is_operational', 0)
             status = committee.get('status', '')
+            start_time = committee.get('start_time')
+            end_time = committee.get('end_time')
 
             if not vaada_date:
                 return False, "Committee has no date"
@@ -315,6 +371,9 @@ class CalendarService:
             # Parse date
             if isinstance(vaada_date, str):
                 vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+
+            # Determine if this should be an all-day event or timed event
+            is_all_day = not (start_time and end_time)
 
             # Build event title and description
             subject = f"{committee_type_name} - {hativa_name}"
@@ -325,8 +384,14 @@ class CalendarService:
                 f"<p><strong>סוג ועדה:</strong> {committee_type_name}</p>",
                 f"<p><strong>חטיבה:</strong> {hativa_name}</p>",
                 f"<p><strong>תאריך:</strong> {vaada_date.strftime('%d/%m/%Y')}</p>",
-                f"<p><strong>סטטוס:</strong> {status}</p>",
             ]
+
+            # Add time information if available
+            if start_time and end_time:
+                body_parts.append(f"<p><strong>שעת התחלה:</strong> {start_time}</p>")
+                body_parts.append(f"<p><strong>שעת סיום:</strong> {end_time}</p>")
+
+            body_parts.append(f"<p><strong>סטטוס:</strong> {status}</p>")
 
             if is_operational:
                 body_parts.append("<p><strong>ועדה תפעולית</strong></p>")
@@ -340,6 +405,8 @@ class CalendarService:
             content_data = {
                 'subject': subject,
                 'start_date': str(vaada_date),
+                'start_time': start_time,
+                'end_time': end_time,
                 'body': body
             }
             content_hash = hashlib.md5(json.dumps(content_data, sort_keys=True).encode('utf-8')).hexdigest()
@@ -361,7 +428,9 @@ class CalendarService:
                     subject=subject,
                     start_date=vaada_date,
                     body=body,
-                    is_all_day=True
+                    is_all_day=is_all_day,
+                    start_time=start_time,
+                    end_time=end_time
                 )
 
                 if success:
@@ -378,7 +447,9 @@ class CalendarService:
                             subject=subject,
                             start_date=vaada_date,
                             body=body,
-                            is_all_day=True
+                            is_all_day=is_all_day,
+                            start_time=start_time,
+                            end_time=end_time
                         )
                         if success2:
                             self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', new_event_id, content_hash=content_hash)
@@ -396,7 +467,9 @@ class CalendarService:
                     subject=subject,
                     start_date=vaada_date,
                     body=body,
-                    is_all_day=True
+                    is_all_day=is_all_day,
+                    start_time=start_time,
+                    end_time=end_time
                 )
 
                 if success:
@@ -594,22 +667,14 @@ class CalendarService:
             logger.error(f"Error syncing event deadlines {event_id}: {e}", exc_info=True)
             return False, str(e)
 
-    def sync_all(self) -> Dict[str, any]:
+    def _sync_all_internal(self) -> Dict[str, any]:
         """
-        Perform full calendar sync of all committees and events
+        Internal method to perform full calendar sync without acquiring lock
+        Should only be called when lock is already held or from sync_all()
 
         Returns:
             Dictionary with sync statistics
         """
-        if not self.is_enabled():
-            return {
-                'success': False,
-                'message': 'Calendar sync is disabled',
-                'committees_synced': 0,
-                'events_synced': 0,
-                'failures': 0
-            }
-
         logger.info("Starting full calendar sync...")
 
         committees_synced = 0
@@ -669,6 +734,42 @@ class CalendarService:
                 'failures': failures
             }
 
+    def sync_all(self) -> Dict[str, any]:
+        """
+        Perform full calendar sync of all committees and events
+
+        Returns:
+            Dictionary with sync statistics
+        """
+        if not self.is_enabled():
+            return {
+                'success': False,
+                'message': 'Calendar sync is disabled',
+                'committees_synced': 0,
+                'events_synced': 0,
+                'failures': 0
+            }
+
+        # Acquire lock to prevent concurrent sync/reset operations
+        # Use non-blocking acquire to avoid blocking the scheduler if a reset is in progress
+        lock_acquired = self._sync_lock.acquire(blocking=False)
+        if not lock_acquired:
+            logger.warning("Calendar sync skipped - another sync or reset operation is in progress")
+            return {
+                'success': False,
+                'message': 'Calendar sync skipped - another operation in progress',
+                'committees_synced': 0,
+                'events_synced': 0,
+                'failures': 0
+            }
+
+        try:
+            return self._sync_all_internal()
+        finally:
+            # Always release the lock
+            self._sync_lock.release()
+            logger.debug("Calendar sync lock released")
+
     def delete_all_calendar_events_and_reset(self) -> Dict[str, any]:
         """
         Delete all calendar events created by the system and reset sync records
@@ -688,61 +789,82 @@ class CalendarService:
                 'failures': 0
             }
 
-        logger.info("Starting deletion of all calendar events and reset...")
+        # Acquire lock to prevent concurrent sync operations during reset
+        # Use blocking acquire since reset is a critical operation that should wait
+        logger.info("Acquiring lock for calendar reset operation...")
+        with self._sync_lock:
+            logger.info("Lock acquired - starting deletion of all calendar events and reset...")
 
-        events_deleted = 0
-        deletion_failures = 0
-        records_cleared = 0
+            events_deleted = 0
+            deletion_failures = 0
+            records_cleared = 0
 
-        try:
-            # Get all synced calendar events
-            sync_records = self.db.get_all_synced_calendar_events(self.calendar_email)
+            try:
+                # Get all synced calendar events
+                sync_records = self.db.get_all_synced_calendar_events(self.calendar_email)
 
-            logger.info(f"Found {len(sync_records)} calendar events to delete")
+                logger.info(f"Found {len(sync_records)} calendar events to delete")
 
-            # Delete each calendar event
-            for record in sync_records:
-                calendar_event_id = record.get('calendar_event_id')
-                if calendar_event_id:
-                    try:
-                        success, message = self.delete_calendar_event(calendar_event_id)
-                        if success:
-                            events_deleted += 1
-                        else:
-                            logger.warning(f"Failed to delete calendar event {calendar_event_id}: {message}")
+                # Delete each calendar event
+                for record in sync_records:
+                    calendar_event_id = record.get('calendar_event_id')
+                    if calendar_event_id:
+                        try:
+                            success, message = self.delete_calendar_event(calendar_event_id)
+                            if success:
+                                events_deleted += 1
+                            else:
+                                logger.warning(f"Failed to delete calendar event {calendar_event_id}: {message}")
+                                deletion_failures += 1
+                        except Exception as e:
+                            logger.error(f"Error deleting calendar event {calendar_event_id}: {e}")
                             deletion_failures += 1
-                    except Exception as e:
-                        logger.error(f"Error deleting calendar event {calendar_event_id}: {e}")
-                        deletion_failures += 1
 
-            # Clear all sync records
-            records_cleared = self.db.clear_all_calendar_sync_records(self.calendar_email)
-            logger.info(f"Cleared {records_cleared} sync records from database")
+                # Clear all sync records
+                records_cleared = self.db.clear_all_calendar_sync_records(self.calendar_email)
+                logger.info(f"Cleared {records_cleared} sync records from database")
 
-            # Now perform full sync to recreate all events
-            logger.info("Starting full sync to recreate all events...")
-            sync_result = self.sync_all()
+                # Now perform full sync to recreate all events
+                # Call internal method since we already hold the lock
+                logger.info("Starting full sync to recreate all events...")
+                sync_result = self._sync_all_internal()
 
-            return {
-                'success': True,
-                'message': f'Reset complete: Deleted {events_deleted} events, cleared {records_cleared} records. Re-synced: {sync_result["committees_synced"]} committees, {sync_result["events_synced"]} events',
-                'events_deleted': events_deleted,
-                'deletion_failures': deletion_failures,
-                'records_cleared': records_cleared,
-                'committees_synced': sync_result.get('committees_synced', 0),
-                'events_synced': sync_result.get('events_synced', 0),
-                'failures': sync_result.get('failures', 0) + deletion_failures
-            }
+                # Check if sync was successful
+                if not sync_result.get('success', False):
+                    logger.error(f"Calendar reset completed but re-sync failed: {sync_result.get('message')}")
+                    return {
+                        'success': False,
+                        'message': f'Reset partially complete: Deleted {events_deleted} events, cleared {records_cleared} records. But re-sync failed: {sync_result.get("message", "Unknown error")}',
+                        'events_deleted': events_deleted,
+                        'deletion_failures': deletion_failures,
+                        'records_cleared': records_cleared,
+                        'committees_synced': sync_result.get('committees_synced', 0),
+                        'events_synced': sync_result.get('events_synced', 0),
+                        'failures': sync_result.get('failures', 0) + deletion_failures
+                    }
 
-        except Exception as e:
-            logger.error(f"Error in delete_all_calendar_events_and_reset: {e}", exc_info=True)
-            return {
-                'success': False,
-                'message': str(e),
-                'events_deleted': events_deleted,
-                'deletion_failures': deletion_failures,
-                'records_cleared': records_cleared,
-                'committees_synced': 0,
-                'events_synced': 0,
-                'failures': deletion_failures
-            }
+                logger.info("Calendar reset and re-sync complete - lock will be released")
+
+                return {
+                    'success': True,
+                    'message': f'Reset complete: Deleted {events_deleted} events, cleared {records_cleared} records. Re-synced: {sync_result["committees_synced"]} committees, {sync_result["events_synced"]} events',
+                    'events_deleted': events_deleted,
+                    'deletion_failures': deletion_failures,
+                    'records_cleared': records_cleared,
+                    'committees_synced': sync_result.get('committees_synced', 0),
+                    'events_synced': sync_result.get('events_synced', 0),
+                    'failures': sync_result.get('failures', 0) + deletion_failures
+                }
+
+            except Exception as e:
+                logger.error(f"Error in delete_all_calendar_events_and_reset: {e}", exc_info=True)
+                return {
+                    'success': False,
+                    'message': str(e),
+                    'events_deleted': events_deleted,
+                    'deletion_failures': deletion_failures,
+                    'records_cleared': records_cleared,
+                    'committees_synced': 0,
+                    'events_synced': 0,
+                    'failures': deletion_failures
+                }
