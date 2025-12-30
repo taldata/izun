@@ -3212,22 +3212,38 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         self.execute(cursor, '''
-            SELECT u.*, h.name as hativa_name
+            SELECT u.user_id, u.username, u.email, u.password_hash, u.full_name, u.role,
+                   u.is_active, u.auth_source, u.ad_dn, u.created_at, u.last_login
             FROM users u
-            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
             WHERE LOWER(u.username) = LOWER(?)
         ''', (username,))
         row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            return None
+        
+        user_id = row[0]
+        
+        # Get user's hativot from junction table
+        self.execute(cursor, '''
+            SELECT h.hativa_id, h.name
+            FROM user_hativot uh
+            JOIN hativot h ON uh.hativa_id = h.hativa_id
+            WHERE uh.user_id = ?
+            ORDER BY h.name
+            LIMIT 1
+        ''', (user_id,))
+        hativa_row = cursor.fetchone()
         conn.close()
         
-        if row:
-            return {
-                'user_id': row[0], 'username': row[1], 'email': row[2], 'password_hash': row[3],
-                'full_name': row[4], 'role': row[5], 'hativa_id': row[6], 'is_active': row[7],
-                'auth_source': row[8], 'ad_dn': row[9], 
-                'created_at': row[10], 'last_login': row[11], 'hativa_name': row[12]
-            }
-        return None
+        return {
+            'user_id': user_id, 'username': row[1], 'email': row[2], 'password_hash': row[3],
+            'full_name': row[4], 'role': row[5], 'hativa_id': hativa_row[0] if hativa_row else None, 
+            'is_active': row[6], 'auth_source': row[7], 'ad_dn': row[8], 
+            'created_at': row[9], 'last_login': row[10], 
+            'hativa_name': hativa_row[1] if hativa_row else None
+        }
     
     def get_ad_users(self) -> List[Dict]:
         """Get all Active Directory users"""
@@ -3235,32 +3251,44 @@ class DatabaseManager:
         cursor = conn.cursor()
         self.execute(cursor, '''
             SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
-                   u.hativa_id, h.name as hativa_name, u.is_active, 
-                   u.created_at, u.last_login, u.ad_dn
+                   u.is_active, u.created_at, u.last_login, u.ad_dn
             FROM users u
-            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
             WHERE u.auth_source = 'ad'
             ORDER BY u.created_at DESC
         ''')
         rows = cursor.fetchall()
-        conn.close()
         
         users = []
         for row in rows:
+            user_id = row[0]
+            
+            # Get first hativa for this user
+            self.execute(cursor, '''
+                SELECT h.hativa_id, h.name
+                FROM user_hativot uh
+                JOIN hativot h ON uh.hativa_id = h.hativa_id
+                WHERE uh.user_id = ?
+                ORDER BY h.name
+                LIMIT 1
+            ''', (user_id,))
+            hativa_row = cursor.fetchone()
+            
             users.append({
-                'user_id': row[0],
+                'user_id': user_id,
                 'username': row[1],
                 'email': row[2],
                 'full_name': row[3],
                 'role': row[4],
-                'hativa_id': row[5],
-                'hativa_name': row[6],
-                'is_active': row[7],
-                'created_at': row[8],
-                'last_login': row[9],
-                'ad_dn': row[10],
+                'hativa_id': hativa_row[0] if hativa_row else None,
+                'hativa_name': hativa_row[1] if hativa_row else None,
+                'is_active': row[5],
+                'created_at': row[6],
+                'last_login': row[7],
+                'ad_dn': row[8],
                 'auth_source': 'ad'
             })
+        
+        conn.close()
         return users
     
     def get_local_users(self) -> List[Dict]:
@@ -3269,31 +3297,43 @@ class DatabaseManager:
         cursor = conn.cursor()
         self.execute(cursor, '''
             SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
-                   u.hativa_id, h.name as hativa_name, u.is_active, 
-                   u.created_at, u.last_login
+                   u.is_active, u.created_at, u.last_login
             FROM users u
-            LEFT JOIN hativot h ON u.hativa_id = h.hativa_id
             WHERE u.auth_source = 'local' OR u.auth_source IS NULL
             ORDER BY u.created_at DESC
         ''')
         rows = cursor.fetchall()
-        conn.close()
         
         users = []
         for row in rows:
+            user_id = row[0]
+            
+            # Get first hativa for this user
+            self.execute(cursor, '''
+                SELECT h.hativa_id, h.name
+                FROM user_hativot uh
+                JOIN hativot h ON uh.hativa_id = h.hativa_id
+                WHERE uh.user_id = ?
+                ORDER BY h.name
+                LIMIT 1
+            ''', (user_id,))
+            hativa_row = cursor.fetchone()
+            
             users.append({
-                'user_id': row[0],
+                'user_id': user_id,
                 'username': row[1],
                 'email': row[2],
                 'full_name': row[3],
                 'role': row[4],
-                'hativa_id': row[5],
-                'hativa_name': row[6],
-                'is_active': row[7],
-                'created_at': row[8],
-                'last_login': row[9],
+                'hativa_id': hativa_row[0] if hativa_row else None,
+                'hativa_name': hativa_row[1] if hativa_row else None,
+                'is_active': row[5],
+                'created_at': row[6],
+                'last_login': row[7],
                 'auth_source': 'local'
             })
+        
+        conn.close()
         return users
     
     # Recycle Bin Functions

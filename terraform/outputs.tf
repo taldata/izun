@@ -56,7 +56,7 @@ output "eb_endpoint_url" {
 
 output "azure_redirect_uri" {
   description = "Azure AD redirect URI to configure"
-  value       = "https://${aws_elastic_beanstalk_environment.production.cname}/auth/callback"
+  value       = var.cloudfront_domain != "" ? "https://${var.cloudfront_domain}/auth/callback" : "https://${aws_elastic_beanstalk_environment.production.cname}/auth/callback"
 }
 
 # VPC Outputs

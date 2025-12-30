@@ -3898,6 +3898,818 @@ def events_table():
         flash(f'שגיאה בטעינת נתוני האירועים: {str(e)}', 'error')
         return redirect(url_for('index'))
 
+@app.route('/api/admin/import_data', methods=['POST'])
+@admin_required
+def import_data_from_json():
+    """Import data from db_export.json file (Admin only)"""
+    try:
+        import json
+        import os
+        
+        # Look for export file
+        export_files = ['db_export.json', 'db_export_from_render.json']
+        data = None
+        used_file = None
+        
+        for export_file in export_files:
+            if os.path.exists(export_file):
+                try:
+                    with open(export_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    if isinstance(data, dict) and len(data) > 0:
+                        used_file = export_file
+                        break
+                except:
+                    continue
+        
+        if not data:
+            return jsonify({
+                'success': False, 
+                'message': 'לא נמצא קובץ ייצוא תקין (db_export.json)'
+            }), 404
+        
+        app.logger.info(f"Importing data from {used_file}")
+        
+        # Check current data counts
+        current_hativot = len(db.get_hativot())
+        current_events = len(db.get_all_events())
+        
+        if current_hativot > 0 and current_events > 5:
+            return jsonify({
+                'success': False,
+                'message': f'מסד הנתונים כבר מכיל נתונים (חטיבות: {current_hativot}, אירועים: {current_events}). יש לרוקן לפני ייבוא.',
+                'current_data': {'hativot': current_hativot, 'events': current_events}
+            }), 400
+        
+        # Import order to respect foreign key relationships
+        import_order = [
+            'users', 'hativot', 'system_settings', 'maslulim', 
+            'committee_types', 'exception_dates', 'user_hativot',
+            'hativa_day_constraints', 'vaadot', 'events', 'audit_logs',
+            'calendar_sync_events'
+        ]
+        
+        # Add any tables not in the import order
+        for table in data.keys():
+            if table not in import_order:
+                import_order.append(table)
+        
+        imported_counts = {}
+        
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        for table in import_order:
+            if table not in data:
+                continue
+            
+            records = data[table]
+            if not records:
+                continue
+            
+            columns = list(records[0].keys())
+            placeholders = ', '.join(['%s'] * len(columns))
+            column_names = ', '.join(columns)
+            
+            insert_query = f"""
+                INSERT INTO {table} ({column_names}) 
+                VALUES ({placeholders})
+                ON CONFLICT DO NOTHING
+            """
+            
+            success_count = 0
+            for record in records:
+                try:
+                    values = [record.get(col) for col in columns]
+                    db.execute(cursor, insert_query, tuple(values))
+                    success_count += 1
+                except Exception as e:
+                    app.logger.warning(f"Error importing to {table}: {e}")
+            
+            imported_counts[table] = success_count
+        
+        conn.commit()
+        conn.close()
+        
+        # Reset sequences for PostgreSQL
+        sequence_tables = [
+            ('hativot', 'hativa_id'), ('maslulim', 'maslul_id'),
+            ('committee_types', 'committee_type_id'), ('vaadot', 'vaadot_id'),
+            ('events', 'event_id'), ('users', 'user_id'),
+            ('exception_dates', 'date_id'), ('system_settings', 'setting_id'),
+            ('audit_logs', 'log_id'), ('user_hativot', 'user_hativa_id'),
+            ('hativa_day_constraints', 'constraint_id'),
+            ('calendar_sync_events', 'sync_id'),
+        ]
+        
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        for table, pk_column in sequence_tables:
+            try:
+                db.execute(cursor, f"""
+                    SELECT setval(pg_get_serial_sequence('{table}', '{pk_column}'), 
+                                  COALESCE((SELECT MAX({pk_column}) FROM {table}), 1))
+                """)
+            except:
+                pass
+        conn.commit()
+        conn.close()
+        
+        total = sum(imported_counts.values())
+        audit_logger.log('data_import', 'system', None, 'Data Import', 
+                        f'Imported {total} records from {used_file}')
+        
+        app.logger.info(f"Import complete: {imported_counts}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'יובאו {total} רשומות בהצלחה',
+            'imported': imported_counts,
+            'source_file': used_file
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error importing data: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/admin/db_stats')
+@admin_required  
+def get_db_stats():
+    """Get database statistics (Admin only)"""
+    try:
+        stats = {
+            'hativot': len(db.get_hativot()),
+            'maslulim': len(db.get_maslulim()),
+            'committee_types': len(db.get_committee_types()),
+            'vaadot': len(db.get_vaadot()),
+            'events': len(db.get_all_events()),
+            'users': len(db.get_all_users()),
+        }
+        return jsonify({'success': True, 'stats': stats})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/migrate/status')
+def migration_status():
+    """Check database status (no auth required, read-only)"""
+    import os
+    try:
+        stats = {
+            'hativot': len(db.get_hativot()),
+            'maslulim': len(db.get_maslulim()),
+            'vaadot': len(db.get_vaadot()),
+            'events': len(db.get_all_events()),
+        }
+        
+        # Check for export files
+        export_files = {}
+        for f in ['db_export.json', 'db_export_from_render.json']:
+            if os.path.exists(f):
+                export_files[f] = os.path.getsize(f)
+        
+        return jsonify({
+            'success': True, 
+            'stats': stats, 
+            'needs_migration': stats['hativot'] == 0,
+            'export_files': export_files,
+            'cwd': os.getcwd()
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/migrate/fix-schema/<secret_key>', methods=['POST'])
+def fix_schema(secret_key):
+    """Add missing columns to tables"""
+    if secret_key != 'izun-migrate-2024-aws':
+        return jsonify({'success': False, 'message': 'Invalid key'}), 403
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        fixes = []
+        
+        # Add status column to vaadot if missing
+        try:
+            cursor.execute("ALTER TABLE vaadot ADD COLUMN status TEXT DEFAULT 'planned'")
+            conn.commit()
+            fixes.append("Added status column to vaadot")
+        except Exception as e:
+            conn.rollback()
+            if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+                fixes.append("status column already exists in vaadot")
+            else:
+                fixes.append(f"Error adding status to vaadot: {e}")
+        
+        # Add priority column to events if missing
+        try:
+            cursor.execute("ALTER TABLE events ADD COLUMN priority INTEGER DEFAULT 1")
+            conn.commit()
+            fixes.append("Added priority column to events")
+        except Exception as e:
+            conn.rollback()
+            if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+                fixes.append("priority column already exists in events")
+            else:
+                fixes.append(f"Error adding priority to events: {e}")
+        
+        # Add notes column to events if missing
+        try:
+            cursor.execute("ALTER TABLE events ADD COLUMN notes TEXT DEFAULT ''")
+            conn.commit()
+            fixes.append("Added notes column to events")
+        except Exception as e:
+            conn.rollback()
+            if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+                fixes.append("notes column already exists in events")
+            else:
+                fixes.append(f"Error adding notes to events: {e}")
+        
+        # Add status column to events if missing
+        try:
+            cursor.execute("ALTER TABLE events ADD COLUMN status TEXT DEFAULT 'planned'")
+            conn.commit()
+            fixes.append("Added status column to events")
+        except Exception as e:
+            conn.rollback()
+            if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+                fixes.append("status column already exists in events")
+            else:
+                fixes.append(f"Error adding status to events: {e}")
+        
+        # Add scheduled_date column to events if missing
+        try:
+            cursor.execute("ALTER TABLE events ADD COLUMN scheduled_date DATE")
+            conn.commit()
+            fixes.append("Added scheduled_date column to events")
+        except Exception as e:
+            conn.rollback()
+            if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+                fixes.append("scheduled_date column already exists in events")
+            else:
+                fixes.append(f"Error adding scheduled_date to events: {e}")
+        
+        # Add call_publication_date column to events if missing
+        try:
+            cursor.execute("ALTER TABLE events ADD COLUMN call_publication_date DATE")
+            conn.commit()
+            fixes.append("Added call_publication_date column to events")
+        except Exception as e:
+            conn.rollback()
+            if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+                fixes.append("call_publication_date column already exists in events")
+            else:
+                fixes.append(f"Error adding call_publication_date to events: {e}")
+        
+        # Add actual_submissions column to events if missing
+        try:
+            cursor.execute("ALTER TABLE events ADD COLUMN actual_submissions INTEGER DEFAULT 0")
+            conn.commit()
+            fixes.append("Added actual_submissions column to events")
+        except Exception as e:
+            conn.rollback()
+            if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+                fixes.append("actual_submissions column already exists in events")
+            else:
+                fixes.append(f"Error adding actual_submissions to events: {e}")
+        
+        # Add expected_requests column to events if missing
+        try:
+            cursor.execute("ALTER TABLE events ADD COLUMN expected_requests INTEGER DEFAULT 0")
+            conn.commit()
+            fixes.append("Added expected_requests column to events")
+        except Exception as e:
+            conn.rollback()
+            if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+                fixes.append("expected_requests column already exists in events")
+            else:
+                fixes.append(f"Error adding expected_requests to events: {e}")
+        
+        conn.close()
+        
+        return jsonify({'success': True, 'fixes': fixes})
+        
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'message': str(e), 'traceback': traceback.format_exc()}), 500
+
+@app.route('/api/migrate/full/<secret_key>')
+def full_migration(secret_key):
+    """Full migration - insert ALL data in correct FK order"""
+    if secret_key != 'izun-migrate-2024-aws':
+        return jsonify({'success': False, 'message': 'Invalid key'}), 403
+    
+    import json
+    try:
+        # Load data
+        with open('db_export.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        results = {'inserted': {}, 'errors': {}}
+        
+        # Clear ALL tables first
+        clear_order = [
+            'calendar_sync_events', 'audit_logs', 'events', 'vaadot',
+            'hativa_day_constraints', 'user_hativot', 'exception_dates',
+            'committee_types', 'maslulim', 'system_settings', 'hativot', 'users'
+        ]
+        for table in clear_order:
+            try:
+                cursor.execute(f"DELETE FROM {table}")
+            except:
+                pass
+        conn.commit()
+        
+        # 1. Insert hativot
+        for h in data.get('hativot', []):
+            try:
+                cursor.execute("""
+                    INSERT INTO hativot (hativa_id, name, description, color, is_active, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (h.get('hativa_id'), h.get('name'), h.get('description'), 
+                      h.get('color', '#007bff'), h.get('is_active', 1), h.get('created_at')))
+            except Exception as e:
+                results['errors'].setdefault('hativot', []).append(str(e)[:100])
+        conn.commit()
+        cursor.execute("SELECT COUNT(*) FROM hativot")
+        results['inserted']['hativot'] = cursor.fetchone()[0]
+        
+        # 2. Insert maslulim
+        for m in data.get('maslulim', []):
+            try:
+                cursor.execute("""
+                    INSERT INTO maslulim (maslul_id, hativa_id, name, description, is_active, created_at, sla_days, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (m.get('maslul_id'), m.get('hativa_id'), m.get('name'), m.get('description'),
+                      m.get('is_active', 1), m.get('created_at'), m.get('sla_days', 45),
+                      m.get('stage_a_days', 10), m.get('stage_b_days', 15),
+                      m.get('stage_c_days', 10), m.get('stage_d_days', 10)))
+            except Exception as e:
+                results['errors'].setdefault('maslulim', []).append(str(e)[:100])
+        conn.commit()
+        cursor.execute("SELECT COUNT(*) FROM maslulim")
+        results['inserted']['maslulim'] = cursor.fetchone()[0]
+        
+        # 3. Insert committee_types
+        for ct in data.get('committee_types', []):
+            try:
+                cursor.execute("""
+                    INSERT INTO committee_types (committee_type_id, hativa_id, name, scheduled_day, frequency, week_of_month, is_operational, is_active, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (ct.get('committee_type_id'), ct.get('hativa_id'), ct.get('name'),
+                      ct.get('scheduled_day'), ct.get('frequency', 'weekly'),
+                      ct.get('week_of_month'), ct.get('is_operational', 0),
+                      ct.get('is_active', 1), ct.get('created_at')))
+            except Exception as e:
+                results['errors'].setdefault('committee_types', []).append(str(e)[:100])
+        conn.commit()
+        cursor.execute("SELECT COUNT(*) FROM committee_types")
+        results['inserted']['committee_types'] = cursor.fetchone()[0]
+        
+        # 4. Insert vaadot
+        for v in data.get('vaadot', []):
+            try:
+                cursor.execute("""
+                    INSERT INTO vaadot (vaadot_id, committee_type_id, hativa_id, vaada_date, status, exception_date_id, notes, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (v.get('vaadot_id'), v.get('committee_type_id'), v.get('hativa_id'),
+                      v.get('vaada_date'), v.get('status'), v.get('exception_date_id'),
+                      v.get('notes'), v.get('created_at')))
+            except Exception as e:
+                results['errors'].setdefault('vaadot', []).append(str(e)[:100])
+        conn.commit()
+        cursor.execute("SELECT COUNT(*) FROM vaadot")
+        results['inserted']['vaadot'] = cursor.fetchone()[0]
+        
+        # 5. Insert events
+        for e in data.get('events', []):
+            try:
+                cursor.execute("""
+                    INSERT INTO events (event_id, vaadot_id, maslul_id, name, event_type, expected_requests,
+                                       scheduled_date, status, created_at, call_deadline_date, 
+                                       intake_deadline_date, review_deadline_date, response_deadline_date,
+                                       call_publication_date, actual_submissions, priority, notes)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (e.get('event_id'), e.get('vaadot_id'), e.get('maslul_id'),
+                      e.get('name', ''), e.get('event_type'), e.get('expected_requests', 0),
+                      e.get('scheduled_date'), e.get('status', 'planned'), e.get('created_at'),
+                      e.get('call_deadline_date'), e.get('intake_deadline_date'),
+                      e.get('review_deadline_date'), e.get('response_deadline_date'),
+                      e.get('call_publication_date'), e.get('actual_submissions', 0),
+                      e.get('priority', 1), e.get('notes', '')))
+            except Exception as ex:
+                results['errors'].setdefault('events', []).append(str(ex)[:100])
+        conn.commit()
+        cursor.execute("SELECT COUNT(*) FROM events")
+        results['inserted']['events'] = cursor.fetchone()[0]
+        
+        # 6. Insert users
+        for u in data.get('users', []):
+            try:
+                cursor.execute("""
+                    INSERT INTO users (user_id, username, email, password_hash, full_name, role, is_active, auth_source, ad_dn, created_at, last_login)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (u.get('user_id'), u.get('username'), u.get('email'), u.get('password_hash'),
+                      u.get('full_name', u.get('username')), u.get('role', 'viewer'), u.get('is_active', 1),
+                      u.get('auth_source', 'local'), u.get('ad_dn'), u.get('created_at'), u.get('last_login')))
+            except Exception as e:
+                results['errors'].setdefault('users', []).append(str(e)[:100])
+        conn.commit()
+        cursor.execute("SELECT COUNT(*) FROM users")
+        results['inserted']['users'] = cursor.fetchone()[0]
+        
+        # 7. Insert exception_dates
+        for ed in data.get('exception_dates', []):
+            try:
+                cursor.execute("""
+                    INSERT INTO exception_dates (date_id, exception_date, description, type, created_at)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (ed.get('date_id'), ed.get('exception_date'), ed.get('description'),
+                      ed.get('type', 'holiday'), ed.get('created_at')))
+            except Exception as e:
+                results['errors'].setdefault('exception_dates', []).append(str(e)[:100])
+        conn.commit()
+        cursor.execute("SELECT COUNT(*) FROM exception_dates")
+        results['inserted']['exception_dates'] = cursor.fetchone()[0]
+        
+        # 8. Insert system_settings
+        for ss in data.get('system_settings', []):
+            try:
+                cursor.execute("""
+                    INSERT INTO system_settings (setting_id, setting_key, setting_value, description, updated_at, updated_by)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (ss.get('setting_id'), ss.get('setting_key'), ss.get('setting_value'),
+                      ss.get('description'), ss.get('updated_at'), ss.get('updated_by')))
+            except Exception as e:
+                results['errors'].setdefault('system_settings', []).append(str(e)[:100])
+        conn.commit()
+        cursor.execute("SELECT COUNT(*) FROM system_settings")
+        results['inserted']['system_settings'] = cursor.fetchone()[0]
+        
+        # 9. Insert audit_logs
+        for al in data.get('audit_logs', []):
+            try:
+                cursor.execute("""
+                    INSERT INTO audit_logs (log_id, timestamp, user_id, username, action, entity_type, entity_id, entity_name, details, ip_address, user_agent, status, error_message)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (al.get('log_id'), al.get('timestamp'), al.get('user_id'), al.get('username'),
+                      al.get('action'), al.get('entity_type'), al.get('entity_id'), al.get('entity_name'),
+                      al.get('details'), al.get('ip_address'), al.get('user_agent'), 
+                      al.get('status', 'success'), al.get('error_message')))
+            except Exception as e:
+                results['errors'].setdefault('audit_logs', []).append(str(e)[:100])
+        conn.commit()
+        cursor.execute("SELECT COUNT(*) FROM audit_logs")
+        results['inserted']['audit_logs'] = cursor.fetchone()[0]
+        
+        # 10. Insert calendar_sync_events
+        for cs in data.get('calendar_sync_events', []):
+            try:
+                cursor.execute("""
+                    INSERT INTO calendar_sync_events (sync_id, vaada_id, calendar_event_id, last_synced)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (cs.get('sync_id'), cs.get('vaada_id'), cs.get('calendar_event_id'), cs.get('last_synced')))
+            except Exception as e:
+                results['errors'].setdefault('calendar_sync_events', []).append(str(e)[:100])
+        conn.commit()
+        cursor.execute("SELECT COUNT(*) FROM calendar_sync_events")
+        results['inserted']['calendar_sync_events'] = cursor.fetchone()[0]
+        
+        # Reset sequences
+        sequence_tables = [
+            ('hativot', 'hativa_id'), ('maslulim', 'maslul_id'),
+            ('committee_types', 'committee_type_id'), ('vaadot', 'vaadot_id'),
+            ('events', 'event_id'), ('users', 'user_id'),
+            ('exception_dates', 'date_id'), ('system_settings', 'setting_id'),
+            ('audit_logs', 'log_id'),
+        ]
+        for table, pk in sequence_tables:
+            try:
+                cursor.execute(f"""
+                    SELECT setval(pg_get_serial_sequence('{table}', '{pk}'), 
+                                  COALESCE((SELECT MAX({pk}) FROM {table}), 1))
+                """)
+            except:
+                pass
+        conn.commit()
+        conn.close()
+        
+        # Truncate errors to first 3
+        for k in results['errors']:
+            results['errors'][k] = results['errors'][k][:3]
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+        
+    except Exception as ex:
+        import traceback
+        return jsonify({'success': False, 'message': str(ex), 'traceback': traceback.format_exc()}), 500
+
+@app.route('/api/admin/export_users/<secret_key>')
+def export_users_from_render(secret_key):
+    """Export all users from current database - for migration comparison"""
+    if secret_key != 'izun-migrate-2024-aws':
+        return jsonify({'success': False, 'message': 'Invalid key'}), 403
+    
+    try:
+        # Get all users from current database
+        users = db.get_all_users()
+        
+        return jsonify({
+            'success': True,
+            'count': len(users),
+            'users': users
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'message': str(e), 'traceback': traceback.format_exc()}), 500
+
+@app.route('/api/migrate/test/<secret_key>')
+def test_migration_insert(secret_key):
+    """Test migration - insert vaadot and events directly"""
+    if secret_key != 'izun-migrate-2024-aws':
+        return jsonify({'success': False, 'message': 'Invalid key'}), 403
+    
+    import json
+    try:
+        # Load data
+        with open('db_export.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        results = {}
+        
+        # Insert vaadot directly
+        vaadot = data.get('vaadot', [])
+        vaadot_inserted = 0
+        vaadot_errors = []
+        for v in vaadot:
+            try:
+                cursor.execute("""
+                    INSERT INTO vaadot (vaadot_id, committee_type_id, hativa_id, vaada_date, status, exception_date_id, notes, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (
+                    v.get('vaadot_id'),
+                    v.get('committee_type_id'),
+                    v.get('hativa_id'),
+                    v.get('vaada_date'),
+                    v.get('status'),
+                    v.get('exception_date_id'),
+                    v.get('notes'),
+                    v.get('created_at')
+                ))
+                vaadot_inserted += 1
+            except Exception as e:
+                if len(vaadot_errors) < 5:
+                    vaadot_errors.append(str(e))
+        
+        conn.commit()
+        results['vaadot_inserted'] = vaadot_inserted
+        results['vaadot_errors'] = vaadot_errors
+        
+        # Insert events directly
+        events = data.get('events', [])
+        events_inserted = 0
+        events_errors = []
+        for e in events:
+            try:
+                cursor.execute("""
+                    INSERT INTO events (event_id, vaadot_id, maslul_id, name, event_type, expected_requests,
+                                       scheduled_date, status, created_at, call_deadline_date, 
+                                       intake_deadline_date, review_deadline_date, response_deadline_date,
+                                       call_publication_date, actual_submissions, priority, notes)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (
+                    e.get('event_id'),
+                    e.get('vaadot_id'),
+                    e.get('maslul_id'),
+                    e.get('name', ''),
+                    e.get('event_type'),
+                    e.get('expected_requests', 0),
+                    e.get('scheduled_date'),
+                    e.get('status', 'planned'),
+                    e.get('created_at'),
+                    e.get('call_deadline_date'),
+                    e.get('intake_deadline_date'),
+                    e.get('review_deadline_date'),
+                    e.get('response_deadline_date'),
+                    e.get('call_publication_date'),
+                    e.get('actual_submissions', 0),
+                    e.get('priority', 1),
+                    e.get('notes', '')
+                ))
+                events_inserted += 1
+            except Exception as ex:
+                if len(events_errors) < 5:
+                    events_errors.append(str(ex))
+        
+        conn.commit()
+        results['events_inserted'] = events_inserted
+        results['events_errors'] = events_errors
+        
+        # Reset sequences
+        for table, pk in [('vaadot', 'vaadot_id'), ('events', 'event_id')]:
+            try:
+                cursor.execute(f"""
+                    SELECT setval(pg_get_serial_sequence('{table}', '{pk}'), 
+                                  COALESCE((SELECT MAX({pk}) FROM {table}), 1))
+                """)
+            except:
+                pass
+        
+        conn.commit()
+        
+        # Final counts
+        cursor.execute("SELECT COUNT(*) FROM vaadot")
+        results['vaadot_count'] = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM events")
+        results['events_count'] = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+        
+    except Exception as ex:
+        import traceback
+        return jsonify({'success': False, 'message': str(ex), 'traceback': traceback.format_exc()}), 500
+
+@app.route('/api/migrate/run/<secret_key>', methods=['POST'])
+def run_migration(secret_key):
+    """Run migration with secret key (one-time use)"""
+    # Simple secret key for one-time migration
+    MIGRATION_SECRET = 'izun-migrate-2024-aws'
+    
+    if secret_key != MIGRATION_SECRET:
+        return jsonify({'success': False, 'message': 'Invalid secret key'}), 403
+    
+    try:
+        import json
+        import os
+        
+        # Check if force clear is requested
+        force_clear = request.args.get('clear', 'false').lower() == 'true'
+        
+        # Look for export file
+        export_files = ['db_export.json', 'db_export_from_render.json']
+        data = None
+        used_file = None
+        
+        for export_file in export_files:
+            if os.path.exists(export_file):
+                try:
+                    with open(export_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    if isinstance(data, dict) and len(data) > 0:
+                        used_file = export_file
+                        break
+                except:
+                    continue
+        
+        if not data:
+            return jsonify({
+                'success': False, 
+                'message': 'לא נמצא קובץ ייצוא תקין (db_export.json)'
+            }), 404
+        
+        app.logger.info(f"Running migration from {used_file}, force_clear={force_clear}")
+        
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Clear tables in reverse order if requested
+        if force_clear:
+            clear_order = [
+                'calendar_sync_events', 'audit_logs', 'events', 'vaadot',
+                'hativa_day_constraints', 'user_hativot', 'exception_dates',
+                'committee_types', 'maslulim', 'system_settings', 'hativot', 'users'
+            ]
+            for table in clear_order:
+                try:
+                    db.execute(cursor, f"DELETE FROM {table}")
+                    app.logger.info(f"Cleared table {table}")
+                except Exception as e:
+                    app.logger.warning(f"Could not clear {table}: {e}")
+            conn.commit()
+        
+        # Import order to respect foreign key relationships
+        import_order = [
+            'users', 'hativot', 'system_settings', 'maslulim', 
+            'committee_types', 'exception_dates', 'user_hativot',
+            'hativa_day_constraints', 'vaadot', 'events', 'audit_logs',
+            'calendar_sync_events'
+        ]
+        
+        for table in data.keys():
+            if table not in import_order:
+                import_order.append(table)
+        
+        imported_counts = {}
+        
+        for table in import_order:
+            if table not in data:
+                continue
+            
+            records = data[table]
+            if not records:
+                continue
+            
+            columns = list(records[0].keys())
+            placeholders = ', '.join(['%s'] * len(columns))
+            column_names = ', '.join(columns)
+            
+            insert_query = f"""
+                INSERT INTO {table} ({column_names}) 
+                VALUES ({placeholders})
+                ON CONFLICT DO NOTHING
+            """
+            
+            success_count = 0
+            error_count = 0
+            last_error = None
+            for record in records:
+                try:
+                    values = [record.get(col) for col in columns]
+                    db.execute(cursor, insert_query, tuple(values))
+                    success_count += 1
+                except Exception as e:
+                    error_count += 1
+                    last_error = str(e)
+                    if error_count <= 3:
+                        app.logger.warning(f"Error importing to {table}: {e}")
+            
+            imported_counts[table] = success_count
+            if error_count > 0:
+                app.logger.info(f"Imported {success_count}/{len(records)} to {table} ({error_count} errors). Last: {last_error}")
+            else:
+                app.logger.info(f"Imported {success_count} records to {table}")
+        
+        conn.commit()
+        
+        # Reset sequences for PostgreSQL
+        sequence_tables = [
+            ('hativot', 'hativa_id'), ('maslulim', 'maslul_id'),
+            ('committee_types', 'committee_type_id'), ('vaadot', 'vaadot_id'),
+            ('events', 'event_id'), ('users', 'user_id'),
+            ('exception_dates', 'date_id'), ('system_settings', 'setting_id'),
+        ]
+        
+        for table, pk_column in sequence_tables:
+            try:
+                db.execute(cursor, f"""
+                    SELECT setval(pg_get_serial_sequence('{table}', '{pk_column}'), 
+                                  COALESCE((SELECT MAX({pk_column}) FROM {table}), 1))
+                """)
+            except:
+                pass
+        conn.commit()
+        conn.close()
+        
+        total = sum(imported_counts.values())
+        app.logger.info(f"Migration complete: {imported_counts}")
+        
+        # Get final counts
+        final_stats = {
+            'hativot': len(db.get_hativot()),
+            'maslulim': len(db.get_maslulim()),
+            'vaadot': len(db.get_vaadot()),
+            'events': len(db.get_all_events()),
+        }
+        
+        return jsonify({
+            'success': True,
+            'message': f'יובאו {total} רשומות בהצלחה',
+            'imported': imported_counts,
+            'source_file': used_file,
+            'cleared': force_clear,
+            'final_stats': final_stats
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error during migration: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5001))
