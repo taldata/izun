@@ -8,10 +8,21 @@ This creates a data export that can be imported on Render
 import sqlite3
 import json
 import sys
+import os
 
-def export_database(db_path='committee_system.db'):
+def export_database(db_path=None):
     """Export database to JSON format"""
+    # Default paths - check Render production path first, then local
+    if db_path is None:
+        if os.path.exists('/var/data/committee_system.db'):
+            db_path = '/var/data/committee_system.db'
+        elif os.path.exists('committee_system.db'):
+            db_path = 'committee_system.db'
+        else:
+            db_path = 'committee_system.db'
+    
     try:
+        print(f"📦 Exporting from database: {db_path}")
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()

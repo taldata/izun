@@ -4499,6 +4499,56 @@ def export_users_from_render(secret_key):
         import traceback
         return jsonify({'success': False, 'message': str(e), 'traceback': traceback.format_exc()}), 500
 
+@app.route('/api/admin/export_all_data/<secret_key>')
+def export_all_data(secret_key):
+    """Export all data from database to JSON format - for migration"""
+    if secret_key != 'izun-migrate-2024-aws':
+        return jsonify({'success': False, 'message': 'Invalid key'}), 403
+    
+    try:
+        import json
+        from datetime import datetime
+        
+        data = {}
+        
+        # Export all tables
+        tables = [
+            'users', 'hativot', 'maslulim', 'committee_types', 
+            'vaadot', 'events', 'exception_dates', 'system_settings',
+            'audit_logs', 'user_hativot', 'hativa_day_constraints',
+            'calendar_sync_events'
+        ]
+        
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        for table in tables:
+            try:
+                cursor.execute(f"SELECT * FROM {table}")
+                rows = cursor.fetchall()
+                columns = [desc[0] for desc in cursor.description]
+                data[table] = [dict(zip(columns, row)) for row in rows]
+            except Exception as e:
+                # Table might not exist, skip it
+                data[table] = []
+        
+        conn.close()
+        
+        # Convert to JSON with proper date handling
+        def json_serial(obj):
+            if isinstance(obj, (datetime, date)):
+                return obj.isoformat()
+            raise TypeError(f"Type {type(obj)} not serializable")
+        
+        return jsonify({
+            'success': True,
+            'data': data,
+            'counts': {table: len(records) for table, records in data.items()}
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'message': str(e), 'traceback': traceback.format_exc()}), 500
+
 @app.route('/api/migrate/test/<secret_key>')
 def test_migration_insert(secret_key):
     """Test migration - insert vaadot and events directly"""
