@@ -109,9 +109,19 @@ def check_mobile_access():
 
 # Error handlers
 @app.errorhandler(500)
-def internal_server_error(e):
     """Handle internal server errors gracefully"""
     app.logger.error(f"Internal Server Error: {e}", exc_info=True)
+    
+    # DEBUG: Write error to static file for debugging
+    try:
+        import traceback
+        with open('static/error.txt', 'w') as f:
+            f.write(f"Time: {datetime.now()}\n")
+            f.write(f"Error: {str(e)}\n")
+            f.write(traceback.format_exc())
+    except Exception as write_err:
+        app.logger.error(f"Failed to write error log: {write_err}")
+
     return render_template('errors/auth_error.html',
         title='שגיאת שרת פנימית',
         message='אירעה שגיאה פנימית בשרת. אנא נסה שוב מאוחר יותר.',
