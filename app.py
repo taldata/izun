@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time
 import json
+from flask.json.provider import DefaultJSONProvider
 import os
 from database import DatabaseManager
 from auto_scheduler import AutoMeetingScheduler
@@ -20,6 +21,17 @@ from services.committee_service import get_committee_summary
 
 app = Flask(__name__)
 app.secret_key = 'committee_management_secret_key_2025_azure_oauth_enabled'
+
+# Custom JSON Provider to handle time objects
+class CustomJSONProvider(DefaultJSONProvider):
+    def default(self, obj):
+        if isinstance(obj, time):
+            return obj.strftime('%H:%M')
+        if isinstance(obj, (date, datetime)):
+            return obj.isoformat()
+        return super().default(obj)
+
+app.json = CustomJSONProvider(app)
 
 # Session configuration (can be overridden via environment variables)
 session_cookie_secure = os.getenv('SESSION_COOKIE_SECURE', 'true').lower() == 'true'
@@ -111,14 +123,11 @@ def check_mobile_access():
 @app.errorhandler(500)
 def internal_server_error(e):
     """Handle internal server errors gracefully"""
-    import traceback
-    error_details = f"{str(e)}\n\n{traceback.format_exc()}"
-    app.logger.error(f"Internal Server Error: {error_details}")
-
+    app.logger.error(f"Internal Server Error: {e}", exc_info=True)
     return render_template('errors/auth_error.html',
         title='שגיאת שרת פנימית',
         message='אירעה שגיאה פנימית בשרת. אנא נסה שוב מאוחר יותר.',
-        details=error_details,  # Temporarily show details in production for debugging
+        details=str(e) if app.debug else None,
         show_retry=True,
         current_user=None), 500
 
