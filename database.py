@@ -2635,7 +2635,7 @@ class DatabaseManager:
             hativa_name = row[0]
             
             # Delete allowed days constraints
-            cursor.execute('DELETE FROM hativa_allowed_days WHERE hativa_id = ?', (hativa_id,))
+            cursor.execute('DELETE FROM hativa_day_constraints WHERE hativa_id = ?', (hativa_id,))
             
             # Delete the hativa
             cursor.execute('DELETE FROM hativot WHERE hativa_id = ?', (hativa_id,))
