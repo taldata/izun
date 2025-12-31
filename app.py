@@ -776,6 +776,55 @@ def toggle_hativa(hativa_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/hativa/<int:hativa_id>/can_delete')
+@admin_required
+def api_can_delete_hativa(hativa_id):
+    """Check if a hativa can be deleted (admin only)"""
+    try:
+        can_delete, reason, counts = db.can_delete_hativa(hativa_id)
+        
+        return jsonify({
+            'success': True,
+            'can_delete': can_delete,
+            'reason': reason,
+            'counts': counts
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/hativa/<int:hativa_id>/delete', methods=['POST'])
+@admin_required
+def api_delete_hativa(hativa_id):
+    """Delete a hativa permanently (admin only, only if empty)"""
+    try:
+        # Get hativa name before deletion for audit
+        hativot = db.get_hativot()
+        hativa = next((h for h in hativot if h['hativa_id'] == hativa_id), None)
+        hativa_name = hativa['name'] if hativa else 'Unknown'
+        
+        success, message = db.delete_hativa(hativa_id)
+        
+        if success:
+            audit_logger.log_success(
+                audit_logger.ACTION_DELETE,
+                audit_logger.ENTITY_HATIVA,
+                hativa_id,
+                hativa_name,
+                details='נמחקה לצמיתות'
+            )
+            return jsonify({
+                'success': True,
+                'message': message
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': message
+            }), 400
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/toggle_maslul/<int:maslul_id>', methods=['POST'])
 @editing_permission_required
 def toggle_maslul(maslul_id):

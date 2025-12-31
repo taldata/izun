@@ -57,9 +57,16 @@
                                             <i class="bi bi-calendar-week me-1"></i>אילוצי ימים
                                         </button>
                                         <a href="{{ url_for('maslulim') }}?hativa_id={{ hativa.hativa_id }}" 
-                                           class="btn btn-sm btn-outline-info">
+                                           class="btn btn-sm btn-outline-info me-1">
                                             <i class="bi bi-arrow-right-circle me-1"></i>מסלולים
                                         </a>
+                                        {% if current_user and current_user.role == 'admin' %}
+                                        <button class="btn btn-sm btn-outline-danger" 
+                                                onclick="checkAndDeleteHativa({{ hativa.hativa_id }}, '{{ hativa.name }}')"
+                                                title="מחק חטיבה">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -251,6 +258,58 @@ function manageDayConstraints(hativaId, hativaName, allowedDays) {
                 checkbox.checked = true;
             }
         });
+    }
+}
+
+async function checkAndDeleteHativa(hativaId, hativaName) {
+    try {
+        // First check if deletion is possible
+        const checkResponse = await fetch(`/api/hativa/${hativaId}/can_delete`);
+        const checkData = await checkResponse.json();
+
+        if (!checkData.success) {
+            alert('שגיאה בבדיקת אפשרות המחיקה: ' + (checkData.error || 'שגיאה לא ידועה'));
+            return;
+        }
+
+        if (!checkData.can_delete) {
+            // Build detailed message about what's blocking
+            let details = [];
+            const counts = checkData.counts;
+            if (counts.events > 0) details.push(`${counts.events} אירועים`);
+            if (counts.vaadot > 0) details.push(`${counts.vaadot} ועדות`);
+            if (counts.maslulim > 0) details.push(`${counts.maslulim} מסלולים`);
+            if (counts.committee_types > 0) details.push(`${counts.committee_types} סוגי ועדות`);
+            if (counts.users > 0) details.push(`${counts.users} משתמשים משויכים`);
+
+            alert(`לא ניתן למחוק את החטיבה "${hativaName}".\n\nקיימים בחטיבה:\n• ${details.join('\n• ')}\n\nיש למחוק או להעביר את כל הפריטים לפני מחיקת החטיבה.`);
+            return;
+        }
+
+        // Confirm deletion
+        if (!confirm(`האם אתה בטוח שברצונך למחוק את החטיבה "${hativaName}"?\n\nפעולה זו לא ניתנת לביטול!`)) {
+            return;
+        }
+
+        // Perform deletion
+        const deleteResponse = await fetch(`/api/hativa/${hativaId}/delete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const deleteData = await deleteResponse.json();
+
+        if (deleteData.success) {
+            alert(deleteData.message);
+            window.location.reload();
+        } else {
+            alert('שגיאה במחיקה: ' + (deleteData.message || 'שגיאה לא ידועה'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('שגיאה בתקשורת עם השרת');
     }
 }
 </script>

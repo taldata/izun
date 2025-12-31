@@ -2554,6 +2554,99 @@ class DatabaseManager:
         except Exception:
             return False
     
+    def can_delete_hativa(self, hativa_id: int) -> tuple:
+        """
+        Check if a hativa can be deleted (only if it has no events, vaadot, maslulim, committee_types, or users)
+        Returns: (can_delete, reason, counts)
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        counts = {}
+        
+        # Check for vaadot (committee meetings)
+        cursor.execute('''
+            SELECT COUNT(*) FROM vaadot 
+            WHERE hativa_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)
+        ''', (hativa_id,))
+        counts['vaadot'] = cursor.fetchone()[0]
+        
+        # Check for maslulim (routes)
+        cursor.execute('SELECT COUNT(*) FROM maslulim WHERE hativa_id = ?', (hativa_id,))
+        counts['maslulim'] = cursor.fetchone()[0]
+        
+        # Check for events through maslulim
+        cursor.execute('''
+            SELECT COUNT(*) FROM events e
+            JOIN maslulim m ON e.maslul_id = m.maslul_id
+            WHERE m.hativa_id = ? AND (e.is_deleted = 0 OR e.is_deleted IS NULL)
+        ''', (hativa_id,))
+        counts['events'] = cursor.fetchone()[0]
+        
+        # Check for committee_types
+        cursor.execute('SELECT COUNT(*) FROM committee_types WHERE hativa_id = ?', (hativa_id,))
+        counts['committee_types'] = cursor.fetchone()[0]
+        
+        # Check for users assigned to this hativa
+        cursor.execute('SELECT COUNT(*) FROM user_hativot WHERE hativa_id = ?', (hativa_id,))
+        counts['users'] = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        # Build reason message if can't delete
+        blocking_items = []
+        if counts['events'] > 0:
+            blocking_items.append(f"{counts['events']} אירועים")
+        if counts['vaadot'] > 0:
+            blocking_items.append(f"{counts['vaadot']} ועדות")
+        if counts['maslulim'] > 0:
+            blocking_items.append(f"{counts['maslulim']} מסלולים")
+        if counts['committee_types'] > 0:
+            blocking_items.append(f"{counts['committee_types']} סוגי ועדות")
+        if counts['users'] > 0:
+            blocking_items.append(f"{counts['users']} משתמשים משויכים")
+        
+        if blocking_items:
+            return False, f"לא ניתן למחוק את החטיבה. קיימים: {', '.join(blocking_items)}", counts
+        
+        return True, "ניתן למחוק את החטיבה", counts
+    
+    def delete_hativa(self, hativa_id: int) -> tuple:
+        """
+        Permanently delete a hativa (only if it has no related data)
+        Returns: (success, message)
+        """
+        # First check if can delete
+        can_delete, reason, counts = self.can_delete_hativa(hativa_id)
+        if not can_delete:
+            return False, reason
+        
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # Get hativa name for the message
+            cursor.execute('SELECT name FROM hativot WHERE hativa_id = ?', (hativa_id,))
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return False, "החטיבה לא נמצאה"
+            
+            hativa_name = row[0]
+            
+            # Delete allowed days constraints
+            cursor.execute('DELETE FROM hativa_allowed_days WHERE hativa_id = ?', (hativa_id,))
+            
+            # Delete the hativa
+            cursor.execute('DELETE FROM hativot WHERE hativa_id = ?', (hativa_id,))
+            
+            conn.commit()
+            conn.close()
+            
+            return True, f"החטיבה '{hativa_name}' נמחקה בהצלחה"
+        except Exception as e:
+            return False, f"שגיאה במחיקת החטיבה: {str(e)}"
+    
     def deactivate_maslul(self, maslul_id: int) -> bool:
         """Deactivate route instead of deleting"""
         try:
