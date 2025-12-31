@@ -353,11 +353,10 @@ class AutoMeetingScheduler:
                 
                 if can_create:
                     # כל הישיבות נוצרות בסטטוס "מתוזמן"
-                    meeting_id = self.db.add_vaada(
+                    meeting_id, warning = self.db.add_vaada(
                         committee_type_id=suggestion['committee_type_id'],
                         hativa_id=suggestion['hativa_id'],
                         vaada_date=suggested_date,
-                        status='scheduled',
                         notes=f"נוצר אוטומטית - {suggestion['frequency']}"
                     )
                     
