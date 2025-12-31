@@ -3345,11 +3345,18 @@ class DatabaseManager:
         entities = [{'entity_type': row[0], 'count': row[1]} for row in cursor.fetchall()]
         
         # Recent activity (last 24 hours)
-        cursor.execute('''
-            SELECT COUNT(*) 
-            FROM audit_logs 
-            WHERE timestamp >= datetime('now', '-1 day')
-        ''')
+        if self.db_type == 'postgres':
+            cursor.execute('''
+                SELECT COUNT(*) 
+                FROM audit_logs 
+                WHERE timestamp >= NOW() - INTERVAL '1 day'
+            ''')
+        else:
+            cursor.execute('''
+                SELECT COUNT(*) 
+                FROM audit_logs 
+                WHERE timestamp >= datetime('now', '-1 day')
+            ''')
         last_24h = cursor.fetchone()[0]
         
         # Failed operations
