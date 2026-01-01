@@ -1219,48 +1219,48 @@ class DatabaseManager:
                 if override_constraints:
                     warning_message += f'\n⚠️ אזהרה: השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. הוספת ועדה נוספת תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit}).'
 
-        # Check if a committee meeting with the same type, division, and date already exists
-        cursor.execute('''
-            SELECT vaadot_id, ct.name as committee_name, h.name as hativa_name
-            FROM vaadot v
-            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-            JOIN hativot h ON v.hativa_id = h.hativa_id
-            WHERE v.committee_type_id = ? AND v.hativa_id = ? AND v.vaada_date = ?
-              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-        ''', (committee_type_id, hativa_id, vaada_date))
-        existing = cursor.fetchone()
-            
-            if existing:
-            existing_id, existing_name, existing_hativa = existing
-            if override_constraints:
-                warning_message += f'\n⚠️ אזהרה: כבר קיימת ועדה מסוג "{existing_name}" בחטיבת "{existing_hativa}" בתאריך {vaada_date}. מנהל מערכת יכול לעקוף אילוץ זה.'
-            else:
-                conn.close()
-                raise ValueError(f'כבר קיימת ועדה מסוג "{existing_name}" בחטיבת "{existing_hativa}" בתאריך {vaada_date}. לא ניתן ליצור ועדה נוספת מאותו סוג באותה חטיבה באותו תאריך.')
-
-        # Set default times based on committee type if not provided
-        if start_time is None or end_time is None:
+            # Check if a committee meeting with the same type, division, and date already exists
             cursor.execute('''
-                SELECT is_operational FROM committee_types
-                WHERE committee_type_id = ?
-            ''', (committee_type_id,))
-            committee_type = cursor.fetchone()
-            if committee_type:
-                is_operational = committee_type[0]
-                # Set defaults: Regular committee 09:00-15:00, Operational 09:00-11:00
-                if start_time is None:
-                    start_time = '09:00'
-                if end_time is None:
-                    end_time = '11:00' if is_operational else '15:00'
+                SELECT vaadot_id, ct.name as committee_name, h.name as hativa_name
+                FROM vaadot v
+                JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+                JOIN hativot h ON v.hativa_id = h.hativa_id
+                WHERE v.committee_type_id = ? AND v.hativa_id = ? AND v.vaada_date = ?
+                  AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
+            ''', (committee_type_id, hativa_id, vaada_date))
+            existing = cursor.fetchone()
 
-        cursor.execute('''
-            INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, notes, start_time, end_time)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (committee_type_id, hativa_id, vaada_date, notes, start_time, end_time))
-        vaadot_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return (vaadot_id, warning_message)
+            if existing:
+                existing_id, existing_name, existing_hativa = existing
+                if override_constraints:
+                    warning_message += f'\n⚠️ אזהרה: כבר קיימת ועדה מסוג "{existing_name}" בחטיבת "{existing_hativa}" בתאריך {vaada_date}. מנהל מערכת יכול לעקוף אילוץ זה.'
+                else:
+                    conn.close()
+                    raise ValueError(f'כבר קיימת ועדה מסוג "{existing_name}" בחטיבת "{existing_hativa}" בתאריך {vaada_date}. לא ניתן ליצור ועדה נוספת מאותו סוג באותה חטיבה באותו תאריך.')
+
+            # Set default times based on committee type if not provided
+            if start_time is None or end_time is None:
+                cursor.execute('''
+                    SELECT is_operational FROM committee_types
+                    WHERE committee_type_id = ?
+                ''', (committee_type_id,))
+                committee_type = cursor.fetchone()
+                if committee_type:
+                    is_operational = committee_type[0]
+                    # Set defaults: Regular committee 09:00-15:00, Operational 09:00-11:00
+                    if start_time is None:
+                        start_time = '09:00'
+                    if end_time is None:
+                        end_time = '11:00' if is_operational else '15:00'
+
+            cursor.execute('''
+                INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, notes, start_time, end_time)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (committee_type_id, hativa_id, vaada_date, notes, start_time, end_time))
+            vaadot_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            return (vaadot_id, warning_message)
         except ValueError:
             conn.rollback()
             conn.close()
@@ -1463,7 +1463,7 @@ class DatabaseManager:
                 UPDATE vaadot
                 SET committee_type_id = ?, hativa_id = ?, vaada_date = ?,
                     exception_date_id = ?, notes = ?, start_time = ?, end_time = ?
-                WHERE vaadot_id = ?
+                WHERE vaadot_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)
             ''', (committee_type_id, hativa_id, vaada_date, exception_date_id, notes, start_time, end_time, vaadot_id))
 
             success = cursor.rowcount > 0
@@ -1559,7 +1559,7 @@ class DatabaseManager:
             cursor.execute('''
                 UPDATE vaadot 
                 SET vaada_date = ?, exception_date_id = ?
-                WHERE vaadot_id = ?
+                WHERE vaadot_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)
             ''', (vaada_date, exception_date_id, vaadot_id))
             
             success = cursor.rowcount > 0
@@ -1936,7 +1936,7 @@ class DatabaseManager:
             manual_call_deadline_date = manual_call_deadline_date.date()
 
         # Get existing call deadline date to validate against
-        cursor.execute('SELECT call_deadline_date FROM events WHERE event_id = ?', (event_id,))
+        cursor.execute('SELECT call_deadline_date FROM events WHERE event_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (event_id,))
         existing_event = cursor.fetchone()
         if not existing_event:
             conn.close()
@@ -2017,7 +2017,7 @@ class DatabaseManager:
             SET vaadot_id = ?, maslul_id = ?, name = ?, event_type = ?, expected_requests = ?, actual_submissions = ?,
                 call_publication_date = ?, call_deadline_date = ?, intake_deadline_date = ?,
                 review_deadline_date = ?, response_deadline_date = ?, is_call_deadline_manual = ?
-            WHERE event_id = ?
+            WHERE event_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)
         ''', (vaadot_id, maslul_id, name, event_type, expected_requests, actual_submissions,
               call_publication_date, final_call_deadline, stage_dates['intake_deadline_date'],
               stage_dates['review_deadline_date'], stage_dates['response_deadline_date'], 
@@ -3487,7 +3487,7 @@ class DatabaseManager:
                     intake_deadline_date = ?,
                     review_deadline_date = ?,
                     response_deadline_date = ?
-                WHERE event_id = ?
+                WHERE event_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)
             """, (new_vaada_id, 
                   stage_dates['call_deadline_date'], 
                   stage_dates['intake_deadline_date'],
