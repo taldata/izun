@@ -252,6 +252,8 @@ class DatabaseManager:
                 vaada_date DATE NOT NULL,
                 exception_date_id INTEGER,
                 notes TEXT,
+                start_time TEXT,
+                end_time TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (committee_type_id) REFERENCES committee_types (committee_type_id),
                 FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id),
@@ -510,6 +512,12 @@ class DatabaseManager:
                     cursor.execute('ALTER TABLE vaadot ADD COLUMN exception_date_id INTEGER REFERENCES exception_dates(date_id)')
                 else:
                     cursor.execute('ALTER TABLE vaadot ADD COLUMN exception_date_id INTEGER REFERENCES exception_dates(date_id)')
+
+            if 'start_time' not in vaadot_columns:
+                cursor.execute('ALTER TABLE vaadot ADD COLUMN start_time TEXT')
+            
+            if 'end_time' not in vaadot_columns:
+                cursor.execute('ALTER TABLE vaadot ADD COLUMN end_time TEXT')
             
             committee_types_columns = self.get_table_columns(cursor, 'committee_types')
             
