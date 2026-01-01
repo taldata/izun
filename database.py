@@ -257,9 +257,18 @@ class DatabaseManager:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (committee_type_id) REFERENCES committee_types (committee_type_id),
                 FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id),
-                FOREIGN KEY (exception_date_id) REFERENCES exception_dates (date_id),
-                UNIQUE(committee_type_id, hativa_id, vaada_date)
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (committee_type_id) REFERENCES committee_types (committee_type_id),
+                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id),
+                FOREIGN KEY (exception_date_id) REFERENCES exception_dates (date_id)
             )
+        ''')
+        
+        # Create partial unique index for active meetings only
+        cursor.execute('''
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_vaadot_unique_active 
+            ON vaadot(committee_type_id, hativa_id, vaada_date) 
+            WHERE is_deleted = 0 OR is_deleted IS NULL
         ''')
         
         # exception_dates creation moved up
@@ -1210,48 +1219,48 @@ class DatabaseManager:
                 if override_constraints:
                     warning_message += f'\n⚠️ אזהרה: השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. הוספת ועדה נוספת תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit}).'
 
-            # Check if a committee meeting with the same type, division, and date already exists
-            cursor.execute('''
-                SELECT vaadot_id, ct.name as committee_name, h.name as hativa_name
-                FROM vaadot v
-                JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-                JOIN hativot h ON v.hativa_id = h.hativa_id
-                WHERE v.committee_type_id = ? AND v.hativa_id = ? AND v.vaada_date = ?
-                  AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-            ''', (committee_type_id, hativa_id, vaada_date))
-            existing = cursor.fetchone()
+        # Check if a committee meeting with the same type, division, and date already exists
+        cursor.execute('''
+            SELECT vaadot_id, ct.name as committee_name, h.name as hativa_name
+            FROM vaadot v
+            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
+            JOIN hativot h ON v.hativa_id = h.hativa_id
+            WHERE v.committee_type_id = ? AND v.hativa_id = ? AND v.vaada_date = ?
+              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
+        ''', (committee_type_id, hativa_id, vaada_date))
+        existing = cursor.fetchone()
             
             if existing:
-                existing_id, existing_name, existing_hativa = existing
-                if override_constraints:
-                    warning_message += f'\n⚠️ אזהרה: כבר קיימת ועדה מסוג "{existing_name}" בחטיבת "{existing_hativa}" בתאריך {vaada_date}. מנהל מערכת יכול לעקוף אילוץ זה.'
-                else:
-                    conn.close()
-                    raise ValueError(f'כבר קיימת ועדה מסוג "{existing_name}" בחטיבת "{existing_hativa}" בתאריך {vaada_date}. לא ניתן ליצור ועדה נוספת מאותו סוג באותה חטיבה באותו תאריך.')
+            existing_id, existing_name, existing_hativa = existing
+            if override_constraints:
+                warning_message += f'\n⚠️ אזהרה: כבר קיימת ועדה מסוג "{existing_name}" בחטיבת "{existing_hativa}" בתאריך {vaada_date}. מנהל מערכת יכול לעקוף אילוץ זה.'
+            else:
+                conn.close()
+                raise ValueError(f'כבר קיימת ועדה מסוג "{existing_name}" בחטיבת "{existing_hativa}" בתאריך {vaada_date}. לא ניתן ליצור ועדה נוספת מאותו סוג באותה חטיבה באותו תאריך.')
 
-            # Set default times based on committee type if not provided
-            if start_time is None or end_time is None:
-                cursor.execute('''
-                    SELECT is_operational FROM committee_types
-                    WHERE committee_type_id = ?
-                ''', (committee_type_id,))
-                committee_type = cursor.fetchone()
-                if committee_type:
-                    is_operational = committee_type[0]
-                    # Set defaults: Regular committee 09:00-15:00, Operational 09:00-11:00
-                    if start_time is None:
-                        start_time = '09:00'
-                    if end_time is None:
-                        end_time = '11:00' if is_operational else '15:00'
-
+        # Set default times based on committee type if not provided
+        if start_time is None or end_time is None:
             cursor.execute('''
-                INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, notes, start_time, end_time)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (committee_type_id, hativa_id, vaada_date, notes, start_time, end_time))
-            vaadot_id = cursor.lastrowid
-            conn.commit()
-            conn.close()
-            return (vaadot_id, warning_message)
+                SELECT is_operational FROM committee_types
+                WHERE committee_type_id = ?
+            ''', (committee_type_id,))
+            committee_type = cursor.fetchone()
+            if committee_type:
+                is_operational = committee_type[0]
+                # Set defaults: Regular committee 09:00-15:00, Operational 09:00-11:00
+                if start_time is None:
+                    start_time = '09:00'
+                if end_time is None:
+                    end_time = '11:00' if is_operational else '15:00'
+
+        cursor.execute('''
+            INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, notes, start_time, end_time)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (committee_type_id, hativa_id, vaada_date, notes, start_time, end_time))
+        vaadot_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return (vaadot_id, warning_message)
         except ValueError:
             conn.rollback()
             conn.close()
