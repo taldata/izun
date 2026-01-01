@@ -1882,7 +1882,9 @@ class DatabaseManager:
             JOIN hativot vh ON v.hativa_id = vh.hativa_id
             JOIN maslulim m ON e.maslul_id = m.maslul_id
             JOIN hativot h ON m.hativa_id = h.hativa_id
+            JOIN hativot h ON m.hativa_id = h.hativa_id
             WHERE (e.is_deleted = 0 OR e.is_deleted IS NULL)
+              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
         '''
         
         if not include_deleted:
@@ -2925,7 +2927,10 @@ class DatabaseManager:
         query = f'''
             SELECT COALESCE(SUM(e.expected_requests), 0)
             FROM events e
-            WHERE e.{column_name} = ? AND e.is_deleted = 0
+            JOIN vaadot v ON e.vaadot_id = v.vaadot_id
+            WHERE e.{column_name} = ? 
+              AND (e.is_deleted = 0 OR e.is_deleted IS NULL)
+              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
         '''
         params = [check_date]
         
