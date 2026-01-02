@@ -116,7 +116,9 @@ class CalendarService:
                 # For timed events, handle both string and time objects
                 if start_time:
                     if isinstance(start_time, str):
-                        start_hour, start_minute = map(int, start_time.split(':'))
+                        time_parts = start_time.split(':')
+                        start_hour = int(time_parts[0])
+                        start_minute = int(time_parts[1])
                         start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=start_hour, minute=start_minute))
                     else:
                         # Assuming it's already a time object (from DB)
@@ -127,7 +129,9 @@ class CalendarService:
 
                 if end_time:
                     if isinstance(end_time, str):
-                        end_hour, end_minute = map(int, end_time.split(':'))
+                        time_parts = end_time.split(':')
+                        end_hour = int(time_parts[0])
+                        end_minute = int(time_parts[1])
                         end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
                     else:
                         # Assuming it's already a time object (from DB)
@@ -238,7 +242,9 @@ class CalendarService:
                     # For timed events, handle both string and time objects
                     if start_time:
                         if isinstance(start_time, str):
-                            start_hour, start_minute = map(int, start_time.split(':'))
+                            time_parts = start_time.split(':')
+                            start_hour = int(time_parts[0])
+                            start_minute = int(time_parts[1])
                             start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=start_hour, minute=start_minute))
                         else:
                             # Assuming it's already a time object
@@ -249,7 +255,9 @@ class CalendarService:
 
                     if end_time:
                         if isinstance(end_time, str):
-                            end_hour, end_minute = map(int, end_time.split(':'))
+                            time_parts = end_time.split(':')
+                            end_hour = int(time_parts[0])
+                            end_minute = int(time_parts[1])
                             end_datetime = datetime.combine(effective_end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
                         else:
                             # Assuming it's already a time object
@@ -275,7 +283,9 @@ class CalendarService:
                 else:
                     if end_time:
                         if isinstance(end_time, str):
-                            end_hour, end_minute = map(int, end_time.split(':'))
+                            time_parts = end_time.split(':')
+                            end_hour = int(time_parts[0])
+                            end_minute = int(time_parts[1])
                             end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
                         else:
                             # Assuming it's already a time object
@@ -625,7 +635,7 @@ class CalendarService:
                     'body': body,
                     'categories': categories
                 }
-                content_hash = hashlib.md5(json.dumps(content_data, sort_keys=True).encode('utf-8')).hexdigest()
+                content_hash = hashlib.md5(json.dumps(content_data, sort_keys=True, default=str).encode('utf-8')).hexdigest()
 
                 # Check if sync record exists for this deadline
                 sync_record = self.db.get_calendar_sync_record('event_deadline', event_id, field_name, self.calendar_email)
