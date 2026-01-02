@@ -3890,10 +3890,13 @@ def trigger_calendar_sync():
                 'failures': result['failures']
             })
         else:
+            # If sync is just disabled, return 200 (not an error)
+            status_code = 200 if 'disabled' in result.get('message', '').lower() else 500
             return jsonify({
                 'success': False,
                 'message': result['message']
-            }), 500
+            }), status_code
+
 
     except Exception as e:
         app.logger.error(f"Error in manual calendar sync: {e}", exc_info=True)
