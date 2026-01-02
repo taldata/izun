@@ -1459,8 +1459,10 @@ class DatabaseManager:
                 new_count = weekly_count + 1
                 raise ValueError(f"השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. העברת הועדה תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit})")
 
-            # Set default times based on committee type if not provided
-            if start_time is None or end_time is None:
+            # Set default times based on committee type if BOTH are not provided
+            # Only set defaults if neither time was provided (new committee or migration)
+            # If user provides one time, we keep it and only fill in the missing one
+            if start_time is None and end_time is None:
                 cursor.execute('''
                     SELECT is_operational FROM committee_types
                     WHERE committee_type_id = ?
