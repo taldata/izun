@@ -43,6 +43,9 @@ class CalendarService:
         self.calendar_email = self.db.get_system_setting('calendar_sync_email') or 'plan@innovationisrael.org.il'
         self.sync_enabled = self.db.get_system_setting('calendar_sync_enabled') == '1'
 
+        # System URL for direct links (CloudFront production URL)
+        self.system_url = 'https://d2skbotj2u5z8s.cloudfront.net'
+
         logger.info(f"Calendar service initialized - Email: {self.calendar_email}, Enabled: {self.sync_enabled}")
 
     def is_enabled(self) -> bool:
@@ -68,7 +71,8 @@ class CalendarService:
 
     def create_calendar_event(self, subject: str, start_date: date, end_date: date = None,
                              body: str = "", location: str = "", is_all_day: bool = True,
-                             user_email: str = None, start_time: str = None, end_time: str = None) -> Tuple[bool, Optional[str], str]:
+                             user_email: str = None, start_time: str = None, end_time: str = None,
+                             categories: List[str] = None) -> Tuple[bool, Optional[str], str]:
         """
         Create a calendar event in the shared calendar
 
@@ -109,17 +113,25 @@ class CalendarService:
                 start_datetime = datetime.combine(start_date, datetime.min.time())
                 end_datetime = datetime.combine(end_date, datetime.min.time())
             else:
-                # For timed events, parse the time strings
+                # For timed events, handle both string and time objects
                 if start_time:
-                    start_hour, start_minute = map(int, start_time.split(':'))
-                    start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=start_hour, minute=start_minute))
+                    if isinstance(start_time, str):
+                        start_hour, start_minute = map(int, start_time.split(':'))
+                        start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=start_hour, minute=start_minute))
+                    else:
+                        # Assuming it's already a time object (from DB)
+                        start_datetime = datetime.combine(start_date, start_time)
                 else:
                     # Default to 09:00 if no time specified
                     start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=9, minute=0))
 
                 if end_time:
-                    end_hour, end_minute = map(int, end_time.split(':'))
-                    end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
+                    if isinstance(end_time, str):
+                        end_hour, end_minute = map(int, end_time.split(':'))
+                        end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
+                    else:
+                        # Assuming it's already a time object (from DB)
+                        end_datetime = datetime.combine(end_date, end_time)
                 else:
                     # Default to 15:00 if no time specified
                     end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=15, minute=0))
@@ -142,7 +154,8 @@ class CalendarService:
                 "isAllDay": is_all_day,
                 "location": {
                     "displayName": location
-                }
+                },
+                "categories": categories or []
             }
 
             # Create event in user's calendar
@@ -169,7 +182,7 @@ class CalendarService:
     def update_calendar_event(self, event_id: str, subject: str = None, start_date: date = None,
                               end_date: date = None, body: str = None, location: str = None,
                               is_all_day: bool = True, user_email: str = None, start_time: str = None,
-                              end_time: str = None) -> Tuple[bool, str]:
+                              end_time: str = None, categories: List[str] = None) -> Tuple[bool, str]:
         """
         Update an existing calendar event
 
@@ -267,6 +280,9 @@ class CalendarService:
                 event_update["location"] = {
                     "displayName": location
                 }
+
+            if categories is not None:
+                event_update["categories"] = categories
 
             # Update event
             url = f"{self.graph_endpoint}/users/{target_email}/calendar/events/{event_id}"
@@ -399,7 +415,15 @@ class CalendarService:
             if notes:
                 body_parts.append(f"<p><strong>הערות:</strong> {notes}</p>")
 
+            # Add direct link to the system with deep linking
+            body_parts.append("<hr>")
+            direct_link = f"{self.system_url}/?highlight_vaada={vaadot_id}"
+            body_parts.append(f"<p><a href=\"{direct_link}\">מעבר למערכת איזון</a></p>")
+
             body = "\n".join(body_parts)
+
+            # Categories (use Hativa name)
+            categories = [hativa_name] if hativa_name else []
 
             # Calculate content hash to check if anything changed
             content_data = {
@@ -407,7 +431,8 @@ class CalendarService:
                 'start_date': str(vaada_date),
                 'start_time': str(start_time) if start_time else None,
                 'end_time': str(end_time) if end_time else None,
-                'body': body
+                'body': body,
+                'categories': categories
             }
             # Use default=str to handle any other non-serializable objects (like time objects if they sneak in)
             content_hash = hashlib.md5(json.dumps(content_data, sort_keys=True, default=str).encode('utf-8')).hexdigest()
@@ -431,7 +456,8 @@ class CalendarService:
                     body=body,
                     is_all_day=is_all_day,
                     start_time=start_time,
-                    end_time=end_time
+                    end_time=end_time,
+                    categories=categories
                 )
 
                 if success:
@@ -450,7 +476,8 @@ class CalendarService:
                             body=body,
                             is_all_day=is_all_day,
                             start_time=start_time,
-                            end_time=end_time
+                            end_time=end_time,
+                            categories=categories
                         )
                         if success2:
                             self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', new_event_id, content_hash=content_hash)
@@ -470,7 +497,8 @@ class CalendarService:
                     body=body,
                     is_all_day=is_all_day,
                     start_time=start_time,
-                    end_time=end_time
+                    end_time=end_time,
+                    categories=categories
                 )
 
                 if success:
@@ -568,13 +596,22 @@ class CalendarService:
                 if actual_submissions:
                     body_parts.append(f"<p><strong>הגשות בפועל:</strong> {actual_submissions}</p>")
 
+                # Add direct link to the system with deep linking
+                body_parts.append("<hr>")
+                direct_link = f"{self.system_url}/?highlight_event={event_id}"
+                body_parts.append(f"<p><a href=\"{direct_link}\">מעבר למערכת איזון</a></p>")
+
                 body = "\n".join(body_parts)
+
+                # Categories (use Hativa name)
+                categories = [hativa_name] if hativa_name else []
 
                 # Calculate content hash to check if anything changed
                 content_data = {
                     'subject': subject,
                     'start_date': str(deadline_date),
-                    'body': body
+                    'body': body,
+                    'categories': categories
                 }
                 content_hash = hashlib.md5(json.dumps(content_data, sort_keys=True).encode('utf-8')).hexdigest()
 
@@ -597,7 +634,8 @@ class CalendarService:
                             subject=subject,
                             start_date=deadline_date,
                             body=body,
-                            is_all_day=True
+                            is_all_day=True,
+                            categories=categories
                         )
 
                         if success:
@@ -613,7 +651,8 @@ class CalendarService:
                                     subject=subject,
                                     start_date=deadline_date,
                                     body=body,
-                                    is_all_day=True
+                                    is_all_day=True,
+                                    categories=categories
                                 )
                                 if success2:
                                     self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', new_cal_id, content_hash=content_hash)
@@ -631,7 +670,8 @@ class CalendarService:
                             subject=subject,
                             start_date=deadline_date,
                             body=body,
-                            is_all_day=True
+                            is_all_day=True,
+                            categories=categories
                         )
 
                         if success:

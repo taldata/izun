@@ -1643,8 +1643,8 @@
 
     // Function to check URL for highlight_event parameter and highlight the event
     function checkHighlightEventParam() {
-        const urlParams = new URLSearchParams(window.location.search);
         const highlightEventId = urlParams.get('highlight_event');
+        const highlightVaadaId = urlParams.get('highlight_vaada');
 
         if (highlightEventId) {
             // Find the event in eventsData
@@ -1667,7 +1667,30 @@
                     initializeDragAndDrop();
                 }, 150);
             }
+        } else if (highlightVaadaId) {
+            // Find the committee in committeesData
+            const committeeToHighlight = committeesData.find(c => c.vaadot_id == highlightVaadaId);
 
+            if (committeeToHighlight && committeeToHighlight.vaada_date) {
+                // Navigate to the committee's vaada_date month
+                const vaadaDate = new Date(committeeToHighlight.vaada_date);
+                currentDate = vaadaDate;
+
+                // Update the year and month selectors
+                updateSelectors();
+
+                // Re-render calendar
+                renderCalendar();
+
+                // Wait for calendar to render, then highlight the committee
+                setTimeout(() => {
+                    highlightCommitteeOnCalendar(highlightVaadaId);
+                    initializeDragAndDrop();
+                }, 150);
+            }
+        }
+
+        if (highlightEventId || highlightVaadaId) {
             // Clean up URL (remove the parameter)
             const newUrl = window.location.pathname;
             window.history.replaceState({}, '', newUrl);
@@ -1707,6 +1730,38 @@
                 eventBadge.style.boxShadow = '';
                 eventBadge.style.transform = '';
                 eventBadge.style.zIndex = '';
+            }, 3000);
+        }
+    }
+
+    // Function to highlight a specific committee on the calendar
+    function highlightCommitteeOnCalendar(vaadaId) {
+        const committeeBadge = document.querySelector(`[data-vaada-id="${vaadaId}"]`);
+
+        if (committeeBadge) {
+            // Scroll the committee into view
+            committeeBadge.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // Add highlight animation
+            committeeBadge.style.animation = 'highlightPulse 2s ease-in-out';
+            committeeBadge.style.boxShadow = '0 0 0 3px #ffc107, 0 4px 15px rgba(255, 193, 7, 0.5)';
+            committeeBadge.style.transform = 'scale(1.05)';
+            committeeBadge.style.zIndex = '100';
+
+            // Show the committee menu after a short delay
+            setTimeout(() => {
+                const committee = committeesData.find(c => c.vaadot_id == vaadaId);
+                if (committee) {
+                    showCommitteeMenu(committee, { stopPropagation: () => { } });
+                }
+            }, 800);
+
+            // Remove highlight after animation
+            setTimeout(() => {
+                committeeBadge.style.animation = '';
+                committeeBadge.style.boxShadow = '';
+                committeeBadge.style.transform = '';
+                committeeBadge.style.zIndex = '';
             }, 3000);
         }
     }
