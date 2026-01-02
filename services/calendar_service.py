@@ -70,6 +70,58 @@ class CalendarService:
             'Prefer': 'outlook.timezone="Asia/Jerusalem"'
         }
 
+    def find_existing_event(self, subject: str, event_date: date, user_email: str = None) -> Optional[str]:
+        """
+        Find an existing calendar event by subject and date to prevent duplicates.
+        
+        Args:
+            subject: Event subject/title
+            event_date: Event date
+            user_email: Target calendar email
+            
+        Returns:
+            Calendar event ID if found, None otherwise
+        """
+        try:
+            token = self._get_access_token()
+            if not token:
+                return None
+                
+            email = user_email or self.calendar_email
+            headers = self._get_headers(token)
+            
+            # Search for events on the same date with similar subject
+            start_datetime = f"{event_date}T00:00:00"
+            end_datetime = f"{event_date}T23:59:59"
+            
+            url = f"{self.graph_endpoint}/users/{email}/calendar/calendarView"
+            params = {
+                'startDateTime': start_datetime,
+                'endDateTime': end_datetime,
+                '$filter': f"contains(subject, '{subject[:50]}')",  # First 50 chars to avoid issues
+                '$select': 'id,subject',
+                '$top': 10
+            }
+            
+            response = requests.get(url, headers=headers, params=params)
+            
+            if response.status_code == 200:
+                data = response.json()
+                events = data.get('value', [])
+                
+                # Find exact or close match
+                for event in events:
+                    if event.get('subject') == subject:
+                        logger.info(f"Found existing event: {event.get('id')[:30]}... for '{subject}'")
+                        return event.get('id')
+                        
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error finding existing event: {e}")
+            return None
+
+
     def create_calendar_event(self, subject: str, start_date: date, end_date: date = None,
                              body: str = "", location: str = "", is_all_day: bool = True,
                              user_email: str = None, start_time: str = None, end_time: str = None,
@@ -514,6 +566,20 @@ class CalendarService:
                         return False, message
             else:
                 # Create new event (no sync record or no calendar_event_id)
+                # First, check if event already exists in calendar (prevent duplicates)
+                existing_event_id = self.find_existing_event(subject, vaada_date)
+                
+                if existing_event_id:
+                    # Event already exists, update sync record to link to existing event
+                    logger.info(f"Found existing calendar event for committee {vaadot_id}, linking instead of creating")
+                    if sync_record:
+                        self.db.update_calendar_sync_status(sync_record['sync_id'], 'synced', existing_event_id, content_hash=content_hash)
+                    else:
+                        sync_id = self.db.create_calendar_sync_record('vaadot', vaadot_id, None, self.calendar_email, existing_event_id)
+                        self.db.update_calendar_sync_status(sync_id, 'synced', existing_event_id, content_hash=content_hash)
+                    return True, f"Committee linked to existing calendar event: {existing_event_id[:30]}..."
+                
+                # No existing event, create new one
                 success, event_id, message = self.create_calendar_event(
                     subject=subject,
                     start_date=vaada_date,
@@ -541,6 +607,7 @@ class CalendarService:
                         sync_id = self.db.create_calendar_sync_record('vaadot', vaadot_id, None, self.calendar_email)
                         self.db.update_calendar_sync_status(sync_id, 'failed', error_message=message)
                     return False, message
+
 
         except Exception as e:
             logger.error(f"Error syncing committee {vaadot_id}: {e}", exc_info=True)

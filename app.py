@@ -3863,45 +3863,50 @@ def empty_recycle_bin_route():
 @login_required
 @admin_required
 def trigger_calendar_sync():
-    """Manually trigger full calendar sync"""
+    """Manually trigger full calendar sync (runs in background)"""
+    import threading
+    
+    def run_sync_async(username):
+        """Run sync in background thread"""
+        try:
+            app.logger.info(f"Background sync started by {username}")
+            result = calendar_service.sync_all()
+            app.logger.info(f"Background sync completed: {result.get('committees_synced', 0)} committees, {result.get('events_synced', 0)} events")
+        except Exception as e:
+            app.logger.error(f"Error in background sync: {e}", exc_info=True)
+    
     try:
-        app.logger.info(f"Manual calendar sync triggered by user {session.get('username')}")
+        username = session.get('username', 'unknown')
+        app.logger.info(f"Manual calendar sync triggered by user {username}")
 
-        # Run sync
-        result = calendar_service.sync_all()
-
-        # Log to audit
+        # Log audit BEFORE starting thread (while we have request context)
         audit_logger.log(
             action='calendar_sync',
             entity_type='calendar',
             entity_id=None,
             entity_name='manual_sync',
-            details=f"Synced {result['committees_synced']} committees and {result['events_synced']} events",
-            status='success' if result['success'] else 'error',
-            error_message=result.get('message') if not result['success'] else None
+            details="Sync started in background",
+            status='success'
         )
+        
+        # Start background thread since sync takes a while (Graph API is slow)
+        thread = threading.Thread(target=run_sync_async, args=(username,))
+        thread.daemon = True
+        thread.start()
 
-        if result['success']:
-            return jsonify({
-                'success': True,
-                'message': result['message'],
-                'committees_synced': result['committees_synced'],
-                'events_synced': result['events_synced'],
-                'failures': result['failures']
-            })
-        else:
-            # If sync is just disabled, return 200 (not an error)
-            status_code = 200 if 'disabled' in result.get('message', '').lower() else 500
-            return jsonify({
-                'success': False,
-                'message': result['message']
-            }), status_code
-
+        return jsonify({
+            'success': True,
+            'message': 'סנכרון הותחל ברקע. התהליך יושלם תוך 1-2 דקות.',
+            'committees_synced': 0,
+            'events_synced': 0,
+            'failures': 0,
+            'background': True
+        })
 
     except Exception as e:
         app.logger.error(f"Error in manual calendar sync: {e}", exc_info=True)
-        audit_logger.log_error('calendar_sync', 'calendar', str(e))
         return jsonify({'success': False, 'message': str(e)}), 500
+
 
 @app.route('/api/calendar/sync/reset', methods=['POST'])
 @login_required
@@ -3910,29 +3915,31 @@ def reset_calendar_sync():
     """Reset calendar sync: clear sync records and re-sync everything (runs in background)"""
     import threading
     
-    def run_reset_async():
+    def run_reset_async(username):
         """Run reset in background thread"""
         try:
+            app.logger.info(f"Background reset started by {username}")
             result = calendar_service.delete_all_calendar_events_and_reset()
-            audit_logger.log(
-                action='calendar_sync_reset',
-                entity_type='calendar',
-                entity_id=None,
-                entity_name='full_reset',
-                details=f"Cleared {result['records_cleared']} records. Re-synced: {result['committees_synced']} committees, {result['events_synced']} events",
-                status='success' if result['success'] else 'error',
-                error_message=result.get('message') if not result['success'] else None
-            )
             app.logger.info(f"Background reset completed: {result.get('message')}")
         except Exception as e:
-            app.logger.error(f"Error in background reset: {e}")
-            audit_logger.log_error('calendar_sync_reset', 'calendar', str(e))
+            app.logger.error(f"Error in background reset: {e}", exc_info=True)
     
     try:
-        app.logger.info(f"Calendar sync reset triggered by user {session.get('username')}")
+        username = session.get('username', 'unknown')
+        app.logger.info(f"Calendar sync reset triggered by user {username}")
+        
+        # Log audit BEFORE starting thread (while we have request context)
+        audit_logger.log(
+            action='calendar_sync_reset',
+            entity_type='calendar',
+            entity_id=None,
+            entity_name='full_reset',
+            details="Reset started in background",
+            status='success'
+        )
         
         # Start background thread since sync takes a while (Graph API is slow)
-        thread = threading.Thread(target=run_reset_async)
+        thread = threading.Thread(target=run_reset_async, args=(username,))
         thread.daemon = True
         thread.start()
         
@@ -3950,8 +3957,8 @@ def reset_calendar_sync():
 
     except Exception as e:
         app.logger.error(f"Error starting calendar reset: {e}")
-        audit_logger.log_error('calendar_sync_reset', 'calendar', str(e))
         return jsonify({'success': False, 'message': str(e)}), 500
+
 
 
 
