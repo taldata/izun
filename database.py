@@ -263,6 +263,17 @@ class DatabaseManager:
         ''')
         
         # Create partial unique index for active meetings only
+        # Drop redundant full unique constraint if it exists (for PostgreSQL)
+        if self.db_type == 'postgres':
+            cursor.execute('''
+                DO $$ 
+                BEGIN 
+                    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'vaadot_committee_type_id_hativa_id_vaada_date_key') THEN
+                        ALTER TABLE vaadot DROP CONSTRAINT vaadot_committee_type_id_hativa_id_vaada_date_key;
+                    END IF;
+                END $$;
+            ''')
+
         cursor.execute('''
             CREATE UNIQUE INDEX IF NOT EXISTS idx_vaadot_unique_active 
             ON vaadot(committee_type_id, hativa_id, vaada_date) 
