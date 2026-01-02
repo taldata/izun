@@ -444,11 +444,17 @@ function formatDate(dateString, locale = 'he-IL') {
             });
 
             // Additional safety check before showing
-            if (activePopover && targetEl.isConnected && document.body.contains(targetEl)) {
+            if (activePopover && activePopover._activeTrigger !== undefined && 
+                targetEl.isConnected && document.body.contains(targetEl)) {
                 activePopover.show();
+            } else if (activePopover) {
+                // Popover wasn't ready, dispose it
+                try { activePopover.dispose(); } catch(e2) {}
+                activePopover = null;
+                activeEl = null;
             }
         } catch (e) {
-            console.warn('Failed to show popover:', e);
+            // Silently fail - don't log to console to avoid noise
             activePopover = null;
             activeEl = null;
         }
@@ -457,13 +463,15 @@ function formatDate(dateString, locale = 'he-IL') {
     function hidePopover() {
         if (activePopover) {
             try {
-                if (activeEl && document.body.contains(activeEl)) {
-                    // Element exists - do normal hide then dispose
+                // Check if popover is valid before trying to hide
+                if (activePopover._activeTrigger !== undefined && 
+                    activeEl && document.body.contains(activeEl)) {
+                    // Element exists and popover is valid - do normal hide then dispose
                     activePopover.hide();
                     activePopover.dispose();
                 } else {
-                    // Element removed - skip hide, just dispose
-                    activePopover.dispose();
+                    // Element removed or popover invalid - skip hide, just dispose
+                    try { activePopover.dispose(); } catch (e2) { }
                 }
             } catch (e) {
                 // Fallback: try to dispose anyway
@@ -637,11 +645,17 @@ function formatDate(dateString, locale = 'he-IL') {
             });
 
             // Additional safety check before showing
-            if (activePopover && targetEl.isConnected && document.body.contains(targetEl)) {
+            if (activePopover && activePopover._activeTrigger !== undefined && 
+                targetEl.isConnected && document.body.contains(targetEl)) {
                 activePopover.show();
+            } else if (activePopover) {
+                // Popover wasn't ready, dispose it
+                try { activePopover.dispose(); } catch(e2) {}
+                activePopover = null;
+                activeEl = null;
             }
         } catch (e) {
-            console.warn('Failed to show popover:', e);
+            // Silently fail - don't log to console to avoid noise
             activePopover = null;
             activeEl = null;
         }
@@ -650,13 +664,15 @@ function formatDate(dateString, locale = 'he-IL') {
     function hidePopover() {
         if (activePopover) {
             try {
-                if (activeEl && document.body.contains(activeEl)) {
-                    // Element exists - do normal hide then dispose
+                // Check if popover is valid before trying to hide
+                if (activePopover._activeTrigger !== undefined && 
+                    activeEl && document.body.contains(activeEl)) {
+                    // Element exists and popover is valid - do normal hide then dispose
                     activePopover.hide();
                     activePopover.dispose();
                 } else {
-                    // Element removed - skip hide, just dispose
-                    activePopover.dispose();
+                    // Element removed or popover invalid - skip hide, just dispose
+                    try { activePopover.dispose(); } catch (e2) { }
                 }
             } catch (e) {
                 // Fallback: try to dispose anyway
