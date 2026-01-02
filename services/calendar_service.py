@@ -235,17 +235,25 @@ class CalendarService:
                     start_datetime = datetime.combine(start_date, datetime.min.time())
                     end_datetime = datetime.combine(effective_end_date, datetime.min.time())
                 else:
-                    # For timed events, parse the time strings
+                    # For timed events, handle both string and time objects
                     if start_time:
-                        start_hour, start_minute = map(int, start_time.split(':'))
-                        start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=start_hour, minute=start_minute))
+                        if isinstance(start_time, str):
+                            start_hour, start_minute = map(int, start_time.split(':'))
+                            start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=start_hour, minute=start_minute))
+                        else:
+                            # Assuming it's already a time object
+                            start_datetime = datetime.combine(start_date, start_time)
                     else:
                         # Default to 09:00 if no time specified
                         start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=9, minute=0))
 
                     if end_time:
-                        end_hour, end_minute = map(int, end_time.split(':'))
-                        end_datetime = datetime.combine(effective_end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
+                        if isinstance(end_time, str):
+                            end_hour, end_minute = map(int, end_time.split(':'))
+                            end_datetime = datetime.combine(effective_end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
+                        else:
+                            # Assuming it's already a time object
+                            end_datetime = datetime.combine(effective_end_date, end_time)
                     else:
                         # Default to 15:00 if no time specified
                         end_datetime = datetime.combine(effective_end_date, datetime.min.time().replace(hour=15, minute=0))
@@ -266,8 +274,12 @@ class CalendarService:
                     end_datetime = datetime.combine(end_date, datetime.min.time())
                 else:
                     if end_time:
-                        end_hour, end_minute = map(int, end_time.split(':'))
-                        end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
+                        if isinstance(end_time, str):
+                            end_hour, end_minute = map(int, end_time.split(':'))
+                            end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
+                        else:
+                            # Assuming it's already a time object
+                            end_datetime = datetime.combine(end_date, end_time)
                     else:
                         end_datetime = datetime.combine(end_date, datetime.min.time().replace(hour=15, minute=0))
 

@@ -1643,6 +1643,7 @@
 
     // Function to check URL for highlight_event parameter and highlight the event
     function checkHighlightEventParam() {
+        const urlParams = new URLSearchParams(window.location.search);
         const highlightEventId = urlParams.get('highlight_event');
         const highlightVaadaId = urlParams.get('highlight_vaada');
 
