@@ -3907,40 +3907,51 @@ def trigger_calendar_sync():
 @login_required
 @admin_required
 def reset_calendar_sync():
-    """Delete all calendar events and reset sync, then re-sync everything"""
+    """Delete all calendar events and reset sync, then re-sync everything (runs in background)"""
+    import threading
+    
+    def run_reset_in_background(username):
+        """Background task to perform reset and sync"""
+        try:
+            app.logger.info(f"Starting background calendar reset for user {username}")
+            result = calendar_service.delete_all_calendar_events_and_reset()
+            
+            # Log to audit
+            audit_logger.log(
+                action='calendar_sync_reset',
+                entity_type='calendar',
+                entity_id=None,
+                entity_name='full_reset',
+                details=f"Deleted {result['events_deleted']} events, cleared {result['records_cleared']} records. Re-synced: {result['committees_synced']} committees, {result['events_synced']} events",
+                status='success' if result['success'] else 'error',
+                error_message=result.get('message') if not result['success'] else None
+            )
+            app.logger.info(f"Background calendar reset completed: {result.get('message', 'Unknown')}")
+        except Exception as e:
+            app.logger.error(f"Error in background calendar reset: {e}")
+            audit_logger.log_error('calendar_sync_reset', 'calendar', str(e))
+    
     try:
-        app.logger.info(f"Calendar sync reset triggered by user {session.get('username')}")
-
-        # Run delete and reset
-        result = calendar_service.delete_all_calendar_events_and_reset()
-
-        # Log to audit
-        audit_logger.log(
-            action='calendar_sync_reset',
-            entity_type='calendar',
-            entity_id=None,
-            entity_name='full_reset',
-            details=f"Deleted {result['events_deleted']} events, cleared {result['records_cleared']} records. Re-synced: {result['committees_synced']} committees, {result['events_synced']} events",
-            status='success' if result['success'] else 'error',
-            error_message=result.get('message') if not result['success'] else None
-        )
-
-        if result['success']:
-            return jsonify({
-                'success': True,
-                'message': result['message'],
-                'events_deleted': result['events_deleted'],
-                'deletion_failures': result.get('deletion_failures', 0),
-                'records_cleared': result['records_cleared'],
-                'committees_synced': result['committees_synced'],
-                'events_synced': result['events_synced'],
-                'failures': result['failures']
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'message': result['message']
-            }), 500
+        username = session.get('username')
+        app.logger.info(f"Calendar sync reset triggered by user {username} - starting background task")
+        
+        # Start background thread
+        thread = threading.Thread(target=run_reset_in_background, args=(username,))
+        thread.daemon = True
+        thread.start()
+        
+        # Return immediately
+        return jsonify({
+            'success': True,
+            'message': 'איפוס וסנכרון הותחלו ברקע. התהליך עשוי לקחת מספר דקות.',
+            'events_deleted': 0,
+            'deletion_failures': 0,
+            'records_cleared': 0,
+            'committees_synced': 0,
+            'events_synced': 0,
+            'failures': 0,
+            'background': True
+        })
 
     except Exception as e:
         import traceback
@@ -3948,6 +3959,7 @@ def reset_calendar_sync():
         app.logger.error(f"Error in calendar sync reset: {e}\n{tb_str}")
         audit_logger.log_error('calendar_sync_reset', 'calendar', str(e))
         return jsonify({'success': False, 'message': str(e), 'traceback': tb_str}), 500
+
 
 @app.route('/api/calendar/sync/status')
 @login_required
