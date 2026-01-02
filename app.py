@@ -2259,9 +2259,11 @@ def generate_auto_schedule():
             flash(f'לא ניתן ליצור תזמון עבור החודשים: {", ".join(months_names)}', 'warning')
             return redirect(url_for('auto_schedule'))
         
-        # Store in session for review
+        # Store in session for review (using DB draft to avoid cookie size limits)
         from flask import session
-        session['pending_schedule'] = {
+        import json
+        
+        pending_schedule = {
             'year': year,
             'months': successful_months,
             'month_selection_type': month_selection_type,
@@ -2269,8 +2271,32 @@ def generate_auto_schedule():
             'selected_hativot': selected_hativot
         }
         
-        app.logger.info(f"Stored in session: {len(all_suggestions)} suggestions for {year} months: {successful_months}")
-        app.logger.info(f"First suggestion in session: {all_suggestions[0] if all_suggestions else 'None'}")
+        # Determine user_id safely
+        user_id = session.get('user_id')
+        if not user_id:
+             # Fallback if somehow missing, though @editor_required checks it
+             current_user = auth_manager.get_current_user()
+             user_id = current_user['user_id'] if current_user else 0
+
+        # Serialize using app.json to handle date/time objects
+        json_data = app.json.dumps(pending_schedule)
+        
+        # Save to database
+        draft_id = db.save_schedule_draft(user_id, json_data)
+        
+        # Clean up old drafts occasionally (1% chance or just do it)
+        try:
+             import random
+             if random.random() < 0.1:
+                 db.cleanup_old_drafts(24)
+        except Exception:
+             pass
+        
+        # Store only the ID in session
+        session['pending_schedule_draft_id'] = draft_id
+        session.pop('pending_schedule', None) # Clean up legacy key if exists
+        
+        app.logger.info(f"Stored draft in DB: id={draft_id}, {len(all_suggestions)} suggestions for {year}")
         
         months_names = [['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
                         'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'][m-1] 
@@ -2290,19 +2316,41 @@ def generate_auto_schedule():
 def review_auto_schedule():
     """Review generated schedule before approval"""
     from flask import session
+    import json
+    from datetime import datetime
     
-    pending_schedule = session.get('pending_schedule')
+    # Try to get draft ID first
+    draft_id = session.get('pending_schedule_draft_id')
+    pending_schedule = None
+    
+    if draft_id:
+        # Load from DB
+        draft = db.get_schedule_draft(draft_id)
+        if draft:
+            try:
+                pending_schedule = json.loads(draft['data'])
+            except json.JSONDecodeError:
+                app.logger.error(f"Failed to decode draft {draft_id}")
+    
+    # Fallback to session check (legacy)
     if not pending_schedule:
-        flash('אין לוח זמנים ממתין לאישור', 'warning')
+        pending_schedule = session.get('pending_schedule')
+
+    if not pending_schedule:
+        flash('אין לוח זמנים ממתין לאישור (פג תוקף או לא נמצא)', 'warning')
         return redirect(url_for('auto_schedule'))
     
     # Get hativot and committee types for display
     hativot = {h['hativa_id']: h for h in db.get_hativot()}
     committee_types = {ct['committee_type_id']: ct for ct in db.get_committee_types()}
     
-    # Enrich suggestions with names
+    # Enrich suggestions with names and parse dates
     enriched_suggestions = []
     for suggestion in pending_schedule['suggestions']:
+        # Parse dates if they are strings (from JSON)
+        if isinstance(suggestion.get('suggested_date'), str):
+            suggestion['suggested_date'] = datetime.strptime(suggestion['suggested_date'], '%Y-%m-%dT%H:%M:%S' if 'T' in suggestion['suggested_date'] else '%Y-%m-%d').date()
+            
         enriched_suggestions.append({
             **suggestion,
             'hativa_name': hativot.get(suggestion['hativa_id'], {}).get('name', 'לא ידוע'),
@@ -2338,9 +2386,22 @@ def review_auto_schedule():
 def approve_auto_schedule():
     """Approve and create selected meetings from the generated schedule"""
     from flask import session
+    import json
+    from datetime import datetime
     
     try:
-        pending_schedule = session.get('pending_schedule')
+        draft_id = session.get('pending_schedule_draft_id')
+        pending_schedule = None
+        
+        if draft_id:
+            draft = db.get_schedule_draft(draft_id)
+            if draft:
+                pending_schedule = json.loads(draft['data'])
+        
+        # Fallback
+        if not pending_schedule:
+            pending_schedule = session.get('pending_schedule')
+
         if not pending_schedule:
             flash('אין לוח זמנים ממתין לאישור', 'warning')
             return redirect(url_for('auto_schedule'))
@@ -2358,7 +2419,16 @@ def approve_auto_schedule():
         selected_meeting_suggestions = []
         for idx in selected_indices:
             if 0 <= idx < len(suggestions):
-                selected_meeting_suggestions.append(suggestions[idx])
+                sug = suggestions[idx]
+                # Ensure date objects
+                if isinstance(sug.get('suggested_date'), str):
+                     # Handle ISO format or simple date
+                     date_str = sug['suggested_date']
+                     if 'T' in date_str:
+                         sug['suggested_date'] = datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%S').date()
+                     else:
+                         sug['suggested_date'] = datetime.strptime(date_str, '%Y-%m-%d').date()
+                selected_meeting_suggestions.append(sug)
         
         if not selected_meeting_suggestions:
             flash('לא נמצאו הצעות תקינות לאישור', 'error')
@@ -2373,8 +2443,11 @@ def approve_auto_schedule():
         # Approve meetings using service
         result = auto_schedule_service.approve_meetings(approval_request)
         
-        # Clear session
+        # Clear session and DB draft
         session.pop('pending_schedule', None)
+        session.pop('pending_schedule_draft_id', None)
+        if draft_id:
+            db.delete_schedule_draft(draft_id)
         
         # Show results
         if result.success_count > 0:

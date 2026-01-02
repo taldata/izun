@@ -30,7 +30,8 @@ TABLE_PK_MAP = {
     'hativa_day_constraints': 'constraint_id',
     'system_settings': 'setting_id',
     'audit_logs': 'log_id',
-    'calendar_sync_events': 'sync_id'
+    'calendar_sync_events': 'sync_id',
+    'schedule_drafts': 'draft_id'
 }
 
 class PG_CursorWrapper:
@@ -400,6 +401,23 @@ class DatabaseManager:
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_calendar_sync_status ON calendar_sync_events (sync_status)
         ''')
+        
+        # Create schedule drafts table
+        cursor.execute(f'''
+            CREATE TABLE IF NOT EXISTS schedule_drafts (
+                draft_id {auto_inc_pk},
+                user_id INTEGER NOT NULL,
+                data TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Create index for expired cleanup
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_schedule_drafts_created_at ON schedule_drafts (created_at)
+        ''')
+
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_calendar_sync_calendar_id ON calendar_sync_events (calendar_event_id)
         ''')
@@ -4117,3 +4135,75 @@ class DatabaseManager:
         conn.close()
 
         return deleted_count
+
+    # Schedule Drafts operations
+    def save_schedule_draft(self, user_id: int, data: str) -> int:
+        """Save a schedule draft and return its ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO schedule_drafts (user_id, data)
+            VALUES (?, ?)
+        ''', (user_id, data))
+        draft_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return draft_id
+
+    def get_schedule_draft(self, draft_id: int) -> Optional[Dict]:
+        """Get a schedule draft by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT draft_id, user_id, data, created_at
+            FROM schedule_drafts
+            WHERE draft_id = ?
+        ''', (draft_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return {
+                'draft_id': row[0],
+                'user_id': row[1],
+                'data': row[2],
+                'created_at': row[3]
+            }
+        return None
+
+    def delete_schedule_draft(self, draft_id: int) -> bool:
+        """Delete a schedule draft"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM schedule_drafts WHERE draft_id = ?', (draft_id,))
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
+
+    def cleanup_old_drafts(self, hours: int = 24) -> int:
+        """Delete drafts older than specified hours"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Calculate cutoff time
+        # This syntax works for SQLite, check Postgres later if needed (DB agnostic usually handled by app logic but SQL differences exist)
+        # SQLite: datetime('now', '-24 hours')
+        # Postgres: NOW() - INTERVAL '24 hours'
+        
+        if self.db_type == 'postgres':
+            cursor.execute(f"DELETE FROM schedule_drafts WHERE created_at < NOW() - INTERVAL '{hours} hours'")
+        else:
+            cursor.execute(f"DELETE FROM schedule_drafts WHERE created_at < datetime('now', '-{hours} hours')")
+            
+        count = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return count
+    
+    def get_system_setting(self, key: str, default: str = None) -> str:
+        """Get system setting by key"""
+        # (Existing implementation presumably here or I should strictly replace what I see)
+        # Wait, I don't want to replace get_system_setting, I want to APPEND methods.
+        # But multi_replace requires replacing existing content.
+        # I will look at the end of file content I just read.
