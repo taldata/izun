@@ -1426,38 +1426,50 @@ class DatabaseManager:
             if ct_row[0] != hativa_id:
                 raise ValueError("סוג הועדה שנבחר אינו שייך לחטיבה שנבחרה")
 
+            # Get current meeting date to check if date is changing
+            cursor.execute('SELECT vaada_date FROM vaadot WHERE vaadot_id = ?', (vaadot_id,))
+            current_row = cursor.fetchone()
+            current_date = current_row[0] if current_row else None
+            # Convert string to date if needed
+            if isinstance(current_date, str):
+                current_date = datetime.strptime(current_date, '%Y-%m-%d').date()
+            
+            # Check if date is actually changing
+            date_is_changing = current_date != vaada_date
+            
             # Check if the date is allowed for this division based on day constraints (only for non-admin users)
             is_admin = user_role == 'admin'
-            if not is_admin and not self.is_day_allowed_for_hativa(hativa_id, vaada_date):
+            if date_is_changing and not is_admin and not self.is_day_allowed_for_hativa(hativa_id, vaada_date):
                 day_names = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון']
                 day_name = day_names[vaada_date.weekday()]
                 allowed_days = self.get_hativa_allowed_days(hativa_id)
                 allowed_day_names = [day_names[d] for d in sorted(allowed_days)]
                 raise ValueError(f'התאריך {vaada_date} ({day_name}) אינו יום מותר לקביעת ועדות עבור חטיבה זו. הימים המותרים: {", ".join(allowed_day_names)}')
 
-            # Check constraints (per-day and per-week limits) excluding current meeting
+            # Only check constraints if date is changing (to allow editing other fields for existing committees)
             constraint_settings = self.get_constraint_settings()
+            
+            if date_is_changing:
+                max_per_day = constraint_settings['max_meetings_per_day']
+                cursor.execute('''
+                    SELECT COUNT(*) FROM vaadot 
+                    WHERE vaada_date = ? AND vaadot_id != ?
+                      AND (is_deleted = 0 OR is_deleted IS NULL)
+                ''', (vaada_date, vaadot_id))
+                existing_count = cursor.fetchone()[0]
+                if existing_count >= max_per_day:
+                    if max_per_day == 1:
+                        raise ValueError(f"כבר קיימת ועדה בתאריך {vaada_date}. לא ניתן לקבוע יותר מועדה אחת ביום.")
+                    raise ValueError(f"כבר קיימות {existing_count} ועדות בתאריך {vaada_date}. המגבלה הנוכחית מאפשרת עד {max_per_day} ועדות ביום.")
 
-            max_per_day = constraint_settings['max_meetings_per_day']
-            cursor.execute('''
-                SELECT COUNT(*) FROM vaadot 
-                WHERE vaada_date = ? AND vaadot_id != ?
-                  AND (is_deleted = 0 OR is_deleted IS NULL)
-            ''', (vaada_date, vaadot_id))
-            existing_count = cursor.fetchone()[0]
-            if existing_count >= max_per_day:
-                if max_per_day == 1:
-                    raise ValueError(f"כבר קיימת ועדה בתאריך {vaada_date}. לא ניתן לקבוע יותר מועדה אחת ביום.")
-                raise ValueError(f"כבר קיימות {existing_count} ועדות בתאריך {vaada_date}. המגבלה הנוכחית מאפשרת עד {max_per_day} ועדות ביום.")
-
-            week_start, week_end = self._get_week_bounds(vaada_date)
-            weekly_count = self._count_meetings_in_week(cursor, week_start, week_end, exclude_vaada_id=vaadot_id)
-            weekly_limit = self._get_weekly_limit(vaada_date, constraint_settings)
-            is_third_week = self._is_third_week_of_month(vaada_date)
-            week_type = "שבוע שלישי" if is_third_week else "שבוע רגיל"
-            if weekly_count >= weekly_limit:
-                new_count = weekly_count + 1
-                raise ValueError(f"השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. העברת הועדה תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit})")
+                week_start, week_end = self._get_week_bounds(vaada_date)
+                weekly_count = self._count_meetings_in_week(cursor, week_start, week_end, exclude_vaada_id=vaadot_id)
+                weekly_limit = self._get_weekly_limit(vaada_date, constraint_settings)
+                is_third_week = self._is_third_week_of_month(vaada_date)
+                week_type = "שבוע שלישי" if is_third_week else "שבוע רגיל"
+                if weekly_count >= weekly_limit:
+                    new_count = weekly_count + 1
+                    raise ValueError(f"השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. העברת הועדה תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit})")
 
             # Set default times based on committee type if BOTH are not provided
             # Only set defaults if neither time was provided (new committee or migration)
