@@ -49,8 +49,9 @@ class CalendarService:
         logger.info(f"Calendar service initialized - Email: {self.calendar_email}, Enabled: {self.sync_enabled}")
 
     def is_enabled(self) -> bool:
-        """Check if calendar sync is enabled"""
-        return self.sync_enabled
+        """Check if calendar sync is enabled - always returns True"""
+        return True  # Calendar sync is always enabled
+
 
     def _get_access_token(self) -> Optional[str]:
         """
