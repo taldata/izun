@@ -841,16 +841,10 @@ class CalendarService:
         Returns:
             Dictionary with operation statistics
         """
-        if not self.is_enabled():
-            return {
-                'success': False,
-                'message': 'Calendar sync is disabled',
-                'events_deleted': 0,
-                'records_cleared': 0,
-                'committees_synced': 0,
-                'events_synced': 0,
-                'failures': 0
-            }
+        sync_was_disabled = not self.is_enabled()
+        
+        # Even if sync is disabled, we allow reset to clear database records
+        # This is useful for maintenance and cleanup operations
 
         # Acquire lock to prevent concurrent sync operations during reset
         # Use blocking acquire since reset is a critical operation that should wait
@@ -887,7 +881,20 @@ class CalendarService:
                 records_cleared = self.db.clear_all_calendar_sync_records(self.calendar_email)
                 logger.info(f"Cleared {records_cleared} sync records from database")
 
-                # Now perform full sync to recreate all events
+                # Now perform full sync to recreate all events (only if sync is enabled)
+                if sync_was_disabled:
+                    logger.info("Calendar sync is disabled - skipping re-sync, only cleared records")
+                    return {
+                        'success': True,
+                        'message': f'Reset complete (sync disabled): Cleared {records_cleared} sync records from database',
+                        'events_deleted': events_deleted,
+                        'deletion_failures': deletion_failures,
+                        'records_cleared': records_cleared,
+                        'committees_synced': 0,
+                        'events_synced': 0,
+                        'failures': deletion_failures
+                    }
+
                 # Call internal method since we already hold the lock
                 logger.info("Starting full sync to recreate all events...")
                 sync_result = self._sync_all_internal()

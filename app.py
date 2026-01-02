@@ -3940,9 +3940,11 @@ def reset_calendar_sync():
             }), 500
 
     except Exception as e:
-        app.logger.error(f"Error in calendar sync reset: {e}", exc_info=True)
+        import traceback
+        tb_str = traceback.format_exc()
+        app.logger.error(f"Error in calendar sync reset: {e}\n{tb_str}")
         audit_logger.log_error('calendar_sync_reset', 'calendar', str(e))
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, 'message': str(e), 'traceback': tb_str}), 500
 
 @app.route('/api/calendar/sync/status')
 @login_required
