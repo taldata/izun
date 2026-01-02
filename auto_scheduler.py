@@ -256,6 +256,7 @@ class AutoMeetingScheduler:
                                  hativot_ids: List[int] = None) -> Dict:
         """
         יצירת לוח זמנים חודשי אוטומטי
+        OPTIMIZED: Pre-fetches all data once to avoid redundant database calls
         """
         if hativot_ids is None:
             hativot = self.db.get_hativot()
@@ -270,11 +271,33 @@ class AutoMeetingScheduler:
         else:
             end_date = date(year, month + 1, 1) - timedelta(days=1)
         
+        # ===== PERFORMANCE OPTIMIZATION: Pre-fetch all data once =====
+        # Cache constraint settings (1 DB call instead of ~100+)
+        cached_constraint_settings = self.db.get_constraint_settings()
+        
+        # Cache existing meetings (1 DB call instead of ~100+)
+        cached_vaadot = self.db.get_vaadot()
+        
+        # Cache committee types for all hativot (N DB calls instead of ~100+)
+        cached_committee_types = {}
+        for hativa_id in hativot_ids:
+            cached_committee_types[hativa_id] = self.db.get_committee_types(hativa_id)
+        
+        # Build a set of dates with meetings for quick lookup
+        cached_meeting_dates = set()
+        for meeting in cached_vaadot:
+            if meeting.get('vaada_date'):
+                try:
+                    cached_meeting_dates.add(meeting['vaada_date'])
+                except (ValueError, TypeError):
+                    pass
+        # ===== END OPTIMIZATION =====
+        
         suggested_meetings = []
         
         for hativa_id in hativot_ids:
-            # קבלת סוגי הועדות הספציפיים לחטיבה זו
-            committee_types = self.db.get_committee_types(hativa_id)
+            # Use cached committee types
+            committee_types = cached_committee_types.get(hativa_id, [])
             
             for committee_type_data in committee_types:
                 committee_type_id = committee_type_data['committee_type_id']
@@ -286,8 +309,10 @@ class AutoMeetingScheduler:
                     # ישיבות שבועיות
                     current_date = start_date
                     while current_date <= end_date:
-                        suggested_date = self.find_next_available_date(
-                            committee_type_id, hativa_id, current_date, 7
+                        suggested_date = self._find_next_available_date_cached(
+                            committee_type_id, hativa_id, current_date, 7,
+                            committee_type_data, cached_constraint_settings, 
+                            cached_vaadot, cached_meeting_dates
                         )
                         if suggested_date and suggested_date <= end_date:
                             suggested_meetings.append({
@@ -310,8 +335,10 @@ class AutoMeetingScheduler:
                         days_to_target_week = (week_of_month - 1) * 7
                         week_start = first_day + timedelta(days=days_to_target_week)
                         
-                        suggested_date = self.find_next_available_date(
-                            committee_type_id, hativa_id, week_start, 7
+                        suggested_date = self._find_next_available_date_cached(
+                            committee_type_id, hativa_id, week_start, 7,
+                            committee_type_data, cached_constraint_settings,
+                            cached_vaadot, cached_meeting_dates
                         )
                         if suggested_date and suggested_date.month == month:
                             suggested_meetings.append({
@@ -329,6 +356,134 @@ class AutoMeetingScheduler:
             'suggested_meetings': suggested_meetings,
             'total_suggestions': len(suggested_meetings)
         }
+    
+    def _find_next_available_date_cached(self, committee_type_id: int, hativa_id: int, 
+                                          start_date: date, max_days: int,
+                                          committee_type_data: Dict,
+                                          constraint_settings: Dict,
+                                          cached_vaadot: List[Dict],
+                                          cached_meeting_dates: set) -> Optional[date]:
+        """
+        מציאת התאריך הזמין הבא לועדה - גרסה מותאמת עם cache
+        """
+        if not committee_type_data:
+            return None
+        
+        expected_weekday = committee_type_data['scheduled_day']
+        frequency = committee_type_data['frequency']
+        week_of_month = committee_type_data.get('week_of_month')
+        
+        current_date = start_date
+        days_checked = 0
+        
+        while days_checked < max_days:
+            # בדיקה שהיום הוא היום הנכון בשבוע
+            expected_python_weekday = self.our_weekday_to_python_weekday(expected_weekday)
+            if current_date.weekday() == expected_python_weekday:
+                # בדיקה נוספת לועדות חודשיות - שהן בשבוע הנכון
+                if frequency == 'monthly' and week_of_month:
+                    week_num = (current_date.day - 1) // 7 + 1
+                    if week_num != week_of_month:
+                        current_date += timedelta(days=1)
+                        days_checked += 1
+                        continue
+                
+                can_schedule, _ = self._can_schedule_meeting_cached(
+                    committee_type_id, current_date, hativa_id,
+                    committee_type_data, constraint_settings, 
+                    cached_vaadot, cached_meeting_dates
+                )
+                if can_schedule:
+                    return current_date
+            
+            current_date += timedelta(days=1)
+            days_checked += 1
+        
+        return None
+    
+    def _can_schedule_meeting_cached(self, committee_type_id: int, target_date: date, 
+                                      hativa_id: int, committee_type_data: Dict,
+                                      constraint_settings: Dict,
+                                      cached_vaadot: List[Dict],
+                                      cached_meeting_dates: set,
+                                      is_admin: bool = False) -> Tuple[bool, str]:
+        """
+        בדיקה האם ניתן לתזמן ישיבה בתאריך נתון - גרסה מותאמת עם cache
+        """
+        # בדיקת יום עסקים
+        if not self.is_business_day(target_date):
+            return False, "התאריך אינו יום עסקים (שבת/חג/יום שבתון)"
+        
+        if not committee_type_data:
+            return False, f"סוג ועדה לא נמצא: {committee_type_id}"
+        
+        # ועדה תפעולית: עוקפים את כל האילוצים למעט יום עסקים
+        if committee_type_data.get('is_operational'):
+            return True, "ועדה תפעולית - ללא אילוצי תדירות/שבוע/קיבולת"
+        
+        expected_weekday = committee_type_data['scheduled_day']
+        frequency = committee_type_data['frequency']
+        week_of_month = committee_type_data.get('week_of_month')
+            
+        # המרת יום השבוע שלנו ליום השבוע של Python
+        expected_python_weekday = self.our_weekday_to_python_weekday(expected_weekday)
+        if target_date.weekday() != expected_python_weekday:
+            weekday_names = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+            expected_day_name = weekday_names[expected_weekday]
+            return False, f"ועדה זו מתקיימת רק בימי {expected_day_name}"
+        
+        warnings = []
+
+        # בדיקת ועדה אחת ביום - using cached data
+        date_str = target_date.strftime('%Y-%m-%d')
+        meetings_on_date = sum(1 for d in cached_meeting_dates if d == date_str)
+        max_per_day = constraint_settings['max_meetings_per_day']
+        
+        if meetings_on_date >= max_per_day:
+            constraint_msg = "קיימת כבר ישיבה אחרת באותו תאריך" if max_per_day == 1 else f"מכסת הישיבות היומית ({max_per_day}) נוצלה בתאריך זה"
+            if is_admin:
+                warnings.append(f"⚠️ {constraint_msg}")
+            else:
+                return False, constraint_msg
+
+        # בדיקת מגבלות שבועיות
+        week_meetings = self.count_meetings_in_week(target_date)
+        is_third_week = self.is_third_week_of_month(target_date)
+
+        weekly_limit = constraint_settings['max_weekly_meetings']
+        third_week_limit = constraint_settings['max_third_week_meetings']
+        allowed_weekly = third_week_limit if is_third_week else weekly_limit
+        if week_meetings >= allowed_weekly:
+            constraint_msg = f"מכסת הישיבות השבועית ({allowed_weekly}) נוצלה השבוע"
+            if is_admin:
+                warnings.append(f"⚠️ {constraint_msg}")
+            else:
+                return False, constraint_msg
+        
+        # בדיקה מיוחדת לועדות חודשיות - רק בשבוע המתאים
+        if frequency == 'monthly':
+            if week_of_month:
+                week_num = (target_date.day - 1) // 7 + 1
+                if week_num != week_of_month:
+                    return False, f"ועדה חודשית זו מתקיימת רק בשבוע {week_of_month} של החודש"
+        
+        # בדיקה שאין כפילות לאותה ועדה ואותה חטיבה - using cached data
+        for meeting in cached_vaadot:
+            if (meeting.get('committee_type_id') == committee_type_id and 
+                meeting.get('hativa_id') == hativa_id and 
+                meeting.get('vaada_date')):
+                try:
+                    meeting_date = datetime.strptime(meeting['vaada_date'], '%Y-%m-%d').date()
+                    if frequency == 'weekly' and abs((meeting_date - target_date).days) < 7:
+                        return False, "קיימת כבר ישיבה דומה לאותה חטיבה השבוע"
+                    elif frequency == 'monthly' and meeting_date.month == target_date.month and meeting_date.year == target_date.year:
+                        return False, "קיימת כבר ישיבה דומה לאותה חטיבה החודש"
+                except (ValueError, TypeError):
+                    continue
+        
+        if warnings:
+            return True, f"ניתן לתזמן ישיבה. {' '.join(warnings)}"
+        return True, "ניתן לתזמן ישיבה"
     
     def create_meetings_from_suggestions(self, suggestions: List[Dict]) -> Dict:
         """
