@@ -13,7 +13,7 @@ import hashlib
 import json
 import threading
 from typing import Optional, Dict, List, Tuple
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
@@ -405,11 +405,12 @@ class CalendarService:
             content_data = {
                 'subject': subject,
                 'start_date': str(vaada_date),
-                'start_time': start_time,
-                'end_time': end_time,
+                'start_time': str(start_time) if start_time else None,
+                'end_time': str(end_time) if end_time else None,
                 'body': body
             }
-            content_hash = hashlib.md5(json.dumps(content_data, sort_keys=True).encode('utf-8')).hexdigest()
+            # Use default=str to handle any other non-serializable objects (like time objects if they sneak in)
+            content_hash = hashlib.md5(json.dumps(content_data, sort_keys=True, default=str).encode('utf-8')).hexdigest()
 
             # Check if sync record exists
             sync_record = self.db.get_calendar_sync_record('vaadot', vaadot_id, None, self.calendar_email)

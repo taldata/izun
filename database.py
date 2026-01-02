@@ -257,9 +257,6 @@ class DatabaseManager:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (committee_type_id) REFERENCES committee_types (committee_type_id),
                 FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (committee_type_id) REFERENCES committee_types (committee_type_id),
-                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id),
                 FOREIGN KEY (exception_date_id) REFERENCES exception_dates (date_id)
             )
         ''')
@@ -1891,7 +1888,7 @@ class DatabaseManager:
             JOIN hativot vh ON v.hativa_id = vh.hativa_id
             JOIN maslulim m ON e.maslul_id = m.maslul_id
             JOIN hativot h ON m.hativa_id = h.hativa_id
-            JOIN hativot h ON m.hativa_id = h.hativa_id
+
             WHERE (e.is_deleted = 0 OR e.is_deleted IS NULL)
               AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
         '''
