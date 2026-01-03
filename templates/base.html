@@ -592,9 +592,13 @@
           .then((response) => response.json())
           .then((data) => {
             if (data.success) {
-              alert(
-                `סנכרון הושלם בהצלחה!\n\nועדות: ${data.committees_synced}\nאירועים: ${data.events_synced}\nכשלונות: ${data.failures}`
-              );
+              if (data.background) {
+                 alert(data.message);
+              } else {
+                 alert(
+                   `סנכרון הושלם בהצלחה!\n\nועדות: ${data.committees_synced}\nאירועים: ${data.events_synced}\nכשלונות: ${data.failures}`
+                 );
+              }
               // Refresh status
               showCalendarSyncModal();
             } else {
