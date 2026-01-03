@@ -465,6 +465,7 @@ class CalendarService:
 
             # Determine if this should be an all-day event or timed event
             is_all_day = not (start_time and end_time)
+            logger.info(f"Syncing committee {vaadot_id}: Date={vaada_date}, Start={start_time}, End={end_time}, IsAllDay={is_all_day}")
 
             # Build event title and description
             subject = f"{committee_type_name} - {hativa_name}"
