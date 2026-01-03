@@ -297,16 +297,16 @@
                         </div>
                         <div>
                             {% if user.user_id != current_user.user_id %}
-                            <form method="POST" action="{{ url_for('toggle_user_status', user_id=user.user_id) }}" class="d-inline">
-                                <button type="submit" class="btn btn-outline-warning action-btn" 
-                                        onclick="return confirm('האם אתה בטוח שברצונך לשנות את סטטוס המשתמש?')">
-                                    {% if user.is_active %}
-                                        <i class="fas fa-pause"></i> השבת
-                                    {% else %}
-                                        <i class="fas fa-play"></i> הפעל
-                                    {% endif %}
-                                </button>
-                            </form>
+                            <button type="button" class="btn btn-outline-warning action-btn toggle-status-btn" 
+                                    data-user-id="{{ user.user_id }}"
+                                    data-username="{{ user.full_name }}"
+                                    data-current-status="{{ 'active' if user.is_active else 'inactive' }}">
+                                {% if user.is_active %}
+                                    <i class="fas fa-pause"></i> השבת
+                                {% else %}
+                                    <i class="fas fa-play"></i> הפעל
+                                {% endif %}
+                            </button>
                             {% endif %}
                         </div>
                     </div>
@@ -388,6 +388,29 @@
     </div>
 </div>
 
+<!-- Toggle Status Modal -->
+<div class="modal fade" id="toggleStatusModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="toggleStatusTitle">שינוי סטטוס משתמש</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="toggleStatusMessage">האם אתה בטוח שברצונך לשנות את הסטטוס?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                <form id="toggleStatusForm" method="POST" action="">
+                    <button type="submit" class="btn btn-warning" id="toggleStatusSubmitBtn">
+                        אישור
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -463,6 +486,42 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const editModal = new bootstrap.Modal(document.getElementById('editUserModal'));
             editModal.show();
+        });
+    });
+
+    // Toggle status handling
+    const toggleButtons = document.querySelectorAll('.toggle-status-btn');
+    toggleButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const userId = this.getAttribute('data-user-id');
+            const username = this.getAttribute('data-username');
+            const currentStatus = this.getAttribute('data-current-status');
+            
+            const modalTitle = document.getElementById('toggleStatusTitle');
+            const modalMessage = document.getElementById('toggleStatusMessage');
+            const submitBtn = document.getElementById('toggleStatusSubmitBtn');
+            const form = document.getElementById('toggleStatusForm');
+            
+            // Set form action - Assuming the route pattern is /toggle_user_status/<user_id>
+            // We need to construct the URL correctly. Since we can't easily use url_for in JS file context well (though this is inline),
+            // a safer way is to have a base structure or replace a placeholder.
+            // Let's rely on the fact we are in a template
+            form.action = "{{ url_for('toggle_user_status', user_id=0) }}".replace('0', userId);
+            
+            if (currentStatus === 'active') {
+                modalTitle.innerHTML = '<i class="fas fa-user-slash me-2"></i>השבתת משתמש';
+                modalMessage.innerHTML = `האם אתה בטוח שברצונך <strong>להשבית</strong> את המשתמש <strong>${username}</strong>?<br><br>המשתמש לא יוכל להתחבר למערכת כל עוד הוא מושבת.`;
+                submitBtn.innerHTML = '<i class="fas fa-pause me-2"></i>השבת משתמש';
+                submitBtn.className = 'btn btn-warning';
+            } else {
+                modalTitle.innerHTML = '<i class="fas fa-user-check me-2"></i>הפעלת משתמש';
+                modalMessage.innerHTML = `האם אתה בטוח שברצונך <strong>להפעיל מחדש</strong> את המשתמש <strong>${username}</strong>?<br><br>המשתמש שוב יוכל להתחבר למערכת.`;
+                submitBtn.innerHTML = '<i class="fas fa-play me-2"></i>הפעל משתמש';
+                submitBtn.className = 'btn btn-success';
+            }
+            
+            const modal = new bootstrap.Modal(document.getElementById('toggleStatusModal'));
+            modal.show();
         });
     });
     
