@@ -255,6 +255,7 @@ class DatabaseManager:
                 notes TEXT,
                 start_time TEXT,
                 end_time TEXT,
+                is_deleted INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (committee_type_id) REFERENCES committee_types (committee_type_id),
                 FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id),
@@ -573,6 +574,13 @@ class DatabaseManager:
             
             if 'ad_dn' not in users_columns:
                 cursor.execute('ALTER TABLE users ADD COLUMN ad_dn TEXT')
+            
+            if 'profile_picture' not in users_columns:
+                if self.db_type == 'postgres':
+                    cursor.execute('ALTER TABLE users ADD COLUMN profile_picture BYTEA')
+                else:
+                    cursor.execute('ALTER TABLE users ADD COLUMN profile_picture BLOB')
+
             
             # Migrate user roles from old system (admin/manager/user) to new system (admin/editor/viewer)
             try:
@@ -3554,9 +3562,8 @@ class DatabaseManager:
     
     # Active Directory User Management Methods
     def create_ad_user(self, username: str, email: str, full_name: str, 
-
                       role: str = 'viewer', hativa_id: Optional[int] = None,
-                      ad_dn: str = '') -> int:
+                      ad_dn: str = '', profile_picture: bytes = None) -> int:
         """
         Create a new AD user (no password required)
         
@@ -3583,9 +3590,9 @@ class DatabaseManager:
                 # Use a placeholder that cannot be used for login
                 dummy_password = 'AZURE_AD_NO_PASSWORD_AUTH'
                 cursor.execute('''
-                    INSERT INTO users (username, email, password_hash, full_name, role, auth_source, ad_dn)
-                    VALUES (?, ?, ?, ?, ?, 'ad', ?)
-                ''', (username, email, dummy_password, full_name, role, ad_dn))
+                    INSERT INTO users (username, email, password_hash, full_name, role, auth_source, ad_dn, profile_picture)
+                    VALUES (?, ?, ?, ?, ?, 'ad', ?, ?)
+                ''', (username, email, dummy_password, full_name, role, ad_dn, profile_picture))
                 user_id = cursor.lastrowid
                 
                 # If hativa_id provided, add to user_hativot table
@@ -3604,7 +3611,7 @@ class DatabaseManager:
                     continue
                 raise  # Re-raise if not a lock error or final attempt
     
-    def update_ad_user_info(self, user_id: int, email: str, full_name: str) -> bool:
+    def update_ad_user_info(self, user_id: int, email: str, full_name: str, profile_picture: bytes = None) -> bool:
         """
         Update AD user information from AD sync
         
@@ -3619,11 +3626,18 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE users 
-                SET email = ?, full_name = ?
-                WHERE user_id = ? AND auth_source = 'ad'
-            ''', (email, full_name, user_id))
+            if profile_picture:
+                cursor.execute('''
+                    UPDATE users 
+                    SET email = ?, full_name = ?, profile_picture = ?
+                    WHERE user_id = ? AND auth_source = 'ad'
+                ''', (email, full_name, profile_picture, user_id))
+            else:
+                cursor.execute('''
+                    UPDATE users 
+                    SET email = ?, full_name = ?
+                    WHERE user_id = ? AND auth_source = 'ad'
+                ''', (email, full_name, user_id))
             conn.commit()
             conn.close()
             return True
@@ -3631,6 +3645,22 @@ class DatabaseManager:
             print(f"Error updating AD user info: {e}")
             return False
     
+    def get_user_photo(self, user_id: int) -> Optional[bytes]:
+        """Get user profile picture"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('SELECT profile_picture FROM users WHERE user_id = ?', (user_id,))
+            row = cursor.fetchone()
+            conn.close()
+            
+            if row and row[0]:
+                return row[0]
+            return None
+        except Exception as e:
+            print(f"Error getting user photo: {e}")
+            return None
+
     def get_user_by_username_any_source(self, username: str) -> Optional[Dict]:
         """
         Get user by username regardless of auth source (case-insensitive)
@@ -4226,9 +4256,4 @@ class DatabaseManager:
         conn.close()
         return count
     
-    def get_system_setting(self, key: str, default: str = None) -> str:
-        """Get system setting by key"""
-        # (Existing implementation presumably here or I should strictly replace what I see)
-        # Wait, I don't want to replace get_system_setting, I want to APPEND methods.
-        # But multi_replace requires replacing existing content.
-        # I will look at the end of file content I just read.
+

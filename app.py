@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, send_file
 from datetime import datetime, date, timedelta, time
 import json
+import io
 from flask.json.provider import DefaultJSONProvider
 import os
 from database import DatabaseManager
@@ -139,6 +140,34 @@ def not_found_error(e):
         message='הדף שביקשת לא נמצא.',
         show_retry=True,
         current_user=None), 404
+
+# User Photo Routes
+@app.route('/user/photo/<int:user_id>')
+@login_required
+def get_user_photo(user_id):
+    """
+    Serve user profile picture
+    """
+    photo_data = db.get_user_photo(user_id)
+    if photo_data:
+        return send_file(
+            io.BytesIO(photo_data),
+            mimetype='image/jpeg',
+            download_name='profile.jpg'
+        )
+    # Return 404 so frontend can use onerror
+    return "No photo", 404
+
+@app.route('/user/photo/me')
+@login_required
+def get_current_user_photo():
+    """
+    Serve current user's profile picture
+    """
+    current_user_id = session.get('user_id')
+    if not current_user_id:
+        return "Unauthorized", 401
+    return get_user_photo(current_user_id)
 
 # Authentication routes
 @app.route('/login', methods=['GET', 'POST'])
@@ -310,10 +339,11 @@ def auth_callback():
         # This prevents showing both "logout" and "login" messages together
         session.pop('_flashes', None)
         
-        # If user is already logged in, redirect to index to prevent loops
+        # If user is already logged in, we still want to proceed with the auth flow
+        # to ensure we update their details (like profile picture) and refresh tokens.
+        # So we removed the early return that was here.
         if 'user_id' in session:
-            app.logger.info(f"User {session.get('username')} already logged in during callback, redirecting to index")
-            return redirect(url_for('index'))
+            app.logger.info(f"User {session.get('username')} already logged in, but proceeding with AD update")
         
         # Verify state parameter
         state = request.args.get('state')

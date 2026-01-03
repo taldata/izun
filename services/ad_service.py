@@ -328,7 +328,10 @@ class ADService:
             email = ad_user_info.get('email', '')
             full_name = ad_user_info.get('full_name', '')
             
-            logger.info(f"Syncing user to local DB - Username: {username}, Email: {email}, Role: {default_role}, Hativa: {hativa_id}")
+            # Extract profile picture
+            profile_picture = ad_user_info.get('profile_picture')
+            
+            logger.info(f"Syncing user to local DB - Username: {username}, Email: {email}, Role: {default_role}, Hativa: {hativa_id}, Has Photo: {bool(profile_picture)}")
             
             # Validate required fields
             if not username:
@@ -352,7 +355,8 @@ class ADService:
                 self.db.update_ad_user_info(
                     user_id=user_id,
                     email=email,
-                    full_name=full_name
+                    full_name=full_name,
+                    profile_picture=profile_picture
                 )
                 logger.info(f"Updated AD user info for: {username}")
                 return user_id
@@ -367,7 +371,8 @@ class ADService:
                         full_name=full_name,
                         role=default_role,
                         hativa_id=hativa_id,
-                        ad_dn=ad_user_info.get('dn', '')
+                        ad_dn=ad_user_info.get('dn', ''),
+                        profile_picture=profile_picture
                     )
                     if not user_id:
                         logger.error(f"create_ad_user returned None for username={username}")
@@ -494,6 +499,27 @@ class ADService:
             
             if not user_info:
                 return False, None, "שגיאה בקבלת פרטי משתמש"
+
+            # Always try to fetch profile picture if we have an access token
+            # _get_user_info_from_token only returns basic info if id_token is present
+            if "access_token" in result and not user_info.get('profile_picture'):
+                try:
+                    logger.info("Fetching profile picture from Graph API...")
+                    headers = {
+                        'Authorization': f'Bearer {result["access_token"]}',
+                        'Content-Type': 'application/json'
+                    }
+                    photo_response = requests.get(
+                        'https://graph.microsoft.com/v1.0/me/photo/$value',
+                        headers=headers
+                    )
+                    if photo_response.status_code == 200:
+                        user_info['profile_picture'] = photo_response.content
+                        logger.info("Successfully fetched profile picture")
+                    else:
+                        logger.info(f"No profile photo found (status: {photo_response.status_code})")
+                except Exception as pe:
+                    logger.warning(f"Could not fetch profile photo: {pe}")
             
             return True, user_info, "אימות הצליח"
             
@@ -598,6 +624,19 @@ class ADService:
                     user_info['groups'] = [g.get('displayName', '') for g in groups_data.get('value', [])]
             except Exception as ge:
                 logger.warning(f"Could not fetch groups: {ge}")
+            
+            # Fetch user photo
+            try:
+                photo_response = requests.get(
+                    'https://graph.microsoft.com/v1.0/me/photo/$value',
+                    headers=headers
+                )
+                if photo_response.status_code == 200:
+                    user_info['profile_picture'] = photo_response.content
+                else:
+                    logger.info(f"No profile photo found (status: {photo_response.status_code})")
+            except Exception as pe:
+                logger.warning(f"Could not fetch profile photo: {pe}")
             
             return user_info
             

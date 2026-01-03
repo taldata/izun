@@ -255,9 +255,18 @@
                 href="#"
                 role="button"
                 data-bs-toggle="dropdown"
+                class="d-flex align-items-center"
               >
-                <i class="bi bi-person-circle me-1"></i>{{
-                current_user.full_name }}
+                <div class="d-inline-block position-relative me-2">
+                  <img src="{{ url_for('get_current_user_photo') }}" 
+                       class="rounded-circle border border-2 border-white"
+                       style="width: 32px; height: 32px; object-fit: cover;"
+                       alt="Profile"
+                       onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+                  >
+                  <i class="bi bi-person-circle text-light" style="font-size: 32px; display: none;"></i>
+                </div>
+                {{ current_user.full_name }}
                 <span class="badge bg-light text-dark ms-1">
                   {% if current_user.role == 'admin' %}מנהל{% elif
                   current_user.role == 'editor' %}עורך{% else %}צופה{% endif %}

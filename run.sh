@@ -17,8 +17,17 @@ APP_NAME="איזון עומסים"
 PORT=${PORT:-5001}
 PYTHON_CMD=${PYTHON_CMD:-python3}
 VENV_DIR="venv"
+# DB_FILE is not used for Postgres but kept for legacy/cleanup logic
 DB_FILE="committee_system.db"
 CURRENT_SCRIPT_PID=$$
+
+# Load .env file if it exists
+if [ -f .env ]; then
+    # Export variables from .env
+    set -a
+    source .env
+    set +a
+fi
 
 # Functions
 log_info() {
