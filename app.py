@@ -525,7 +525,6 @@ def auth_callback():
         # Log successful login
         audit_logger.log_login(username, True, None)
         
-        flash(f"ברוך הבא, {full_name}", 'success')
         return redirect(url_for('index'))
         
     except Exception as e:
