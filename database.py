@@ -507,33 +507,10 @@ class DatabaseManager:
         
         cursor.execute(settings_sql)
         
-        self._migrate_database(cursor)
         conn.commit()
         conn.close()
-        
-        self._create_default_admin()
-        
-    
-    def _create_default_admin(self):
-        """Create default admin user if no users exist"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT COUNT(*) FROM users')
-        user_count = cursor.fetchone()[0]
-        
-        if user_count == 0:
-            import hashlib
-            password_hash = hashlib.sha256('admin123'.encode()).hexdigest()
-            
-            cursor.execute('''
-                INSERT INTO users (username, email, password_hash, full_name, role, is_active)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', ('admin', 'admin@example.com', password_hash, 'מנהל מערכת', 'admin', 1))
-            
-        
-        conn.commit()
-        conn.close()
+
+
     
     def _migrate_database(self, cursor):
         """Migrate existing database to add new columns if they don't exist"""
@@ -2115,28 +2092,8 @@ class DatabaseManager:
             conn.close()
     
     # User Management and Permissions
-    def create_user(self, username: str, email: str, password_hash: str, full_name: str, 
-                   role: str = 'viewer', hativa_ids: List[int] = None) -> int:
-        """Create a new user with access to specified hativot"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO users (username, email, password_hash, full_name, role)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (username, email, password_hash, full_name, role))
-        user_id = cursor.lastrowid
-        
-        # Add hativot access
-        if hativa_ids:
-            for hativa_id in hativa_ids:
-                cursor.execute('''
-                    INSERT INTO user_hativot (user_id, hativa_id) 
-                    VALUES (?, ?)
-                ''', (user_id, hativa_id))
-        
-        conn.commit()
-        conn.close()
-        return user_id
+    
+
     
     def get_user_by_username(self, username: str) -> Optional[Dict]:
         """Get user by username with all their hativot (case-insensitive)"""
