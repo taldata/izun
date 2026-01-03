@@ -2171,9 +2171,9 @@
             // הצג תאריכים נגזרים אם קיימים
             if (event.call_deadline_date || event.intake_deadline_date || event.review_deadline_date || event.response_deadline_date) {
                 document.getElementById('derivedDatesSection').style.display = 'block';
-                document.getElementById('intakeDeadlineDate').textContent = event.intake_deadline_date || '-';
-                document.getElementById('reviewDeadlineDate').textContent = event.review_deadline_date || '-';
-                document.getElementById('responseDeadlineDate').textContent = event.response_deadline_date || '-';
+                document.getElementById('intakeDeadlineDate').textContent = event.intake_deadline_date ? formatDateHebrew(event.intake_deadline_date) : '-';
+                document.getElementById('reviewDeadlineDate').textContent = event.review_deadline_date ? formatDateHebrew(event.review_deadline_date) : '-';
+                document.getElementById('responseDeadlineDate').textContent = event.response_deadline_date ? formatDateHebrew(event.response_deadline_date) : '-';
 
                 // טען מצב עריכה ידנית אם קיים
                 const isManual = event.is_call_deadline_manual == 1 || event.is_call_deadline_manual === true;
@@ -2234,7 +2234,7 @@
         }
 
         // עדכן את התאריך
-        callDeadlineElement.textContent = callDeadlineDate || '-';
+        callDeadlineElement.textContent = callDeadlineDate ? formatDateHebrew(callDeadlineDate) : '-';
 
         if (isManual) {
             // מצב ידני - הצג את כל האינדיקציות
@@ -2253,7 +2253,7 @@
             // הצג את התאריך המחושב (אם קיים)
             if (calculatedHint && calculatedCallDeadlineSpan) {
                 if (calculatedDate) {
-                    calculatedCallDeadlineSpan.textContent = calculatedDate;
+                    calculatedCallDeadlineSpan.textContent = formatDateHebrew(calculatedDate);
                     calculatedHint.style.display = 'block';
                 } else {
                     calculatedHint.style.display = 'none';
