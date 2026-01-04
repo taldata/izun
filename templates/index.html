@@ -232,7 +232,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('add_committee_meeting') }}" id="addCommitteeForm">
+            <form method="POST" action="{{ url_for('committees.add_committee_meeting') }}" id="addCommitteeForm">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="hativa_id" class="form-label">חטיבה <span class="text-danger">*</span></label>
@@ -314,7 +314,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('add_event') }}">
+            <form method="POST" action="{{ url_for('events.add_event') }}">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="event_hativa_id" class="form-label">חטיבה <span class="text-danger">*</span></label>

@@ -91,7 +91,7 @@
 </div>
 
 <!-- Approval Form -->
-<form method="POST" action="{{ url_for('approve_auto_schedule') }}">
+<form method="POST" action="{{ url_for('auto_schedule.approve_auto_schedule') }}">
     <div class="row mb-4">
         <div class="col-12">
             <div class="card">
@@ -177,7 +177,7 @@
     <div class="row">
         <div class="col-12">
             <div class="d-flex justify-content-between">
-                <a href="{{ url_for('auto_schedule') }}" class="btn btn-secondary">
+                <a href="{{ url_for('auto_schedule.auto_schedule') }}" class="btn btn-secondary">
                     <i class="bi bi-arrow-left me-2"></i>חזור לתזמון אוטומטי
                 </a>
                 

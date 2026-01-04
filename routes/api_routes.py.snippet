@@ -1,0 +1,29 @@
+@api_bp.route('/api/maslulim/<int:maslul_id>/details')
+@login_required
+def maslul_details(maslul_id):
+    """Get details of a specific route including event count"""
+    try:
+        maslul = db.get_maslul_by_id(maslul_id)
+        if not maslul:
+            return jsonify({'success': False, 'error': 'המסלול לא נמצא'}), 404
+            
+        # Get count of events using this maslul
+        events = db.get_all_events()
+        maslul_events = [e for e in events if e.get('maslul_id') == maslul_id]
+        events_count = len(maslul_events)
+        
+        # Add basic info
+        data = {
+            'maslul_id': maslul['maslul_id'],
+            'name': maslul['name'],
+            'hativa_name': maslul['hativa_name'],
+            'description': maslul.get('description'),
+            'events_count': events_count,
+            'can_delete': events_count == 0
+        }
+        
+        return jsonify({'success': True, 'data': data})
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting maslul details: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

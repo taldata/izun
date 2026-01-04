@@ -47,16 +47,16 @@
                                     <td>{{ hativa.description or '-' }}</td>
                                     <td>
                                         <button class="btn btn-sm btn-outline-primary me-1" 
-                                                onclick="editHativa({{ hativa.hativa_id }}, '{{ hativa.name }}', '{{ hativa.description or '' }}', '{{ hativa.color }}')"
+                                                onclick='editHativa({{ hativa.hativa_id }}, {{ hativa.name|tojson }}, {{ (hativa.description or "")|tojson }}, {{ hativa.color|tojson }})'
                                                 data-bs-toggle="modal" data-bs-target="#editHativaModal">
                                             <i class="bi bi-pencil me-1"></i>ערוך
                                         </button>
                                         <button class="btn btn-sm btn-outline-warning me-1" 
-                                                onclick="manageDayConstraints({{ hativa.hativa_id }}, '{{ hativa.name }}', {{ hativa.get('allowed_days', [])|tojson }})"
+                                                onclick='manageDayConstraints({{ hativa.hativa_id }}, {{ hativa.name|tojson }}, {{ hativa.get("allowed_days", [])|tojson }})'
                                                 data-bs-toggle="modal" data-bs-target="#dayConstraintsModal">
                                             <i class="bi bi-calendar-week me-1"></i>אילוצי ימים
                                         </button>
-                                        <a href="{{ url_for('maslulim') }}?hativa_id={{ hativa.hativa_id }}" 
+                                        <a href="{{ url_for('admin.maslulim') }}?hativa_id={{ hativa.hativa_id }}"  
                                            class="btn btn-sm btn-outline-info me-1">
                                             <i class="bi bi-arrow-right-circle me-1"></i>מסלולים
                                         </a>
@@ -100,7 +100,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('add_hativa') }}">
+            <form method="POST" action="{{ url_for('admin.add_hativa') }}">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="name" class="form-label">שם החטיבה <span class="text-danger">*</span></label>
@@ -140,7 +140,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('update_hativa') }}" id="editHativaForm">
+            <form method="POST" action="{{ url_for('admin.update_hativa') }}" id="editHativaForm">
                 <input type="hidden" id="edit_hativa_id" name="hativa_id">
                 <div class="modal-body">
                     <div class="mb-3">
@@ -181,7 +181,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('set_hativa_day_constraints') }}" id="dayConstraintsForm">
+            <form method="POST" action="{{ url_for('admin.set_hativa_day_constraints') }}" id="dayConstraintsForm">
                 <input type="hidden" id="constraints_hativa_id" name="hativa_id">
                 <div class="modal-body">
                     <div class="mb-3">

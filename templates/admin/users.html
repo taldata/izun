@@ -321,7 +321,7 @@
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('update_user') }}">
+            <form method="POST" action="{{ url_for('users.update_user') }}">
                 <input type="hidden" name="user_id" id="editUserId">
                 <div class="modal-body">
                     <div class="row">
@@ -496,7 +496,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // We need to construct the URL correctly. Since we can't easily use url_for in JS file context well (though this is inline),
             // a safer way is to have a base structure or replace a placeholder.
             // Let's rely on the fact we are in a template
-            form.action = "{{ url_for('toggle_user_status', user_id=0) }}".replace('0', userId);
+            form.action = "{{ url_for('users.toggle_user_status', user_id=0) }}".replace('0', userId);
             
             if (currentStatus === 'active') {
                 modalTitle.innerHTML = '<i class="fas fa-user-slash me-2"></i>השבתת משתמש';

@@ -58,7 +58,7 @@ def login_required(f):
                 # Already on auth route, don't redirect again
                 return jsonify({'error': 'נדרשת התחברות'}), 401
             # Redirect directly to SSO instead of login page
-            return redirect(url_for('auth_azure'))
+            return redirect(url_for('auth.auth_azure'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -73,13 +73,13 @@ def admin_required(f):
             if request.path in ['/auth/azure', '/auth/callback', '/login']:
                 return jsonify({'error': 'נדרשת התחברות'}), 401
             # Redirect directly to SSO instead of login page
-            return redirect(url_for('auth_azure'))
+            return redirect(url_for('auth.auth_azure'))
         
         if session.get('role') != 'admin':
             if request.is_json:
                 return jsonify({'error': 'נדרשות הרשאות מנהל'}), 403
             flash('נדרשות הרשאות מנהל מערכת', 'error')
-            return redirect(url_for('index'))
+            return redirect(url_for('main.index'))
         
         return f(*args, **kwargs)
     return decorated_function
@@ -95,14 +95,14 @@ def editor_required(f):
             if request.path in ['/auth/azure', '/auth/callback', '/login']:
                 return jsonify({'error': 'נדרשת התחברות'}), 401
             # Redirect directly to SSO instead of login page
-            return redirect(url_for('auth_azure'))
+            return redirect(url_for('auth.auth_azure'))
         
         role = session.get('role')
         if role not in ['editor', 'admin']:
             if request.is_json:
                 return jsonify({'error': 'נדרשות הרשאות עורך'}), 403
             flash('נדרשות הרשאות עורך או מנהל', 'error')
-            return redirect(url_for('index'))
+            return redirect(url_for('main.index'))
         
         return f(*args, **kwargs)
     return decorated_function
@@ -118,7 +118,7 @@ def editing_permission_required(f):
             if request.path in ['/auth/azure', '/auth/callback', '/login']:
                 return jsonify({'error': 'נדרשת התחברות'}), 401
             # Redirect directly to SSO instead of login page
-            return redirect(url_for('auth_azure'))
+            return redirect(url_for('auth.auth_azure'))
         
         # Get target hativa_id from form data or URL params
         target_hativa_id = None
@@ -131,14 +131,14 @@ def editing_permission_required(f):
             target_hativa_id = int(target_hativa_id)
         
         # Check permissions
-        from app import auth_manager
+        from services_init import auth_manager
         can_edit, reason = auth_manager.can_edit(target_hativa_id)
         
         if not can_edit:
             if request.is_json:
                 return jsonify({'error': reason}), 403
             flash(reason, 'error')
-            return redirect(url_for('index'))
+            return redirect(url_for('main.index'))
         
         return f(*args, **kwargs)
     return decorated_function

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from flask import Flask, render_template, request, jsonify, session, url_for
+from flask import Flask, render_template, request, jsonify, session
 from datetime import datetime, date, timedelta, time
 import json
 import os
@@ -17,10 +17,7 @@ from services_init import (
 from db import cleanup_db
 
 # Import blueprints
-from routes import (
-    auth_bp, api_bp, admin_bp, committee_bp, event_bp, main_bp, migration_bp,
-    auto_schedule_bp, committee_type_bp, user_bp, settings_bp, recycle_bin_bp, calendar_bp
-)
+from routes import auth_bp, api_bp, admin_bp, committee_bp, event_bp, main_bp, migration_bp
 
 app = Flask(__name__)
 
@@ -57,17 +54,10 @@ app.register_blueprint(admin_bp) # Routes like /hativot, /maslulim
 app.register_blueprint(committee_bp)
 app.register_blueprint(event_bp)
 app.register_blueprint(migration_bp)
-app.register_blueprint(auto_schedule_bp)
-app.register_blueprint(committee_type_bp)
-app.register_blueprint(user_bp)
-app.register_blueprint(settings_bp)
-app.register_blueprint(recycle_bin_bp)
-app.register_blueprint(calendar_bp)
 
 # Start calendar sync scheduler
 if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
     try:
-        # Use is_running property (fixed bug)
         if not calendar_sync_scheduler.is_running:
             calendar_sync_scheduler.start()
             app.logger.info("Calendar sync scheduler started")

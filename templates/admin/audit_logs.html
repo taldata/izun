@@ -58,7 +58,7 @@
             <!-- Filters Panel -->
             <div id="filtersPanel" class="card mb-4" style="display: none;">
                 <div class="card-body">
-                    <form method="get" action="{{ url_for('admin_audit_logs') }}">
+                    <form method="get" action="{{ url_for('settings.admin_audit_logs') }}">
                         <div class="row">
                             <div class="col-md-3">
                                 <label>משתמש</label>
@@ -122,7 +122,7 @@
                                 <button type="submit" class="btn btn-primary">
                                     <i class="fas fa-search"></i> חפש
                                 </button>
-                                <a href="{{ url_for('admin_audit_logs') }}" class="btn btn-secondary">
+                                <a href="{{ url_for('settings.admin_audit_logs') }}" class="btn btn-secondary">
                                     <i class="fas fa-times"></i> נקה
                                 </a>
                             </div>

@@ -300,7 +300,7 @@
                 <h5 class="modal-title">הוסף סוג ועדה חדש</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('add_committee_type') }}" id="addCommitteeTypeForm">
+            <form method="POST" action="{{ url_for('committee_types.add_committee_type') }}" id="addCommitteeTypeForm">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="hativa_id" class="form-label">חטיבה <span class="text-danger">*</span></label>
@@ -379,7 +379,7 @@
                 <h5 class="modal-title">עריכת סוג ועדה</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('update_committee_type') }}" id="editCommitteeTypeForm">
+            <form method="POST" action="{{ url_for('committee_types.update_committee_type') }}" id="editCommitteeTypeForm">
                 <input type="hidden" id="edit_committee_type_id" name="committee_type_id">
                 <div class="modal-body">
                     <div class="mb-3">
@@ -464,7 +464,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
-                <form method="POST" action="{{ url_for('delete_committee_type') }}" style="display: inline;">
+                <form method="POST" action="{{ url_for('committee_types.delete_committee_type') }}" style="display: inline;">
                     <input type="hidden" id="delete_committee_type_id" name="committee_type_id">
                     <button type="submit" class="btn btn-warning">
                         <i class="fas fa-pause-circle"></i> השבת

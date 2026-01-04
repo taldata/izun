@@ -109,7 +109,7 @@
       style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
     >
       <div class="container">
-        <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">
+        <a class="navbar-brand fw-bold" href="{{ url_for('main.index') }}">
           <img
             src="https://upload.wikimedia.org/wikipedia/he/c/c8/Israel_Innovation_Authority.svg"
             alt="לוגו"
@@ -140,7 +140,7 @@
             <li class="nav-item">
               <a
                 class="nav-link rounded-pill px-3 mx-1"
-                href="{{ url_for('index') }}"
+                href="{{ url_for('main.index') }}"
               >
                 <i class="bi bi-house me-1"></i>דף הבית
               </a>
@@ -148,7 +148,7 @@
             <li class="nav-item">
               <a
                 class="nav-link rounded-pill px-3 mx-1"
-                href="{{ url_for('events_table') }}"
+                href="{{ url_for('events.events_table') }}"
               >
                 <i class="bi bi-table me-1"></i>טבלת אירועים
               </a>
@@ -159,7 +159,7 @@
             <li class="nav-item">
               <a
                 class="nav-link rounded-pill px-3 mx-1"
-                href="{{ url_for('dashboard') }}"
+                href="{{ url_for('main.dashboard') }}"
               >
                 <i class="bi bi-graph-up-arrow me-1"></i>דשבורד
               </a>
@@ -168,7 +168,7 @@
             <li class="nav-item">
               <a
                 class="nav-link rounded-pill px-3 mx-1"
-                href="{{ url_for('user_guide') }}"
+                href="{{ url_for('main.user_guide') }}"
                 style="
                   background: linear-gradient(135deg, #667eea20, #764ba220);
                 "
@@ -192,13 +192,13 @@
                 <li>
                   <a
                     class="dropdown-item"
-                    href="{{ url_for('committee_types') }}"
+                    href="{{ url_for('committee_types.committee_types') }}"
                   >
                     <i class="bi bi-people me-2"></i>ניהול ועדות
                   </a>
                 </li>
                 <li>
-                  <a class="dropdown-item" href="{{ url_for('recycle_bin') }}">
+                  <a class="dropdown-item" href="{{ url_for('recycle_bin.recycle_bin') }}">
                     <i class="bi bi-trash3 me-2 text-secondary"></i>סל מחזור
                   </a>
                 </li>
@@ -206,7 +206,7 @@
                 <li>
                   <a
                     class="dropdown-item"
-                    href="{{ url_for('auto_schedule') }}"
+                    href="{{ url_for('auto_schedule.auto_schedule') }}"
                   >
                     <i class="bi bi-robot me-2 text-success"></i>תזמון אוטומטי
                   </a>
@@ -216,12 +216,12 @@
                 <li><hr class="dropdown-divider" /></li>
                 <li><h6 class="dropdown-header">הגדרות מנהל</h6></li>
                 <li>
-                  <a class="dropdown-item" href="{{ url_for('hativot') }}">
+                  <a class="dropdown-item" href="{{ url_for('admin.hativot') }}">
                     <i class="bi bi-diagram-3 me-2 text-primary"></i>חטיבות
                   </a>
                 </li>
                 <li>
-                  <a class="dropdown-item" href="{{ url_for('maslulim') }}">
+                  <a class="dropdown-item" href="{{ url_for('admin.maslulim') }}">
                     <i class="bi bi-arrow-right-circle me-2 text-info"></i
                     >מסלולים
                   </a>
@@ -229,14 +229,14 @@
                 <li>
                   <a
                     class="dropdown-item"
-                    href="{{ url_for('exception_dates') }}"
+                    href="{{ url_for('admin.exception_dates') }}"
                   >
                     <i class="bi bi-calendar-x me-2 text-danger"></i>תאריכי
                     חריגים
                   </a>
                 </li>
                 <li>
-                  <a class="dropdown-item" href="{{ url_for('constraints') }}">
+                  <a class="dropdown-item" href="{{ url_for('admin.constraints') }}">
                     <i class="bi bi-sliders me-2 text-warning"></i>ניהול אילוצים
                   </a>
                 </li>
@@ -258,7 +258,7 @@
                 class="d-flex align-items-center"
               >
                 <div class="d-inline-block position-relative me-2">
-                  <img src="{{ url_for('get_current_user_photo') }}" 
+                  <img src="{{ url_for('auth.get_current_user_photo') }}" 
                        class="rounded-circle border border-2 border-white"
                        style="width: 32px; height: 32px; object-fit: cover;"
                        alt="Profile"
@@ -287,14 +287,14 @@
                   <h6 class="dropdown-header text-primary">ניהול מערכת</h6>
                 </li>
                 <li>
-                  <a class="dropdown-item" href="{{ url_for('manage_users') }}">
+                  <a class="dropdown-item" href="{{ url_for('users.manage_users') }}">
                     <i class="bi bi-people me-2 text-primary"></i>ניהול משתמשים
                   </a>
                 </li>
                 <li>
                   <a
                     class="dropdown-item"
-                    href="{{ url_for('permissions_matrix') }}"
+                    href="{{ url_for('users.permissions_matrix') }}"
                   >
                     <i class="bi bi-shield-lock me-2 text-warning"></i>מטריצת
                     הרשאות
@@ -303,7 +303,7 @@
                 <li>
                   <a
                     class="dropdown-item"
-                    href="{{ url_for('admin_audit_logs') }}"
+                    href="{{ url_for('settings.admin_audit_logs') }}"
                   >
                     <i class="bi bi-clipboard-data me-2 text-success"></i>יומן
                     ביקורת
@@ -333,7 +333,7 @@
                 <li>
                   <a
                     class="dropdown-item text-danger"
-                    href="{{ url_for('logout') }}"
+                    href="{{ url_for('auth.logout') }}"
                   >
                     <i class="bi bi-box-arrow-right me-2"></i>התנתק
                   </a>

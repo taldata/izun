@@ -13,7 +13,7 @@
             <p class="page-subtitle">המערכת מבטיחה עמידה באילוצים עסקיים ויוצרת לוח זמנים מיטבי</p>
         </div>
         <div class="col-md-4 text-end">
-            <a href="{{ url_for('committee_types') }}" class="btn btn-outline-primary">
+            <a href="{{ url_for('committee_types.committee_types') }}" class="btn btn-outline-primary">
                 <i class="bi bi-gear me-1"></i>ניהול סוגי ועדות
             </a>
         </div>
@@ -28,7 +28,7 @@
                 <h3 class="form-title mb-3">
                     <i class="bi bi-sliders me-2"></i>הגדרות התזמון
                 </h3>
-                <form method="POST" action="{{ url_for('generate_auto_schedule') }}">
+                <form method="POST" action="{{ url_for('auto_schedule.generate_auto_schedule') }}">
                     <div class="row g-3">
                         <div class="col-sm-6">
                             <div class="form-group">
