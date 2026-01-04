@@ -8,8 +8,7 @@ Werkzeug>=3.0.0
 gunicorn>=23.0.0
 
 # Security & Authentication
-bcrypt>=4.0.0
-ldap3>=2.9.1
+# All authentication handled via Azure AD SSO
 
 # Azure AD / Microsoft Identity Platform
 msal>=1.25.0
@@ -25,6 +24,10 @@ APScheduler>=3.10.0
 
 # PostgreSQL support for AWS RDS
 psycopg2-binary>=2.9.9
+
+# SQLAlchemy ORM
+SQLAlchemy>=2.0.45
+alembic>=1.14.0
 
 # Python 3.7+ built-in modules used:
 # - sqlite3 (built-in)

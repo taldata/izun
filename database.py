@@ -1,1361 +1,438 @@
-import sqlite3
 import os
 import re
 import urllib.parse
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Optional, Tuple, Any
-
 from zoneinfo import ZoneInfo
 
-# Try to import psycopg2 for PostgreSQL support
-try:
-    import psycopg2
-    from psycopg2.extras import DictCursor
-    postgres_available = True
-except ImportError:
-    postgres_available = False
+# SQLAlchemy ORM imports
+from db import get_db_session
+from repositories import (
+    HativaRepository, MaslulRepository, CommitteeTypeRepository,
+    VaadaRepository, EventRepository, UserRepository, SettingsRepository,
+    AuditLogRepository, ScheduleDraftRepository, ExceptionDateRepository,
+    CalendarSyncRepository
+)
 
 ISRAEL_TZ = ZoneInfo('Asia/Jerusalem')
 
-# Map table names to their primary keys for RETURNING clause
-TABLE_PK_MAP = {
-    'hativot': 'hativa_id',
-    'maslulim': 'maslul_id',
-    'committee_types': 'committee_type_id',
-    'vaadot': 'vaadot_id',
-    'exception_dates': 'date_id',
-    'events': 'event_id',
-    'users': 'user_id',
-    'user_hativot': 'user_hativa_id',
-    'hativa_day_constraints': 'constraint_id',
-    'system_settings': 'setting_id',
-    'audit_logs': 'log_id',
-    'calendar_sync_events': 'sync_id',
-    'schedule_drafts': 'draft_id'
-}
-
-class PG_CursorWrapper:
-    """Wrapper for psycopg2 cursor to emulate sqlite3 behavior"""
-    def __init__(self, cursor):
-        self.cursor = cursor
-        self.lastrowid = None
-        self.rowcount = 0
-        
-    def __getattr__(self, name):
-        return getattr(self.cursor, name)
-        
-    def execute(self, sql, params=None):
-        # Convert sqlite placeholders (?) to postgres placeholders (%s)
-        pg_sql = sql.replace('?', '%s')
-        
-        # Handle INSERT OR IGNORE (SQLite) -> ON CONFLICT DO NOTHING (Postgres)
-        if 'INSERT OR IGNORE' in pg_sql.upper():
-            # Replace 'INSERT OR IGNORE INTO' with 'INSERT INTO'
-            pg_sql = re.sub(r'INSERT\s+OR\s+IGNORE\s+INTO', 'INSERT INTO', pg_sql, flags=re.IGNORECASE)
-            # Append ON CONFLICT DO NOTHING
-            # Ensure we don't have a trailing semicolon blocking the append (simple strip)
-            pg_sql = pg_sql.strip().rstrip(';') + " ON CONFLICT DO NOTHING"
-        
-        # Handle INSERT queries to capture lastrowid (logic for RETURNING PK)
-        is_insert = pg_sql.strip().upper().startswith('INSERT') and 'RETURNING' not in pg_sql.upper()
-        
-        if is_insert:
-            # Find table name to determine PK
-            match = re.search(r'INSERT\s+(?:OR\s+IGNORE\s+)?INTO\s+(\w+)', pg_sql, re.IGNORECASE)
-            if match:
-                table_name = match.group(1)
-                pk_col = TABLE_PK_MAP.get(table_name)
-                
-                if pk_col:
-                    pg_sql += f" RETURNING {pk_col}"
-        
-        try:
-            if params:
-                # Handle boolean conversion if needed (sqlite uses 0/1, postgres accepts 0/1 for int but consistent types are better)
-                # For now rely on postgres implicit casting or application using 0/1 ints
-                self.cursor.execute(pg_sql, params)
-            else:
-                self.cursor.execute(pg_sql)
-            
-            self.rowcount = self.cursor.rowcount
-            
-            if is_insert and match and pk_col:
-                result = self.cursor.fetchone()
-                if result:
-                    self.lastrowid = result[0]
-                    
-            return self
-        except Exception as e:
-            # Log query for debugging
-            # print(f"Error executing SQL: {pg_sql} with params: {params}")
-            raise e
-
-    def executemany(self, sql, params_list):
-        pg_sql = sql.replace('?', '%s')
-        self.cursor.executemany(pg_sql, params_list)
-        self.rowcount = self.cursor.rowcount
-        return self
-
-    def fetchone(self):
-        return self.cursor.fetchone()
-        
-    def fetchall(self):
-        return self.cursor.fetchall()
-        
-    def close(self):
-        self.cursor.close()
-        
-    @property
-    def description(self):
-        return self.cursor.description
-
-class PG_ConnectionWrapper:
-    """Wrapper for psycopg2 connection to return wrapped cursors"""
-    def __init__(self, conn):
-        self.conn = conn
-        self.row_factory = None  # sqlite3 attribute often accessed
-        
-    def cursor(self):
-        return PG_CursorWrapper(self.conn.cursor())
-        
-    def commit(self):
-        self.conn.commit()
-        
-    def rollback(self):
-        self.conn.rollback()
-        
-    def close(self):
-        self.conn.close()
-        
-    def __getattr__(self, attr):
-        return getattr(self.conn, attr)
-
 class DatabaseManager:
     def __init__(self, db_path: str = None):
-        # Check for DATABASE_URL first (PostgreSQL)
-        self.database_url = os.environ.get('DATABASE_URL')
-        self.db_type = 'postgres' if self.database_url else 'sqlite'
-        
-        if self.db_type == 'sqlite':
-            # Use environment variable for database path, with fallback to local development path
-            if db_path is None:
-                db_path = os.environ.get('DATABASE_PATH', 'committee_system.db')
-            self.db_path = db_path
-            # Ensure directory exists for database file
-            db_dir = os.path.dirname(self.db_path)
-            if db_dir:
-                try:
-                    if not os.path.exists(db_dir):
-                        os.makedirs(db_dir, exist_ok=True)
-                except (OSError, PermissionError) as e:
-                    # On Render, /var/data might not be available during build phase
-                    print(f"Note: Could not create directory {db_dir}: {e}")
-        
+        # Database initialized via db.init_database() in app.py or manual calls
         self.init_database()
-    
-    def get_connection(self):
-        """Get database connection with timeout and optimizations"""
-        if self.db_type == 'postgres':
-            if not postgres_available:
-                raise ImportError("psycopg2 package is required for PostgreSQL connections")
-            
-            conn = psycopg2.connect(self.database_url)
-            return PG_ConnectionWrapper(conn)
-        else:
-            conn = sqlite3.connect(self.db_path, timeout=30.0)
-            conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for better concurrency
-            conn.execute("PRAGMA busy_timeout=30000")  # 30 seconds timeout
-            return conn
-
-    
-    def get_table_columns(self, cursor, table_name: str) -> List[str]:
-        """Get column names for a table, handling dialect differences"""
-        if self.db_type == 'postgres':
-            # Use cursor.execute with %s (PG_CursorWrapper handles generic execute if needed, 
-            # but usually we are inside init_database with a wrapped cursor if PG, or raw if SQLite)
-            # The wrapper we added handles ? -> %s, so we can use ? safely if using the wrapper
-            # But let's use the underlying dialect safe approach
-            cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = %s", (table_name,))
-            return [row[0] for row in cursor.fetchall()]
-        else:
-            cursor.execute(f"PRAGMA table_info({table_name})")
-            return [row[1] for row in cursor.fetchall()]
 
     def init_database(self):
-        """Initialize database with all required tables"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
+        """Initialize database using SQLAlchemy and seed default settings"""
+        from db import init_database as sa_init_database
         
-        # Define dialect-specific PK
-        # SQLite uses INTEGER PRIMARY KEY AUTOINCREMENT
-        # PostgreSQL uses SERIAL PRIMARY KEY (or GENERATED BY DEFAULT AS IDENTITY)
-        if self.db_type == 'postgres':
-            auto_inc_pk = "SERIAL PRIMARY KEY"
-        else:
-            auto_inc_pk = "INTEGER PRIMARY KEY AUTOINCREMENT"
+        # Create all tables defined in models.py
+        sa_init_database()
         
-        # self._migrate_database(cursor) - Moved to end of function
-        
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS hativot (
-                hativa_id {auto_inc_pk},
-                name TEXT NOT NULL UNIQUE,
-                description TEXT,
-                color TEXT DEFAULT '#007bff',
-                is_active INTEGER DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS maslulim (
-                maslul_id {auto_inc_pk},
-                hativa_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                description TEXT,
-                is_active INTEGER DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id) ON DELETE CASCADE
-            )
-        ''')
-        
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS committee_types (
-                committee_type_id {auto_inc_pk},
-                hativa_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                scheduled_day INTEGER NOT NULL,
-                frequency TEXT NOT NULL DEFAULT 'weekly' CHECK (frequency IN ('weekly', 'monthly')),
-                week_of_month INTEGER DEFAULT NULL,
-                is_operational INTEGER DEFAULT 0,
-                is_active INTEGER DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id) ON DELETE CASCADE,
-                UNIQUE(hativa_id, name)
-            )
-        ''')
-        
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS exception_dates (
-                date_id {auto_inc_pk},
-                exception_date DATE NOT NULL UNIQUE,
-                description TEXT,
-                type TEXT DEFAULT 'holiday',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS vaadot (
-                vaadot_id {auto_inc_pk},
-                committee_type_id INTEGER NOT NULL,
-                hativa_id INTEGER NOT NULL,
-                vaada_date DATE NOT NULL,
-                exception_date_id INTEGER,
-                notes TEXT,
-                start_time TEXT,
-                end_time TEXT,
-                is_deleted INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (committee_type_id) REFERENCES committee_types (committee_type_id),
-                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id),
-                FOREIGN KEY (exception_date_id) REFERENCES exception_dates (date_id)
-            )
-        ''')
-        
-        # Create partial unique index for active meetings only
-        # Drop redundant full unique constraint if it exists (for PostgreSQL)
-        if self.db_type == 'postgres':
-            cursor.execute('''
-                DO $$ 
-                BEGIN 
-                    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'vaadot_committee_type_id_hativa_id_vaada_date_key') THEN
-                        ALTER TABLE vaadot DROP CONSTRAINT vaadot_committee_type_id_hativa_id_vaada_date_key;
-                    END IF;
-                END $$;
-            ''')
-
-        cursor.execute('''
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_vaadot_unique_active 
-            ON vaadot(committee_type_id, hativa_id, vaada_date) 
-            WHERE is_deleted = 0 OR is_deleted IS NULL
-        ''')
-        
-        # exception_dates creation moved up
-        
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS events (
-                event_id {auto_inc_pk},
-                vaadot_id INTEGER NOT NULL,
-                maslul_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                event_type TEXT NOT NULL CHECK (event_type IN ('kokok', 'shotef')),
-                expected_requests INTEGER DEFAULT 0,
-                call_publication_date DATE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (vaadot_id) REFERENCES vaadot (vaadot_id) ON DELETE CASCADE,
-                FOREIGN KEY (maslul_id) REFERENCES maslulim (maslul_id) ON DELETE CASCADE
-            )
-        ''')
-        
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS users (
-                user_id {auto_inc_pk},
-                username TEXT NOT NULL UNIQUE,
-                email TEXT NOT NULL UNIQUE,
-                password_hash TEXT,
-                full_name TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'editor', 'viewer')),
-                is_active INTEGER DEFAULT 1,
-                auth_source TEXT DEFAULT 'local' CHECK (auth_source IN ('local', 'ad')),
-                ad_dn TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_login TIMESTAMP
-            )
-        ''')
-        
-        # Create user_hativot table for many-to-many relationship
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS user_hativot (
-                user_hativa_id {auto_inc_pk},
-                user_id INTEGER NOT NULL,
-                hativa_id INTEGER NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
-                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id) ON DELETE CASCADE,
-                UNIQUE(user_id, hativa_id)
-            )
-        ''')
-        
-        # Create hativa_day_constraints table for division day constraints
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS hativa_day_constraints (
-                constraint_id {auto_inc_pk},
-                hativa_id INTEGER NOT NULL,
-                day_of_week INTEGER NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (hativa_id) REFERENCES hativot (hativa_id) ON DELETE CASCADE,
-                UNIQUE(hativa_id, day_of_week)
-            )
-        ''')
-        
-        # Create index for faster queries
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_hativa_day_constraints_hativa 
-            ON hativa_day_constraints (hativa_id)
-        ''')
-        
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS system_settings (
-                setting_id {auto_inc_pk},
-                setting_key TEXT NOT NULL UNIQUE,
-                setting_value TEXT NOT NULL,
-                description TEXT,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_by INTEGER,
-                FOREIGN KEY (updated_by) REFERENCES users (user_id)
-            )
-        ''')
-        
-        # Create audit logs table
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS audit_logs (
-                log_id {auto_inc_pk},
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                user_id INTEGER,
-                username TEXT,
-                action TEXT NOT NULL,
-                entity_type TEXT NOT NULL,
-                entity_id INTEGER,
-                entity_name TEXT,
-                details TEXT,
-                ip_address TEXT,
-                user_agent TEXT,
-                status TEXT DEFAULT 'success',
-                error_message TEXT,
-                FOREIGN KEY (user_id) REFERENCES users (user_id)
-            )
-        ''')
-        
-        # Create index for faster log queries
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs (timestamp DESC)
-        ''')
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs (user_id)
-        ''')
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs (entity_type, entity_id)
-        ''')
-
-        # Create calendar sync tracking table
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS calendar_sync_events (
-                sync_id {auto_inc_pk},
-                source_type TEXT NOT NULL CHECK (source_type IN ('vaadot', 'event_deadline')),
-                source_id INTEGER NOT NULL,
-                deadline_type TEXT,
-                calendar_event_id TEXT,
-                calendar_email TEXT NOT NULL,
-                last_synced TIMESTAMP,
-                sync_status TEXT DEFAULT 'pending' CHECK (sync_status IN ('pending', 'synced', 'failed', 'deleted')),
-                error_message TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(source_type, source_id, deadline_type, calendar_email)
-            )
-        ''')
-
-        # Create indexes for faster calendar sync queries
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_calendar_sync_source ON calendar_sync_events (source_type, source_id)
-        ''')
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_calendar_sync_status ON calendar_sync_events (sync_status)
-        ''')
-        
-        # Create schedule drafts table
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS schedule_drafts (
-                draft_id {auto_inc_pk},
-                user_id INTEGER NOT NULL,
-                data TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
-            )
-        ''')
-        
-        # Create index for expired cleanup
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_schedule_drafts_created_at ON schedule_drafts (created_at)
-        ''')
-
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_calendar_sync_calendar_id ON calendar_sync_events (calendar_event_id)
-        ''')
-
-        # Add content_hash column if it doesn't exist (for change detection)
-        try:
-            if self.db_type == 'sqlite':
-                cursor.execute('ALTER TABLE calendar_sync_events ADD COLUMN content_hash TEXT')
-            else:
-                cursor.execute('ALTER TABLE calendar_sync_events ADD COLUMN IF NOT EXISTS content_hash TEXT')
-        except Exception:
-            pass  # Column already exists or error
+        # Seed default settings
+        with get_db_session() as session:
+            from repositories.settings_repo import SettingsRepository
+            repo = SettingsRepository(session)
             
-        # Initial data for settings
-        # Use simple INSERT to be safe across dialects (no OR IGNORE in postgres standard, use ON CONFLICT)
-        # But for sqlite we use OR IGNORE.
-        # Postgres 9.5+ supports ON CONFLICT
-        
-        settings_sql = '''
-            INSERT INTO system_settings (setting_key, setting_value, description)
-            VALUES 
-                ('editing_period_active', '1', 'Whether general editing is allowed (1=yes, 0=admin only)'),
-                ('academic_year_start', '2024-09-01', 'Start of current academic year'),
-                ('editing_deadline', '2024-10-31', 'Deadline for general user editing'),
-                ('work_days', '6,0,1,2,3,4', 'Working days (Python weekday: 0=Monday ... 6=Sunday)'),
-                ('work_start_time', '08:00', 'Daily work start time'),
-                ('work_end_time', '17:00', 'Daily work end time'),
-                ('sla_days_before', '14', 'Default SLA days before committee meeting'),
-                ('max_meetings_per_day', '1', 'Maximum number of committee meetings per calendar day'),
-                ('max_weekly_meetings', '3', 'Maximum number of committee meetings per standard week'),
-                ('max_third_week_meetings', '4', 'Maximum number of committee meetings during the third week of a month'),
-                ('max_requests_committee_date', '100', 'Maximum total expected requests on committee meeting date'),
-                ('show_deadline_dates_in_calendar', '1', 'Show derived deadline dates in calendar (1=yes, 0=no)'),
-                ('rec_base_score', '100', 'Committee recommendation base score'),
-                ('rec_best_bonus', '25', 'Bonus for best recommendation'),
-                ('rec_space_bonus', '10', 'Bonus for available space'),
-                ('rec_sla_bonus', '20', 'Maximum bonus for SLA buffer'),
-                ('rec_optimal_range_bonus', '15', 'Bonus for optimal time range'),
-                ('rec_no_events_bonus', '5', 'Bonus for committee with no events'),
-                ('rec_high_load_penalty', '15', 'Penalty for high event load (7+ events)'),
-                ('rec_medium_load_penalty', '5', 'Penalty for medium event load (4-6 events)'),
-                ('rec_no_space_penalty', '50', 'Penalty for no available space'),
-                ('rec_no_sla_penalty', '30', 'Penalty for insufficient SLA time'),
-                ('rec_tight_sla_penalty', '10', 'Penalty for tight SLA time'),
-                ('rec_far_future_penalty', '10', 'Penalty for dates too far in future'),
-                ('rec_week_full_penalty', '20', 'Penalty for full week'),
-                ('rec_optimal_range_start', '0', 'Optimal range start (days after SLA)'),
-                ('rec_optimal_range_end', '30', 'Optimal range end (days after SLA)'),
-                ('rec_far_future_threshold', '60', 'Days considered too far in future (after optimal range)'),
-                ('ad_enabled', '0', 'Enable Active Directory authentication (1=yes, 0=no)'),
-                ('ad_server_url', '', 'Active Directory server URL (e.g., ad.domain.com)'),
-                ('ad_port', '636', 'AD server port (636 for LDAPS, 389 for LDAP)'),
-                ('ad_use_ssl', '1', 'Use SSL/LDAPS (1=yes, 0=no)'),
-                ('ad_use_tls', '0', 'Use STARTTLS (1=yes, 0=no)'),
-                ('ad_base_dn', '', 'Base DN (e.g., DC=domain,DC=com)'),
-                ('ad_bind_dn', '', 'Service account DN for binding'),
-                ('ad_bind_password', '', 'Service account password'),
-                ('ad_user_search_base', '', 'User search base DN (defaults to base_dn)'),
-                ('ad_user_search_filter', '(sAMAccountName={username})', 'LDAP filter for user search'),
-                ('ad_group_search_base', '', 'Group search base DN (defaults to base_dn)'),
-                ('ad_admin_group', '', 'AD group name/DN for admin role'),
-                ('ad_manager_group', '', 'AD group name/DN for manager role'),
-                ('ad_auto_create_users', '1', 'Automatically create users on first AD login (1=yes, 0=no)'),
-                ('ad_default_hativa_id', '', 'Default division ID for new AD users'),
-                ('ad_sync_on_login', '1', 'Sync user info from AD on each login (1=yes, 0=no)'),
-                ('calendar_sync_enabled', '1', 'Enable automatic calendar synchronization (1=yes, 0=no)'),
-                ('calendar_sync_email', 'plan@innovationisrael.org.il', 'Email address of the shared calendar to sync to'),
-                ('calendar_sync_interval_hours', '1', 'How often to sync calendar (in hours)')
-        '''
-        
-        if self.db_type == 'postgres':
-             settings_sql += ' ON CONFLICT (setting_key) DO NOTHING'
-        else:
-             settings_sql = settings_sql.replace('INSERT INTO', 'INSERT OR IGNORE INTO')
-        
-        cursor.execute(settings_sql)
-        
-        conn.commit()
-        conn.close()
-
-
-    
-    def _migrate_database(self, cursor):
-        """Migrate existing database to add new columns if they don't exist"""
-        try:
-            vaadot_columns = self.get_table_columns(cursor, 'vaadot')
-            
-            if 'vaada_date' not in vaadot_columns:
-                cursor.execute('ALTER TABLE vaadot ADD COLUMN vaada_date DATE')
-            
-            if 'exception_date_id' not in vaadot_columns:
-                if self.db_type == 'postgres':
-                    cursor.execute('ALTER TABLE vaadot ADD COLUMN exception_date_id INTEGER REFERENCES exception_dates(date_id)')
-                else:
-                    cursor.execute('ALTER TABLE vaadot ADD COLUMN exception_date_id INTEGER REFERENCES exception_dates(date_id)')
-
-            if 'start_time' not in vaadot_columns:
-                cursor.execute('ALTER TABLE vaadot ADD COLUMN start_time TEXT')
-            
-            if 'end_time' not in vaadot_columns:
-                cursor.execute('ALTER TABLE vaadot ADD COLUMN end_time TEXT')
-            
-            committee_types_columns = self.get_table_columns(cursor, 'committee_types')
-            
-            if 'hativa_id' not in committee_types_columns:
-                cursor.execute('ALTER TABLE committee_types ADD COLUMN hativa_id INTEGER DEFAULT 1')
-            
-            hativot_columns = self.get_table_columns(cursor, 'hativot')
-            
-            if 'color' not in hativot_columns:
-                cursor.execute('ALTER TABLE hativot ADD COLUMN color TEXT DEFAULT \'#007bff\'')
-            
-            # Migrate users table for AD support
-            users_columns = self.get_table_columns(cursor, 'users')
-            
-            if 'auth_source' not in users_columns:
-                # CHECK constraints might need separate handling in Postgres but basic ALTER ADD works
-                cursor.execute("ALTER TABLE users ADD COLUMN auth_source TEXT DEFAULT 'local' CHECK (auth_source IN ('local', 'ad'))")
-            
-            if 'ad_dn' not in users_columns:
-                cursor.execute('ALTER TABLE users ADD COLUMN ad_dn TEXT')
-            
-            if 'profile_picture' not in users_columns:
-                if self.db_type == 'postgres':
-                    cursor.execute('ALTER TABLE users ADD COLUMN profile_picture BYTEA')
-                else:
-                    cursor.execute('ALTER TABLE users ADD COLUMN profile_picture BLOB')
-
-            
-            # Migrate user roles from old system (admin/manager/user) to new system (admin/editor/viewer)
-            try:
-                # Check if hativa_id column exists in users table (legacy column)
-                users_columns = self.get_table_columns(cursor, 'users')
-                has_hativa_id = 'hativa_id' in users_columns
-                
-                if has_hativa_id:
-                    # Legacy migration: migrate hativa_id from users table to user_hativot
-                    cursor.execute("SELECT user_id, role, hativa_id FROM users WHERE role IN ('manager', 'user')")
-                    old_role_users = cursor.fetchall()
-                    
-                    for user_id, old_role, hativa_id in old_role_users:
-                        # Map old roles to new roles
-                        if old_role == 'manager':
-                            new_role = 'editor'
-                        elif old_role == 'user':
-                            new_role = 'viewer'
-                        else:
-                            continue  # admin stays admin
-                        
-                        cursor.execute("UPDATE users SET role = ? WHERE user_id = ?", (new_role, user_id))
-                        
-                        # If user had a hativa_id, migrate it to user_hativot table
-                        if hativa_id:
-                            if self.db_type == 'postgres':
-                                cursor.execute("""
-                                    INSERT INTO user_hativot (user_id, hativa_id) 
-                                    VALUES (?, ?)
-                                    ON CONFLICT DO NOTHING
-                                """, (user_id, hativa_id))
-                            else:
-                                cursor.execute("""
-                                    INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
-                                    VALUES (?, ?)
-                                """, (user_id, hativa_id))
-                    
-                    # Also migrate admin users with hativa_id
-                    cursor.execute("SELECT user_id, hativa_id FROM users WHERE role = 'admin' AND hativa_id IS NOT NULL")
-                    admin_users = cursor.fetchall()
-                    for user_id, hativa_id in admin_users:
-                        if self.db_type == 'postgres':
-                            cursor.execute("""
-                                INSERT INTO user_hativot (user_id, hativa_id) 
-                                VALUES (?, ?)
-                                ON CONFLICT DO NOTHING
-                            """, (user_id, hativa_id))
-                        else:
-                            cursor.execute("""
-                                INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
-                                VALUES (?, ?)
-                            """, (user_id, hativa_id))
-                else:
-                    # New schema: just migrate old role names if they exist
-                    cursor.execute("UPDATE users SET role = 'editor' WHERE role = 'manager'")
-                    cursor.execute("UPDATE users SET role = 'viewer' WHERE role = 'user'")
-                    
-            except Exception as e:
-                print(f"Role migration note: {e}")
-                # For Postgres, we must rollback the failed transaction
-                if hasattr(cursor, 'connection'):
-                    try:
-                        cursor.connection.rollback()
-                    except:
-                        pass
-            
-            tables_columns = {
-                'hativot': [('is_active', 'INTEGER DEFAULT 1')],
-                'maslulim': [
-                    ('is_active', 'INTEGER DEFAULT 1'), 
-                    ('sla_days', 'INTEGER DEFAULT 45'),
-                    ('stage_a_days', 'INTEGER DEFAULT 10'),
-                    ('stage_b_days', 'INTEGER DEFAULT 15'),
-                    ('stage_c_days', 'INTEGER DEFAULT 10'),
-                    ('stage_d_days', 'INTEGER DEFAULT 10'),
-                    ('stage_a_easy_days', 'INTEGER DEFAULT 5'),
-                    ('stage_a_review_days', 'INTEGER DEFAULT 5'),
-                    ('stage_b_easy_days', 'INTEGER DEFAULT 8'),
-                    ('stage_b_review_days', 'INTEGER DEFAULT 7'),
-                    ('stage_c_easy_days', 'INTEGER DEFAULT 5'),
-                    ('stage_c_review_days', 'INTEGER DEFAULT 5'),
-                    ('stage_d_easy_days', 'INTEGER DEFAULT 5'),
-                    ('stage_d_review_days', 'INTEGER DEFAULT 5'),
-                    ('call_publication_date', 'DATE')
-                ],
-                'committee_types': [
-                    ('is_active', 'INTEGER DEFAULT 1'),
-                    ('description', 'TEXT'),
-                    ('is_operational', 'INTEGER DEFAULT 0')
-                ],
-                'vaadot': [
-                    ('is_deleted', 'INTEGER DEFAULT 0'),
-                    ('deleted_at', 'TIMESTAMP'),
-                    ('deleted_by', 'INTEGER'),
-                    ('start_time', 'TIME'),
-                    ('end_time', 'TIME')
-                ],
-                'events': [
-                    ('call_publication_date', 'DATE'),
-                    ('call_deadline_date', 'DATE'),
-                    ('intake_deadline_date', 'DATE'),
-                    ('review_deadline_date', 'DATE'),
-                    ('response_deadline_date', 'DATE'),
-                    ('is_call_deadline_manual', 'INTEGER DEFAULT 0'),
-                    ('actual_submissions', 'INTEGER DEFAULT 0'),
-                    ('scheduled_date', 'DATE'),
-                    ('is_deleted', 'INTEGER DEFAULT 0'),
-                    ('deleted_at', 'TIMESTAMP'),
-                    ('deleted_by', 'INTEGER')
-                ]
+            default_settings = {
+                'editing_period_active': ('1', 'Whether general editing is allowed (1=yes, 0=admin only)'),
+                'academic_year_start': ('2024-09-01', 'Start of current academic year'),
+                'editing_deadline': ('2024-10-31', 'Deadline for general user editing'),
+                'work_days': ('6,0,1,2,3,4', 'Working days (Python weekday: 0=Monday ... 6=Sunday)'),
+                'work_start_time': ('08:00', 'Daily work start time'),
+                'work_end_time': ('17:00', 'Daily work end time'),
+                'sla_days_before': ('14', 'Default SLA days before committee meeting'),
+                'max_meetings_per_day': ('1', 'Maximum number of committee meetings per calendar day'),
+                'max_weekly_meetings': ('3', 'Maximum number of committee meetings per standard week'),
+                'max_third_week_meetings': ('4', 'Maximum number of committee meetings during the third week of a month'),
+                'max_requests_committee_date': ('100', 'Maximum total expected requests on committee meeting date'),
+                'show_deadline_dates_in_calendar': ('1', 'Show derived deadline dates in calendar (1=yes, 0=no)'),
+                'ad_enabled': ('0', 'Enable Active Directory authentication (1=yes, 0=no)'),
+                'calendar_sync_enabled': ('1', 'Enable automatic calendar synchronization (1=yes, 0=no)'),
+                'calendar_sync_email': ('plan@innovationisrael.org.il', 'Email address of the shared calendar to sync to'),
+                'calendar_sync_interval_hours': ('1', 'How often to sync calendar (in hours)')
             }
             
-            for table_name, columns in tables_columns.items():
-                existing_columns = self.get_table_columns(cursor, table_name)
-                
-                # If table doesn't exist, skip migration (init_database will create it)
-                if not existing_columns:
-                    continue
-                
-                for column_name, column_def in columns:
-                    if column_name not in existing_columns:
-                        print(f"Migrating {table_name}: Adding {column_name}")
-                        cursor.execute(f'ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}')
-                
-        except Exception as e:
-            print(f"Migration error: {e}")
-            # For Postgres, rollback failed transaction
-            if hasattr(cursor, 'connection'):
-                try:
-                    cursor.connection.rollback()
-                except:
-                    pass
+            for key, (value, desc) in default_settings.items():
+                if not repo.get_setting(key):
+                    repo.update_setting(key, value)
+        
+        
+        
+        
+        
+        
+
+        
+        
+
+            
+
+
+    
     
     def add_hativa(self, name: str, description: str = "", color: str = "#007bff") -> int:
-        """Add a new division"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO hativot (name, description, color) VALUES (?, ?, ?)', (name, description, color))
-        hativa_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return hativa_id
+        """Add a new division using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = HativaRepository(session)
+            hativa = repo.create(name, description, color)
+            return hativa.hativa_id
     
     def get_hativot(self) -> List[Dict]:
-        """Get all divisions"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT hativa_id, name, description, color, is_active, created_at FROM hativot ORDER BY name')
-        rows = cursor.fetchall()
-        conn.close()
-        
-        hativot = [{'hativa_id': row[0], 'name': row[1], 'description': row[2], 'color': row[3], 
-                'is_active': row[4], 'created_at': row[5]} for row in rows]
-        
-        # Add allowed days for each division
-        for hativa in hativot:
-            hativa['allowed_days'] = self.get_hativa_allowed_days(hativa['hativa_id'])
-        
-        return hativot
+        """Get all divisions using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = HativaRepository(session)
+            hativot = repo.get_all(include_inactive=True)
+            result = []
+            for h in hativot:
+                allowed_days = repo.get_allowed_days(h.hativa_id)
+                result.append({
+                    'hativa_id': h.hativa_id,
+                    'name': h.name,
+                    'description': h.description,
+                    'color': h.color,
+                    'is_active': h.is_active,
+                    'created_at': h.created_at,
+                    'allowed_days': allowed_days
+                })
+            return result
     
     def get_hativa_allowed_days(self, hativa_id: int) -> List[int]:
-        """Get allowed days of week for a division"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT day_of_week 
-            FROM hativa_day_constraints 
-            WHERE hativa_id = ?
-            ORDER BY day_of_week
-        ''', (hativa_id,))
-        rows = cursor.fetchall()
-        conn.close()
-        return [row[0] for row in rows]
+        """Get allowed days of week for a division using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = HativaRepository(session)
+            return repo.get_allowed_days(hativa_id)
     
     def set_hativa_allowed_days(self, hativa_id: int, allowed_days: List[int]) -> bool:
-        """Set allowed days of week for a division"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Validate days (0-6)
-        for day in allowed_days:
-            if day < 0 or day > 6:
-                conn.close()
-                raise ValueError(f'יום לא תקין: {day}. יש לבחור יום בין 0 (שני) ל-6 (ראשון)')
-        
-        # Delete existing constraints
-        cursor.execute('DELETE FROM hativa_day_constraints WHERE hativa_id = ?', (hativa_id,))
-        
-        # Insert new constraints
-        for day in allowed_days:
-            cursor.execute('''
-                INSERT INTO hativa_day_constraints (hativa_id, day_of_week)
-                VALUES (?, ?)
-            ''', (hativa_id, day))
-        
-        conn.commit()
-        conn.close()
-        return True
+        """Set allowed days of week for a division using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = HativaRepository(session)
+            return repo.set_allowed_days(hativa_id, allowed_days)
     
     def is_day_allowed_for_hativa(self, hativa_id: int, date_obj: date) -> bool:
         """Check if a date is allowed for a division based on day constraints"""
-        # Get allowed days for this division
-        allowed_days = self.get_hativa_allowed_days(hativa_id)
-        
-        # If no constraints set, allow all days (backward compatibility)
-        if not allowed_days:
-            return True
-        
-        # Get day of week (Python weekday: Monday=0, Sunday=6)
-        day_of_week = date_obj.weekday()
-        
-        # Check if this day is allowed
-        return day_of_week in allowed_days
+        with get_db_session() as session:
+            repo = HativaRepository(session)
+            return repo.is_day_allowed(hativa_id, date_obj.weekday())
     
     def update_hativa_color(self, hativa_id: int, color: str) -> bool:
-        """Update division color"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('UPDATE hativot SET color = ? WHERE hativa_id = ?', (color, hativa_id))
-        success = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
-        return success
+        """Update division color using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = HativaRepository(session)
+            return repo.update_color(hativa_id, color)
     
     def update_hativa(self, hativa_id: int, name: str, description: str = "", color: str = "#007bff") -> bool:
-        """Update division details"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE hativot 
-            SET name = ?, description = ?, color = ?
-            WHERE hativa_id = ?
-        ''', (name, description, color, hativa_id))
-        success = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
-        return success
+        """Update division details using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = HativaRepository(session)
+            return repo.update_hativa(hativa_id, name, description, color)
     
     # Maslulim operations
     def add_maslul(self, hativa_id: int, name: str, description: str = "", sla_days: int = 45, 
                    stage_a_days: int = 10, stage_b_days: int = 15, stage_c_days: int = 10, stage_d_days: int = 10) -> int:
-        """Add a new route to a division"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''INSERT INTO maslulim (hativa_id, name, description, sla_days, stage_a_days, stage_b_days, stage_c_days, stage_d_days) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
-                      (hativa_id, name, description, sla_days, stage_a_days, stage_b_days, stage_c_days, stage_d_days))
-        maslul_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return maslul_id
+        """Add a new route to a division using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = MaslulRepository(session)
+            maslul = repo.create(hativa_id, name, description, sla_days,
+                                stage_a_days, stage_b_days, stage_c_days, stage_d_days)
+            return maslul.maslul_id
     
     def get_maslulim(self, hativa_id: Optional[int] = None) -> List[Dict]:
-        """Get routes, optionally filtered by division"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        if hativa_id:
-            cursor.execute('''
-                SELECT m.maslul_id, m.hativa_id, m.name, m.description, m.is_active, m.created_at,
-                       m.sla_days, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days,
-                       h.name as hativa_name
-                FROM maslulim m 
-                JOIN hativot h ON m.hativa_id = h.hativa_id 
-                WHERE m.hativa_id = ? 
-                ORDER BY m.name
-            ''', (hativa_id,))
-        else:
-            cursor.execute('''
-                SELECT m.maslul_id, m.hativa_id, m.name, m.description, m.is_active, m.created_at,
-                       m.sla_days, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days,
-                       h.name as hativa_name
-                FROM maslulim m 
-                JOIN hativot h ON m.hativa_id = h.hativa_id 
-                ORDER BY h.name, m.name
-            ''')
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [{'maslul_id': row[0], 'hativa_id': row[1], 'name': row[2], 
-                'description': row[3], 'is_active': row[4], 'created_at': row[5],
-                'sla_days': row[6] if row[6] is not None else 45,
-                'stage_a_days': row[7] if row[7] is not None else 10,
-                'stage_b_days': row[8] if row[8] is not None else 15,
-                'stage_c_days': row[9] if row[9] is not None else 10,
-                'stage_d_days': row[10] if row[10] is not None else 10,
-                'hativa_name': row[11]} for row in rows]
+        """Get routes, optionally filtered by division using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = MaslulRepository(session)
+            maslulim = repo.get_all(hativa_id=hativa_id)
+            return [m.to_dict() for m in maslulim]
     
     def update_maslul(self, maslul_id: int, name: str, description: str, sla_days: int, 
                      stage_a_days: int, stage_b_days: int, stage_c_days: int, stage_d_days: int, is_active: bool = True) -> bool:
-        """Update an existing route"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            UPDATE maslulim 
-            SET name = ?, description = ?, sla_days = ?, stage_a_days = ?, stage_b_days = ?, stage_c_days = ?, stage_d_days = ?, is_active = ?
-            WHERE maslul_id = ?
-        ''', (name, description, sla_days, stage_a_days, stage_b_days, stage_c_days, stage_d_days, 1 if is_active else 0, maslul_id))
-        
-        success = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
-        return success
+        """Update an existing route using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = MaslulRepository(session)
+            return repo.update_maslul(maslul_id, name, description, sla_days,
+                                     stage_a_days, stage_b_days, stage_c_days, stage_d_days, is_active)
     
     def delete_maslul(self, maslul_id: int) -> bool:
-        """Delete a route"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Check if maslul is used in any events (including deleted ones)
-        cursor.execute('''
-            SELECT COUNT(*) FROM events WHERE maslul_id = ?
-        ''', (maslul_id,))
-        events_count = cursor.fetchone()[0]
-        
-        if events_count > 0:
-            conn.close()
-            raise ValueError(f'לא ניתן למחוק מסלול המשויך ל-{events_count} אירועים. יש למחוק תחילה את האירועים הקשורים.')
-        
-        cursor.execute('DELETE FROM maslulim WHERE maslul_id = ?', (maslul_id,))
-        
-        success = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
-        return success
+        """Delete a route using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = MaslulRepository(session)
+            return repo.hard_delete(maslul_id)
     
     # Exception dates operations
     def add_exception_date(self, exception_date: date, description: str = "", date_type: str = "holiday"):
-        """Add an exception date (holiday, sabbath, etc.)"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('INSERT OR IGNORE INTO exception_dates (exception_date, description, type) VALUES (?, ?, ?)', 
-                      (exception_date, description, date_type))
-        conn.commit()
-        conn.close()
+        """Add an exception date using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = ExceptionDateRepository(session)
+            repo.create(exception_date, description, date_type)
     
     def get_exception_dates(self, include_past: bool = False) -> List[Dict]:
-        """Get exception dates, optionally including past dates"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        if include_past:
-            cursor.execute('SELECT * FROM exception_dates ORDER BY exception_date DESC')
-        else:
-            today = date.today()
-            cursor.execute('SELECT * FROM exception_dates WHERE exception_date >= ? ORDER BY exception_date', (today,))
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [{'date_id': row[0], 'exception_date': row[1], 'description': row[2], 
-                'type': row[3], 'created_at': row[4] if len(row) > 4 else None} for row in rows]
+        """Get exception dates using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = ExceptionDateRepository(session)
+            items = repo.get_exception_dates(include_past)
+            return [item.to_dict() for item in items]
     
     def get_exception_date_by_id(self, date_id: int) -> Optional[Dict]:
-        """Get a specific exception date by ID"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM exception_dates WHERE date_id = ?', (date_id,))
-        row = cursor.fetchone()
-        conn.close()
-        
-        if row:
-            return {'date_id': row[0], 'exception_date': row[1], 'description': row[2], 
-                   'type': row[3], 'created_at': row[4] if len(row) > 4 else None}
-        return None
+        """Get a specific exception date by ID using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = ExceptionDateRepository(session)
+            item = repo.get_by_id(date_id)
+            return item.to_dict() if item else None
     
     def update_exception_date(self, date_id: int, exception_date: date, description: str = "", date_type: str = "holiday") -> bool:
-        """Update an exception date"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE exception_dates 
-                SET exception_date = ?, description = ?, type = ?
-                WHERE date_id = ?
-            ''', (exception_date, description, date_type, date_id))
-            success = cursor.rowcount > 0
-            conn.commit()
-            conn.close()
-            return success
-        except Exception as e:
-            print(f"Error updating exception date: {e}")
-            return False
+        """Update an exception date using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = ExceptionDateRepository(session)
+            return repo.update_date(date_id, exception_date, description, date_type)
     
     def delete_exception_date(self, date_id: int) -> bool:
-        """Delete an exception date"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            # Check if any committees are linked to this exception date (excluding deleted)
-            cursor.execute('SELECT COUNT(*) FROM vaadot WHERE exception_date_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (date_id,))
-            linked_count = cursor.fetchone()[0]
-            
-            if linked_count > 0:
-                conn.close()
-                return False  # Cannot delete if committees are linked
-            
-            cursor.execute('DELETE FROM exception_dates WHERE date_id = ?', (date_id,))
-            success = cursor.rowcount > 0
-            conn.commit()
-            conn.close()
-            return success
-        except Exception as e:
-            print(f"Error deleting exception date: {e}")
-            return False
+        """Delete an exception date using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = ExceptionDateRepository(session)
+            if not repo.can_delete(date_id):
+                return False
+            return repo.delete_by_id(date_id)
     
     def is_exception_date(self, check_date: date) -> bool:
-        """Check if a date is an exception date"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT COUNT(*) FROM exception_dates WHERE exception_date = ?', (check_date,))
-        count = cursor.fetchone()[0]
-        conn.close()
-        return count > 0
+        """Check if a date is an exception date using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = ExceptionDateRepository(session)
+            return repo.is_exception_date(check_date)
     
     def recalculate_all_event_deadlines(self) -> int:
-        """Recalculate deadline dates for all existing events based on current exception dates"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Get all events with their committee dates and maslul stage information
-        cursor.execute('''
-            SELECT e.event_id, v.vaada_date, 
-                   m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days
-            FROM events e
-            JOIN vaadot v ON e.vaadot_id = v.vaadot_id
-            JOIN maslulim m ON e.maslul_id = m.maslul_id
-            WHERE (e.is_deleted = 0 OR e.is_deleted IS NULL)
-              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-        ''')
-        
-        events = cursor.fetchall()
-        updated_count = 0
-        
-        for event in events:
-            event_id, vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days = event
+        """Recalculate deadline dates for all existing events based on current exception dates using SQLAlchemy"""
+        with get_db_session() as session:
+            event_repo = EventRepository(session)
+            exception_repo = ExceptionDateRepository(session)
+            settings_repo = SettingsRepository(session)
             
-            # Convert vaada_date to date object if it's a string
-            if isinstance(vaada_date, str):
-                from datetime import datetime
-                vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+            # 1. Get all active events
+            active_events = event_repo.get_all_active()
+            work_days = settings_repo.get_work_days()
+            updated_count = 0
             
-            # Recalculate stage dates
-            stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
-            
-            # Update the event with new deadline dates
-            cursor.execute('''
-                UPDATE events 
-                SET call_deadline_date = ?,
-                    intake_deadline_date = ?,
-                    review_deadline_date = ?,
-                    response_deadline_date = ?
-                WHERE event_id = ?
-            ''', (
-                stage_dates['call_deadline_date'],
-                stage_dates['intake_deadline_date'],
-                stage_dates['review_deadline_date'],
-                stage_dates['response_deadline_date'],
-                event_id
-            ))
-            updated_count += 1
-        
-        conn.commit()
-        conn.close()
-        return updated_count
+            for event in active_events:
+                maslul = event.maslul
+                vaada = event.vaada
+                if not vaada:
+                    continue
+                    
+                # 2. Recalculate stage dates
+                stage_dates = event_repo.calculate_stage_dates(
+                    vaada.vaada_date,
+                    maslul.stage_a_days, maslul.stage_b_days, maslul.stage_c_days, maslul.stage_d_days,
+                    lambda d: exception_repo.is_work_day(d, work_days)
+                )
+                
+                # 3. Update the event with new deadline dates (skipping manual call deadlines if they were set)
+                # Note: Original code updated ALL fields including call_deadline. 
+                # If it was manual, we might want to preserve it, but original code didn't seem to care here.
+                # However, calculate_stage_dates returns the base call_deadline.
+                
+                event.call_deadline_date = stage_dates['call_deadline_date']
+                event.intake_deadline_date = stage_dates['intake_deadline_date']
+                event.review_deadline_date = stage_dates['review_deadline_date']
+                event.response_deadline_date = stage_dates['response_deadline_date']
+                updated_count += 1
+                
+            session.flush()
+            return updated_count
 
     def recalculate_event_deadlines_for_maslul(self, maslul_id: int) -> int:
-        """Recalculate deadline dates for all events of a specific maslul based on updated stage days"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        # Get the maslul's current stage information
-        cursor.execute('''
-            SELECT stage_a_days, stage_b_days, stage_c_days, stage_d_days
-            FROM maslulim
-            WHERE maslul_id = ?
-        ''', (maslul_id,))
-
-        maslul_row = cursor.fetchone()
-        if not maslul_row:
-            conn.close()
-            return 0
-
-        stage_a_days, stage_b_days, stage_c_days, stage_d_days = maslul_row
-
-        # Get all events for this maslul with their committee dates
-        cursor.execute('''
-            SELECT e.event_id, v.vaada_date
-            FROM events e
-            JOIN vaadot v ON e.vaadot_id = v.vaadot_id
-            WHERE e.maslul_id = ?
-              AND (e.is_deleted = 0 OR e.is_deleted IS NULL)
-              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-        ''', (maslul_id,))
-
-        events = cursor.fetchall()
-        updated_count = 0
-
-        for event in events:
-            event_id, vaada_date = event
-
-            # Convert vaada_date to date object if it's a string
-            if isinstance(vaada_date, str):
-                from datetime import datetime
-                vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
-
-            # Recalculate stage dates using maslul's updated values
-            stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
-
-            # Update the event with new deadline dates
-            cursor.execute('''
-                UPDATE events
-                SET call_deadline_date = ?,
-                    intake_deadline_date = ?,
-                    review_deadline_date = ?,
-                    response_deadline_date = ?
-                WHERE event_id = ?
-            ''', (
-                stage_dates['call_deadline_date'],
-                stage_dates['intake_deadline_date'],
-                stage_dates['review_deadline_date'],
-                stage_dates['response_deadline_date'],
-                event_id
-            ))
-            updated_count += 1
-
-        conn.commit()
-        conn.close()
-        return updated_count
+        """Recalculate deadline dates for all events of a specific maslul using SQLAlchemy"""
+        with get_db_session() as session:
+            event_repo = EventRepository(session)
+            exception_repo = ExceptionDateRepository(session)
+            settings_repo = SettingsRepository(session)
+            maslul_repo = MaslulRepository(session)
+            
+            maslul = maslul_repo.get_by_id(maslul_id)
+            if not maslul:
+                return 0
+                
+            # Get all events for this maslul
+            events = event_repo.get_by_maslul(maslul_id)
+            work_days = settings_repo.get_work_days()
+            updated_count = 0
+            
+            for event in events:
+                vaada = event.vaada
+                if not vaada:
+                    continue
+                    
+                # Recalculate using maslul's current values
+                stage_dates = event_repo.calculate_stage_dates(
+                    vaada.vaada_date,
+                    maslul.stage_a_days, maslul.stage_b_days, maslul.stage_c_days, maslul.stage_d_days,
+                    lambda d: exception_repo.is_work_day(d, work_days)
+                )
+                
+                event.call_deadline_date = stage_dates['call_deadline_date']
+                event.intake_deadline_date = stage_dates['intake_deadline_date']
+                event.review_deadline_date = stage_dates['review_deadline_date']
+                event.response_deadline_date = stage_dates['response_deadline_date']
+                updated_count += 1
+                
+            session.flush()
+            return updated_count
 
     # Committee Types operations
     def add_committee_type(self, hativa_id: int, name: str, scheduled_day: int, frequency: str = 'weekly',
                           week_of_month: Optional[int] = None, description: str = "", is_operational: int = 0) -> int:
-        """Add a new committee type"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO committee_types (hativa_id, name, scheduled_day, frequency, week_of_month, description, is_operational)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (hativa_id, name, scheduled_day, frequency, week_of_month, description, is_operational))
-        committee_type_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return committee_type_id
+        """Add a new committee type using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CommitteeTypeRepository(session)
+            ct = repo.create(hativa_id, name, scheduled_day, frequency, week_of_month, description, is_operational)
+            return ct.committee_type_id
     
     def get_committee_types(self, hativa_id: Optional[int] = None) -> List[Dict]:
-        """Get committee types, optionally filtered by division"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        if hativa_id:
-            cursor.execute('''
-                SELECT ct.committee_type_id, ct.hativa_id, ct.name, ct.scheduled_day, 
-                       ct.frequency, ct.week_of_month, ct.description, ct.is_operational, h.name as hativa_name 
-                FROM committee_types ct
-                JOIN hativot h ON ct.hativa_id = h.hativa_id
-                WHERE ct.hativa_id = ?
-                ORDER BY ct.scheduled_day
-            ''', (hativa_id,))
-        else:
-            cursor.execute('''
-                SELECT ct.committee_type_id, ct.hativa_id, ct.name, ct.scheduled_day, 
-                       ct.frequency, ct.week_of_month, ct.description, ct.is_operational, h.name as hativa_name 
-                FROM committee_types ct
-                JOIN hativot h ON ct.hativa_id = h.hativa_id
-                ORDER BY h.name, ct.scheduled_day
-            ''')
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        days = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת']
-        
-        return [{'committee_type_id': row[0], 'hativa_id': row[1], 'name': row[2], 'scheduled_day': row[3],
-                'scheduled_day_name': days[row[3]], 'frequency': row[4], 
-                'week_of_month': row[5], 'description': row[6], 'is_operational': row[7], 'hativa_name': row[8]} for row in rows]
+        """Get committee types using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CommitteeTypeRepository(session)
+            cts = repo.get_all(hativa_id=hativa_id)
+            days = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת']
+            result = []
+            for ct in cts:
+                d = ct.to_dict()
+                d['scheduled_day_name'] = days[ct.scheduled_day] if ct.scheduled_day is not None else ''
+                result.append(d)
+            return result
     
     def update_committee_type(self, committee_type_id: int, hativa_id: int, name: str, scheduled_day: int, 
                              frequency: str = 'weekly', week_of_month: Optional[int] = None, 
                              description: str = "", is_operational: int = 0) -> bool:
-        """Update an existing committee type"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE committee_types 
-            SET hativa_id = ?, name = ?, scheduled_day = ?, frequency = ?, week_of_month = ?, description = ?, is_operational = ?
-            WHERE committee_type_id = ?
-        ''', (hativa_id, name, scheduled_day, frequency, week_of_month, description, is_operational, committee_type_id))
-        success = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
-        return success
+        """Update committee type using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CommitteeTypeRepository(session)
+            return repo.update_committee_type(committee_type_id, hativa_id, name, scheduled_day, 
+                                             frequency, week_of_month, description, is_operational)
     
     def delete_committee_type(self, committee_type_id: int) -> bool:
-        """Delete a committee type"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Check if there are any vaadot using this committee type (excluding deleted)
-        cursor.execute('SELECT COUNT(*) FROM vaadot WHERE committee_type_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (committee_type_id,))
-        vaadot_count = cursor.fetchone()[0]
-        
-        if vaadot_count > 0:
-            conn.close()
-            return False  # Cannot delete committee type with existing meetings
-        
-        cursor.execute('DELETE FROM committee_types WHERE committee_type_id = ?', (committee_type_id,))
-        success = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
-        return success
+        """Delete a committee type using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CommitteeTypeRepository(session)
+            return repo.hard_delete(committee_type_id)
     
     # Vaadot operations (specific meeting instances)
     def add_vaada(self, committee_type_id: int, hativa_id: int, vaada_date: date,
                   notes: str = "", start_time: str = None, end_time: str = None,
                   created_by: int = None, override_constraints: bool = False) -> tuple[int, str]:
         """
-        Add a new committee meeting with constraint checking
+        Add a new committee meeting with constraint checking using SQLAlchemy
         Returns: (vaadot_id, warning_message)
-        If override_constraints=True (for admins), constraints become warnings
         """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
+        if isinstance(vaada_date, str):
+            vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+
         warning_message = ""
         
-        # Check if date is available for scheduling (one meeting per day constraint)
-        if not self.is_date_available_for_meeting(vaada_date):
-            if override_constraints:
-                warning_message = f'⚠️ אזהרה: כבר קיימת ועדה בתאריך {vaada_date}. מנהל מערכת יכול לעקוף אילוץ זה.'
-            else:
-                conn.close()
-                raise ValueError(f'כבר קיימת ועדה בתאריך {vaada_date}. המערכת מאפשרת רק ועדה אחת ביום.')
-        
-        # Ensure meeting date is an allowed business day
-        if not self.is_work_day(vaada_date):
-            if override_constraints:
-                warning_message += f'\n⚠️ אזהרה: התאריך {vaada_date} אינו יום עסקים חוקי לועדות.'
-            else:
-                conn.close()
-                raise ValueError(f'התאריך {vaada_date} אינו יום עסקים חוקי לועדות')
-        
-        # Check if the date is allowed for this division based on day constraints
-        if not self.is_day_allowed_for_hativa(hativa_id, vaada_date):
-            day_names = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון']
-            day_name = day_names[vaada_date.weekday()]
-            allowed_days = self.get_hativa_allowed_days(hativa_id)
-            allowed_day_names = [day_names[d] for d in sorted(allowed_days)]
+        with get_db_session() as session:
+            vaada_repo = VaadaRepository(session)
+            hativa_repo = HativaRepository(session)
+            settings_repo = SettingsRepository(session)
+            exception_repo = ExceptionDateRepository(session)
+            ct_repo = CommitteeTypeRepository(session)
             
-            if override_constraints:
-                warning_message += f'\n⚠️ אזהרה: התאריך {vaada_date} ({day_name}) אינו יום מותר לקביעת ועדות עבור חטיבה זו. הימים המותרים: {", ".join(allowed_day_names)}.'
-            else:
-                conn.close()
-                raise ValueError(f'התאריך {vaada_date} ({day_name}) אינו יום מותר לקביעת ועדות עבור חטיבה זו. הימים המותרים: {", ".join(allowed_day_names)}')
-        
-        try:
-            constraint_settings = self.get_constraint_settings()
-
-            # Check weekly limit
-            week_start, week_end = self._get_week_bounds(vaada_date)
-            weekly_count = self._count_meetings_in_week(cursor, week_start, week_end)
-            weekly_limit = self._get_weekly_limit(vaada_date, constraint_settings)
-            is_third_week = self._is_third_week_of_month(vaada_date)
-            week_type = "שבוע שלישי" if is_third_week else "שבוע רגיל"
-            if weekly_count >= weekly_limit:
-                new_count = weekly_count + 1
+            # 1. Date Availability (One meeting per day)
+            count_on_date = vaada_repo.count_meetings_on_date(vaada_date)
+            max_per_day = settings_repo.get_int_setting('max_meetings_per_day', 1)
+            if count_on_date >= max_per_day:
+                msg = f'כבר קיימת ועדה בתאריך {vaada_date}. המערכת מאפשרת רק {max_per_day} ועדה ביום.'
                 if override_constraints:
-                    warning_message += f'\n⚠️ אזהרה: השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. הוספת ועדה נוספת תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit}).'
-
-            # Check if a committee meeting with the same type, division, and date already exists
-            cursor.execute('''
-                SELECT vaadot_id, ct.name as committee_name, h.name as hativa_name
-                FROM vaadot v
-                JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-                JOIN hativot h ON v.hativa_id = h.hativa_id
-                WHERE v.committee_type_id = ? AND v.hativa_id = ? AND v.vaada_date = ?
-                  AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-            ''', (committee_type_id, hativa_id, vaada_date))
-            existing = cursor.fetchone()
-
-            if existing:
-                existing_id, existing_name, existing_hativa = existing
-                if override_constraints:
-                    warning_message += f'\n⚠️ אזהרה: כבר קיימת ועדה מסוג "{existing_name}" בחטיבת "{existing_hativa}" בתאריך {vaada_date}. מנהל מערכת יכול לעקוף אילוץ זה.'
+                    warning_message += f'⚠️ אזהרה: {msg} מנהל מערכת יכול לעקוף אילוץ זה.\n'
                 else:
-                    conn.close()
-                    raise ValueError(f'כבר קיימת ועדה מסוג "{existing_name}" בחטיבת "{existing_hativa}" בתאריך {vaada_date}. לא ניתן ליצור ועדה נוספת מאותו סוג באותה חטיבה באותו תאריך.')
-
-            # Set default times based on committee type if not provided
+                    raise ValueError(msg)
+            
+            # 2. Business Day Check
+            work_days = settings_repo.get_work_days()
+            if not exception_repo.is_work_day(vaada_date, work_days):
+                msg = f'התאריך {vaada_date} אינו יום עסקים חוקי לועדות (סופ"ש או חג).'
+                if override_constraints:
+                    warning_message += f'⚠️ אזהרה: {msg}\n'
+                else:
+                    raise ValueError(msg)
+            
+            # 3. Hativa allowed days check
+            allowed_days = hativa_repo.get_allowed_days(hativa_id)
+            if vaada_date.weekday() not in allowed_days:
+                day_names = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת', 'יום ראשון']
+                day_name = day_names[vaada_date.weekday()]
+                allowed_day_names = [day_names[d] for d in sorted(allowed_days)]
+                msg = f'התאריך {vaada_date} ({day_name}) אינו יום מותר לקביעת ועדות עבור חטיבה זו. הימים המותרים: {", ".join(allowed_day_names)}.'
+                if override_constraints:
+                    warning_message += f'⚠️ אזהרה: {msg}\n'
+                else:
+                    raise ValueError(msg)
+            
+            # 4. Weekly capacity check
+            week_start, week_end = vaada_repo.get_week_bounds(vaada_date)
+            weekly_count = vaada_repo.get_weekly_count(week_start, week_end)
+            constraint_settings = settings_repo.get_constraint_settings()
+            
+            # Simplified weekly limit logic from DB manager
+            limit_key = 'max_meetings_per_week_third' if vaada_repo.is_third_week_of_month(vaada_date) else 'max_meetings_per_week_regular'
+            weekly_limit = int(constraint_settings.get(limit_key, 3))
+            
+            if weekly_count >= weekly_limit:
+                msg = f'השבוע של {vaada_date} כבר מכיל {weekly_count} ועדות (המגבלה היא {weekly_limit}).'
+                if override_constraints:
+                    warning_message += f'⚠️ אזהרה: {msg}\n'
+                # Weekly limit is usually a warning in original code if override_constraints=True
+            
+            # 5. Type duplication check
+            existing = vaada_repo.check_existing_match(committee_type_id, hativa_id, vaada_date)
+            if existing:
+                msg = f'כבר קיימת ועדה מאותו סוג בחטיבה זו בתאריך {vaada_date}.'
+                if override_constraints:
+                    warning_message += f'⚠️ אזהרה: {msg}\n'
+                else:
+                    raise ValueError(msg)
+            
+            # 6. Set defaults from committee type
             if start_time is None or end_time is None:
-                cursor.execute('''
-                    SELECT is_operational FROM committee_types
-                    WHERE committee_type_id = ?
-                ''', (committee_type_id,))
-                committee_type = cursor.fetchone()
-                if committee_type:
-                    is_operational = committee_type[0]
-                    # Set defaults: Regular committee 09:00-15:00, Operational 09:00-11:00
+                ct = ct_repo.get_by_id(committee_type_id)
+                if ct:
                     if start_time is None:
-                        start_time = '09:00'
+                        start_time = "09:00"
                     if end_time is None:
-                        end_time = '11:00' if is_operational else '15:00'
+                        end_time = "11:00" if ct.is_operational else "15:00"
 
-            cursor.execute('''
-                INSERT INTO vaadot (committee_type_id, hativa_id, vaada_date, notes, start_time, end_time)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (committee_type_id, hativa_id, vaada_date, notes, start_time, end_time))
-            vaadot_id = cursor.lastrowid
-            conn.commit()
-            conn.close()
-            return (vaadot_id, warning_message)
-        except ValueError:
-            conn.rollback()
-            conn.close()
-            raise
-        except Exception as e:
-            conn.rollback()
-            conn.close()
-            print(f"Error adding vaada: {e}")
-            raise
-        finally:
-            conn.close()
+            # 7. Create
+            vaada = vaada_repo.create(
+                committee_type_id=committee_type_id,
+                hativa_id=hativa_id,
+                vaada_date=vaada_date,
+                notes=notes,
+                start_time=start_time,
+                end_time=end_time
+            )
+            
+            return (vaada.vaadot_id, warning_message.strip())
+
     
     def is_date_available_for_meeting(self, vaada_date) -> bool:
-        """Check if a date is available for a committee meeting (no existing meetings)"""
-        # Convert string to date if needed
+        """Check if date available for meeting using SQLAlchemy"""
         if isinstance(vaada_date, str):
-            from datetime import datetime
             vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
         
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT COUNT(*) 
-            FROM vaadot v
-            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-            WHERE v.vaada_date = ? AND COALESCE(ct.is_operational, 0) = 0
-              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-        ''', (vaada_date,))
-        count = cursor.fetchone()[0]
-        conn.close()
-        max_per_day = self.get_int_setting('max_meetings_per_day', 1)
-        return count < max_per_day
+        with get_db_session() as session:
+            repo = VaadaRepository(session)
+            count = repo.count_meetings_on_date(vaada_date)
+            max_per_day = self.get_int_setting('max_meetings_per_day', 1)
+            return count < max_per_day
     
     def get_vaadot(self, hativa_id: Optional[int] = None, start_date: Optional[date] = None, 
                    end_date: Optional[date] = None, include_deleted: bool = False) -> List[Dict]:
-        """Get committee meetings with optional filters"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        query = '''
-            SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date,
-                   v.exception_date_id, v.notes, v.created_at,
-                   ct.name as committee_name, ct.is_operational, h.name as hativa_name,
-                   ed.exception_date, ed.description as exception_description, ed.type as exception_type,
-                   v.start_time, v.end_time
-            FROM vaadot v
-            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-            JOIN hativot h ON v.hativa_id = h.hativa_id
-            LEFT JOIN exception_dates ed ON v.exception_date_id = ed.date_id
-            WHERE 1=1
-        '''
-        params = []
-        
-        if not include_deleted:
-            query += ' AND (v.is_deleted = 0 OR v.is_deleted IS NULL)'
-        
-        if hativa_id:
-            query += ' AND v.hativa_id = ?'
-            params.append(hativa_id)
-        
-        if start_date:
-            query += ' AND v.vaada_date >= ?'
-            params.append(start_date)
-            
-        if end_date:
-            query += ' AND v.vaada_date <= ?'
-            params.append(end_date)
-            
-        query += ' ORDER BY v.vaada_date, ct.name'
-        
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2],
-                'vaada_date': row[3], 'exception_date_id': row[4],
-                'notes': row[5], 'created_at': row[6], 'committee_name': row[7], 'is_operational': row[8], 'hativa_name': row[9],
-                'exception_date': row[10], 'exception_description': row[11],
-                'exception_type': row[12], 'start_time': row[13], 'end_time': row[14]} for row in rows]
+        """Get committee meetings using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = VaadaRepository(session)
+            vaadot = repo.get_all(hativa_id=hativa_id, start_date=start_date, 
+                                 end_date=end_date, include_deleted=include_deleted)
+            return [v.to_dict() for v in vaadot]
 
     def duplicate_vaada_with_events(self, source_vaadot_id: int, target_date: date, created_by: Optional[int] = None,
-                                    override_constraints: bool = False) -> Dict:
+                                    override_constraints: bool = False) -> dict:
         """
-        Duplicate a committee meeting (vaada) and all its events to a new date.
+        Duplicate a committee meeting (vaada) and all its events to a new date using SQLAlchemy.
         Returns dict with new_vaadot_id and counts.
         """
         # Fetch source committee details
@@ -1363,7 +440,7 @@ class DatabaseManager:
         if not source:
             raise ValueError("ועדה מקורית לא נמצאה")
 
-        # Create the new committee meeting using existing constraint checks
+        # Create the new committee meeting using existing SQLAlchemy-based add_vaada
         new_vaadot_id, warning_message = self.add_vaada(
             committee_type_id=int(source['committee_type_id']),
             hativa_id=int(source['hativa_id']),
@@ -1405,1106 +482,566 @@ class DatabaseManager:
                      exception_date_id: Optional[int] = None, notes: str = "",
                      start_time: str = None, end_time: str = None,
                      user_role: Optional[str] = None) -> bool:
-        """Update committee meeting details including date, type, division, and notes"""
-        conn = None
-        try:
-            if not self.is_work_day(vaada_date):
+        """Update committee meeting details including date, type, division, and notes using SQLAlchemy"""
+        if isinstance(vaada_date, str):
+            vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+
+        with get_db_session() as session:
+            vaada_repo = VaadaRepository(session)
+            hativa_repo = HativaRepository(session)
+            ct_repo = CommitteeTypeRepository(session)
+            settings_repo = SettingsRepository(session)
+            exception_repo = ExceptionDateRepository(session)
+            
+            # 1. Basic Work Day Check
+            work_days = settings_repo.get_work_days()
+            if not exception_repo.is_work_day(vaada_date, work_days):
                 raise ValueError(f"התאריך {vaada_date} אינו יום עסקים חוקי לועדות")
 
-            conn = self.get_connection()
-            cursor = conn.cursor()
-
-            # Ensure committee type belongs to the same division as selected hativa
-            cursor.execute('SELECT hativa_id FROM committee_types WHERE committee_type_id = ?', (committee_type_id,))
-            ct_row = cursor.fetchone()
-            if not ct_row:
+            # 2. Committee Type Belonging Check
+            ct = ct_repo.get_by_id(committee_type_id)
+            if not ct:
                 raise ValueError("סוג הועדה לא נמצא")
-            if ct_row[0] != hativa_id:
+            if ct.hativa_id != hativa_id:
                 raise ValueError("סוג הועדה שנבחר אינו שייך לחטיבה שנבחרה")
 
-            # Get current meeting date to check if date is changing
-            cursor.execute('SELECT vaada_date FROM vaadot WHERE vaadot_id = ?', (vaadot_id,))
-            current_row = cursor.fetchone()
-            current_date = current_row[0] if current_row else None
-            # Convert string to date if needed
-            if isinstance(current_date, str):
-                current_date = datetime.strptime(current_date, '%Y-%m-%d').date()
-            
-            # Check if date is actually changing
-            date_is_changing = current_date != vaada_date
-            
-            # Check if the date is allowed for this division based on day constraints (only for non-admin users)
+            # 3. Get Current Record
+            vaada = vaada_repo.get_by_id(vaadot_id)
+            if not vaada:
+                return False
+                
+            date_is_changing = vaada.vaada_date != vaada_date
             is_admin = user_role == 'admin'
-            if date_is_changing and not is_admin and not self.is_day_allowed_for_hativa(hativa_id, vaada_date):
-                day_names = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון']
-                day_name = day_names[vaada_date.weekday()]
-                allowed_days = self.get_hativa_allowed_days(hativa_id)
-                allowed_day_names = [day_names[d] for d in sorted(allowed_days)]
-                raise ValueError(f'התאריך {vaada_date} ({day_name}) אינו יום מותר לקביעת ועדות עבור חטיבה זו. הימים המותרים: {", ".join(allowed_day_names)}')
 
-            # Only check constraints if date is changing (to allow editing other fields for existing committees)
-            constraint_settings = self.get_constraint_settings()
-            
+            # 4. In-depth Constraints (if date changed)
             if date_is_changing:
-                max_per_day = constraint_settings['max_meetings_per_day']
-                cursor.execute('''
-                    SELECT COUNT(*) FROM vaadot 
-                    WHERE vaada_date = ? AND vaadot_id != ?
-                      AND (is_deleted = 0 OR is_deleted IS NULL)
-                ''', (vaada_date, vaadot_id))
-                existing_count = cursor.fetchone()[0]
-                if existing_count >= max_per_day:
+                # 4a. Hativa Day Allowance
+                if not is_admin:
+                    allowed_days = hativa_repo.get_allowed_days(hativa_id)
+                    if vaada_date.weekday() not in allowed_days:
+                        day_names = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת', 'יום ראשון']
+                        day_name = day_names[vaada_date.weekday()]
+                        allowed_day_names = [day_names[d] for d in sorted(allowed_days)]
+                        raise ValueError(f'התאריך {vaada_date} ({day_name}) אינו יום מותר לקביעת ועדות עבור חטיבה זו. הימים המותרים: {", ".join(allowed_day_names)}')
+
+                # 4b. Daily Capacity
+                max_per_day = settings_repo.get_int_setting('max_meetings_per_day', 1)
+                count_on_date = vaada_repo.count_meetings_on_date(vaada_date)
+                # Since we are excluding our current record, count_on_date is compared to max_per_day directly
+                # Wait, count_on_date includes all active meetings on that date.
+                # If we are changing to that date, we must make sure there's room.
+                if count_on_date >= max_per_day:
                     if max_per_day == 1:
                         raise ValueError(f"כבר קיימת ועדה בתאריך {vaada_date}. לא ניתן לקבוע יותר מועדה אחת ביום.")
-                    raise ValueError(f"כבר קיימות {existing_count} ועדות בתאריך {vaada_date}. המגבלה הנוכחית מאפשרת עד {max_per_day} ועדות ביום.")
+                    raise ValueError(f"כבר קיימות {count_on_date} ועדות בתאריך {vaada_date}. המגבלה הנוכחית מאפשרת עד {max_per_day} ועדות ביום.")
 
-                week_start, week_end = self._get_week_bounds(vaada_date)
-                weekly_count = self._count_meetings_in_week(cursor, week_start, week_end, exclude_vaada_id=vaadot_id)
-                weekly_limit = self._get_weekly_limit(vaada_date, constraint_settings)
-                is_third_week = self._is_third_week_of_month(vaada_date)
-                week_type = "שבוע שלישי" if is_third_week else "שבוע רגיל"
+                # 4c. Weekly Capacity
+                week_start, week_end = vaada_repo.get_week_bounds(vaada_date)
+                weekly_count = vaada_repo.get_weekly_count(week_start, week_end, exclude_vaada_id=vaadot_id)
+                constraint_settings = settings_repo.get_constraint_settings()
+                limit_key = 'max_meetings_per_week_third' if vaada_repo.is_third_week_of_month(vaada_date) else 'max_meetings_per_week_regular'
+                weekly_limit = int(constraint_settings.get(limit_key, 3))
+                
                 if weekly_count >= weekly_limit:
-                    new_count = weekly_count + 1
-                    raise ValueError(f"השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. העברת הועדה תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit})")
+                    week_type = "שבוע שלישי" if vaada_repo.is_third_week_of_month(vaada_date) else "שבוע רגיל"
+                    raise ValueError(f"השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. העברת הועדה תגרום לסך של {weekly_count+1} ועדות (המגבלה היא {weekly_limit})")
 
-            # Set default times based on committee type if BOTH are not provided
-            # Only set defaults if neither time was provided (new committee or migration)
-            # If user provides one time, we keep it and only fill in the missing one
+            # 5. Set defaults if BOTH times are missing (legacy support or partial updates)
             if start_time is None and end_time is None:
-                cursor.execute('''
-                    SELECT is_operational FROM committee_types
-                    WHERE committee_type_id = ?
-                ''', (committee_type_id,))
-                committee_type = cursor.fetchone()
-                if committee_type:
-                    is_operational = committee_type[0]
-                    # Set defaults: Regular committee 09:00-15:00, Operational 09:00-11:00
-                    if start_time is None:
-                        start_time = '09:00'
-                    if end_time is None:
-                        end_time = '11:00' if is_operational else '15:00'
+                if start_time is None:
+                    start_time = '09:00'
+                if end_time is None:
+                    end_time = '11:00' if ct.is_operational else '15:00'
 
-            cursor.execute('''
-                UPDATE vaadot
-                SET committee_type_id = ?, hativa_id = ?, vaada_date = ?,
-                    exception_date_id = ?, notes = ?, start_time = ?, end_time = ?
-                WHERE vaadot_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)
-            ''', (committee_type_id, hativa_id, vaada_date, exception_date_id, notes, start_time, end_time, vaadot_id))
-
-            success = cursor.rowcount > 0
-            conn.commit()
+            # 6. Apply Updates
+            success = vaada_repo.update_vaada(
+                vaadot_id=vaadot_id,
+                committee_type_id=committee_type_id,
+                hativa_id=hativa_id,
+                vaada_date=vaada_date,
+                exception_date_id=exception_date_id,
+                notes=notes,
+                start_time=start_time,
+                end_time=end_time
+            )
             return success
-        except ValueError:
-            if conn:
-                conn.rollback()
-            raise
-        except Exception as e:
-            if conn:
-                conn.rollback()
-            print(f"Error updating vaada: {e}")
-            raise
-        finally:
-            if conn:
-                conn.close()
 
     def update_vaada_date(self, vaadot_id: int, vaada_date: date, exception_date_id: Optional[int] = None, user_role: Optional[str] = None) -> bool:
-        """Update the actual meeting date for a committee and optionally link to exception date"""
-        conn = None
+        """Update the actual meeting date for a committee and optionally link to exception date using SQLAlchemy"""
+        if isinstance(vaada_date, str):
+            vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+
         try:
-            if not self.is_work_day(vaada_date):
-                raise ValueError(f"התאריך {vaada_date} אינו יום עסקים חוקי לועדות")
-
-            conn = self.get_connection()
-            cursor = conn.cursor()
-
-            # Get hativa_id for this committee to check day constraints
-            cursor.execute('SELECT hativa_id FROM vaadot WHERE vaadot_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (vaadot_id,))
-            hativa_row = cursor.fetchone()
-            if hativa_row:
-                hativa_id = hativa_row[0]
-                # Check if the date is allowed for this division based on day constraints (only for non-admin users)
-                is_admin = user_role == 'admin'
-                if not is_admin and not self.is_day_allowed_for_hativa(hativa_id, vaada_date):
-                    day_names = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת', 'יום ראשון']
-                    day_name = day_names[vaada_date.weekday()]
-                    allowed_days = self.get_hativa_allowed_days(hativa_id)
-                    allowed_day_names = [day_names[d] for d in sorted(allowed_days)]
-                    raise ValueError(f'התאריך {vaada_date} ({day_name}) אינו יום מותר לקביעת ועדות עבור חטיבה זו. הימים המותרים: {", ".join(allowed_day_names)}')
-
-            # Enforce daily limit excluding the current meeting
-            constraint_settings = self.get_constraint_settings()
-            max_per_day = constraint_settings['max_meetings_per_day']
-            cursor.execute('''
-                SELECT COUNT(*) FROM vaadot
-                WHERE vaada_date = ? AND vaadot_id != ?
-                  AND (is_deleted = 0 OR is_deleted IS NULL)
-            ''', (vaada_date, vaadot_id))
-            existing_count = cursor.fetchone()[0]
-            if existing_count >= max_per_day:
-                raise ValueError(f"התאריך {vaada_date} כבר מכיל {existing_count} ועדות (המגבלה היא {max_per_day})")
-
-            week_start, week_end = self._get_week_bounds(vaada_date)
-            weekly_count = self._count_meetings_in_week(cursor, week_start, week_end, exclude_vaada_id=vaadot_id)
-            weekly_limit = self._get_weekly_limit(vaada_date, constraint_settings)
-            is_third_week = self._is_third_week_of_month(vaada_date)
-            week_type = "שבוע שלישי" if is_third_week else "שבוע רגיל"
-            if weekly_count >= weekly_limit:
-                new_count = weekly_count + 1
-                raise ValueError(f"השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. העברת הועדה תגרום לסך של {new_count} ועדות (המגבלה היא {weekly_limit})")
-
-            # Check constraints on derived dates for all events in this committee
-            cursor.execute('''
-                SELECT e.event_id, e.expected_requests, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days
-                FROM events e
-                JOIN maslulim m ON e.maslul_id = m.maslul_id
-                WHERE e.vaadot_id = ? AND e.is_deleted = 0
-            ''', (vaadot_id,))
-            events = cursor.fetchall()
-            
-            # Close connection before calling constraint check functions
-            conn.close()
-            conn = None
-            
-            # Check derived date constraints for each event
-            for event in events:
-                event_id, expected_requests, stage_a_days, stage_b_days, stage_c_days, stage_d_days = event
+            with get_db_session() as session:
+                vaada_repo = VaadaRepository(session)
+                event_repo = EventRepository(session)
+                hativa_repo = HativaRepository(session)
+                settings_repo = SettingsRepository(session)
+                exception_repo = ExceptionDateRepository(session)
                 
-                # Calculate new derived dates with the new committee date
-                stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
-                
-                # Check constraints (excluding the current event)
-                derived_constraint_error = self.check_derived_dates_constraints(stage_dates, expected_requests, exclude_event_id=event_id, user_role=user_role)
-                if derived_constraint_error:
-                    raise ValueError(f"העברת הועדה תגרום לחריגה באירוע {event_id}: {derived_constraint_error}")
-            
-            # Reopen connection for the update
-            conn = self.get_connection()
-            cursor = conn.cursor()
+                # 1. Basic Work Day Check
+                work_days = settings_repo.get_work_days()
+                if not exception_repo.is_work_day(vaada_date, work_days):
+                    raise ValueError(f"התאריך {vaada_date} אינו יום עסקים חוקי לועדות")
 
-            cursor.execute('''
-                UPDATE vaadot 
-                SET vaada_date = ?, exception_date_id = ?
-                WHERE vaadot_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)
-            ''', (vaada_date, exception_date_id, vaadot_id))
-            
-            success = cursor.rowcount > 0
-            conn.commit()
-            return success
+                # 2. Fetch Vaada
+                vaada = vaada_repo.get_by_id(vaadot_id)
+                if not vaada:
+                    return False
+                    
+                # 3. Hativa Day Allowance (non-admin)
+                if user_role != 'admin':
+                    allowed_days = hativa_repo.get_allowed_days(vaada.hativa_id)
+                    if vaada_date.weekday() not in allowed_days:
+                        day_names = ['יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת', 'יום ראשון']
+                        day_name = day_names[vaada_date.weekday()]
+                        allowed_day_names = [day_names[d] for d in sorted(allowed_days)]
+                        raise ValueError(f'התאריך {vaada_date} ({day_name}) אינו יום מותר לקביעת ועדות עבור חטיבה זו. הימים המותרים: {", ".join(allowed_day_names)}')
+
+                # 4. Daily Capacity
+                max_per_day = settings_repo.get_int_setting('max_meetings_per_day', 1)
+                count_on_date = vaada_repo.count_meetings_on_date(vaada_date)
+                if vaada.vaada_date != vaada_date and count_on_date >= max_per_day:
+                    raise ValueError(f"התאריך {vaada_date} כבר מכיל {count_on_date} ועדות (המגבלה היא {max_per_day})")
+
+                # 5. Weekly Capacity
+                week_start, week_end = vaada_repo.get_week_bounds(vaada_date)
+                weekly_count = vaada_repo.get_weekly_count(week_start, week_end, exclude_vaada_id=vaadot_id)
+                constraint_settings = settings_repo.get_constraint_settings()
+                limit_key = 'max_meetings_per_week_third' if vaada_repo.is_third_week_of_month(vaada_date) else 'max_meetings_per_week_regular'
+                weekly_limit = int(constraint_settings.get(limit_key, 3))
+                
+                if weekly_count >= weekly_limit:
+                    week_type = "שבוע שלישי" if vaada_repo.is_third_week_of_month(vaada_date) else "שבוע רגיל"
+                    raise ValueError(f"השבוע של {vaada_date} ({week_type}) כבר מכיל {weekly_count} ועדות. העברת הועדה תגרום לסך של {weekly_count+1} ועדות (המגבלה היא {weekly_limit})")
+
+                # 6. Check derived constraints for each event
+                events = [e for e in vaada.events if (e.is_deleted == 0 or e.is_deleted is None)]
+                for event in events:
+                    maslul = event.maslul
+                    stage_dates = event_repo.calculate_stage_dates(
+                        vaada_date,
+                        maslul.stage_a_days, maslul.stage_b_days, maslul.stage_c_days, maslul.stage_d_days,
+                        lambda d: exception_repo.is_work_day(d, work_days)
+                    )
+                    derived_error = event_repo.check_derived_dates_constraints(stage_dates, event.expected_requests, exclude_event_id=event.event_id)
+                    if derived_error:
+                        raise ValueError(f"העברת הועדה תגרום לחריגה באירוע {event.event_id}: {derived_error}")
+
+                # 7. Apply Update
+                vaada.vaada_date = vaada_date
+                vaada.exception_date_id = exception_date_id
+                session.flush()
+                return True
         except ValueError:
-            if conn:
-                conn.rollback()
             raise
         except Exception as e:
             print(f"Error updating vaada date: {e}")
-            if conn:
-                conn.rollback()
             return False
-        finally:
-            if conn:
-                conn.close()
 
     def delete_vaada(self, vaadot_id: int, user_id: Optional[int] = None) -> bool:
-        """Soft delete a committee meeting"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            # Soft delete the vaada
-            cursor.execute('''
-                UPDATE vaadot 
-                SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
-                WHERE vaadot_id = ?
-            ''', (datetime.now(ISRAEL_TZ), user_id, vaadot_id))
-            success = cursor.rowcount > 0
-            
-            # Also soft delete related events
-            if success:
-                cursor.execute('''
-                    UPDATE events 
-                    SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
-                    WHERE vaadot_id = ? AND is_deleted = 0
-                ''', (datetime.now(ISRAEL_TZ), user_id, vaadot_id))
-            
-            conn.commit()
-            conn.close()
-            return success
-        except Exception as e:
-            print(f"Error deleting vaada: {e}")
-            if 'conn' in locals():
-                conn.close()
-            return False
+        """Soft delete a committee meeting using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = VaadaRepository(session)
+            return repo.soft_delete(vaadot_id, user_id)
 
     def delete_vaadot_bulk(self, vaadot_ids: List[int], user_id: Optional[int] = None) -> Tuple[int, int]:
         """
-        Bulk soft delete committee meetings (vaadot) by IDs.
+        Bulk soft delete committee meetings (vaadot) by IDs using SQLAlchemy.
         Returns (deleted_committees_count, affected_events_count).
-        Events are also soft deleted.
         """
         if not vaadot_ids:
             return 0, 0
-        ids = [int(vid) for vid in vaadot_ids]
-        placeholders = ','.join(['?'] * len(ids))
-        conn = self.get_connection()
-        try:
-            cursor = conn.cursor()
-            # Count related events before deletion
-            cursor.execute(f'SELECT COUNT(*) FROM events WHERE vaadot_id IN ({placeholders}) AND is_deleted = 0', ids)
-            events_count = cursor.fetchone()[0] or 0
             
-            # Soft delete related events first
-            cursor.execute(f'''
-                UPDATE events 
-                SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
-                WHERE vaadot_id IN ({placeholders}) AND is_deleted = 0
-            ''', [datetime.now(ISRAEL_TZ), user_id] + ids)
+        with get_db_session() as session:
+            vaada_repo = VaadaRepository(session)
+            event_repo = EventRepository(session)
             
-            # Soft delete committees
-            cursor.execute(f'''
-                UPDATE vaadot 
-                SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
-                WHERE vaadot_id IN ({placeholders}) AND is_deleted = 0
-            ''', [datetime.now(ISRAEL_TZ), user_id] + ids)
-            deleted_committees = cursor.rowcount or 0
+            deleted_vaadot = 0
+            affected_events = 0
             
-            conn.commit()
-            return deleted_committees, events_count
-        except Exception as e:
-            conn.rollback()
-            print(f"Error bulk deleting vaadot: {e}")
-            raise
-        finally:
-            conn.close()
-    
-    def _get_week_bounds(self, check_date: date) -> Tuple[date, date]:
-        """Return start (Sunday) and end (Saturday) dates for the week of the given date."""
-        days_since_sunday = (check_date.weekday() + 1) % 7
-        week_start = check_date - timedelta(days=days_since_sunday)
-        week_end = week_start + timedelta(days=6)
-        return week_start, week_end
-
-    def _get_weekly_limit(self, check_date: date, constraint_settings: Dict[str, Any]) -> int:
-        """Return the applicable weekly meeting limit for a given date."""
-        limit = constraint_settings['max_weekly_meetings']
-        if self._is_third_week_of_month(check_date):
-            limit = constraint_settings['max_third_week_meetings']
-        return limit
-
-    def _count_meetings_in_week(self, cursor, week_start: date, week_end: date, exclude_vaada_id: Optional[int] = None) -> int:
-        """Count meetings within a week range, optionally excluding a specific meeting."""
-        query = '''
-            SELECT COUNT(*) FROM vaadot
-            WHERE vaada_date BETWEEN ? AND ?
-              AND (is_deleted = 0 OR is_deleted IS NULL)
-        '''
-        params = [week_start, week_end]
-        if exclude_vaada_id is not None:
-            query += ' AND vaadot_id != ?'
-            params.append(exclude_vaada_id)
-        cursor.execute(query, params)
-        result = cursor.fetchone()
-        return result[0] if result else 0
-
-    def _is_third_week_of_month(self, check_date: date) -> bool:
-        """Return True if date falls within the third week of its month (Sunday-Saturday)."""
-        first_day = date(check_date.year, check_date.month, 1)
-        days_to_first_sunday = (6 - first_day.weekday()) % 7
-        first_sunday = first_day + timedelta(days=days_to_first_sunday)
-        third_week_start = first_sunday + timedelta(weeks=2)
-        third_week_end = third_week_start + timedelta(days=6)
-        return third_week_start <= check_date <= third_week_end
+            for vid in vaadot_ids:
+                vaada = vaada_repo.get_by_id(int(vid))
+                if vaada and (vaada.is_deleted == 0 or vaada.is_deleted is None):
+                    # Soft delete related events first
+                    for event in vaada.events:
+                        if event.is_deleted == 0 or event.is_deleted is None:
+                            event_repo.soft_delete(event.event_id, user_id)
+                            affected_events += 1
+                    
+                    # Soft delete the committee
+                    vaada_repo.soft_delete(vid, user_id)
+                    deleted_vaadot += 1
+            
+            return deleted_vaadot, affected_events
     
     def get_vaada_by_date(self, vaada_date: date) -> List[Dict]:
-        """Get committees scheduled for a specific date"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date, v.status, v.notes, v.exception_date_id,
-                   ct.name, ct.scheduled_day, ct.frequency, ct.week_of_month,
-                   h.name as hativa_name,
-                   ed.exception_date, ed.description as exception_description, ed.type as exception_type
-            FROM vaadot v
-            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-            JOIN hativot h ON v.hativa_id = h.hativa_id
-            LEFT JOIN exception_dates ed ON v.exception_date_id = ed.date_id
-            WHERE v.vaada_date = ? AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-            ORDER BY ct.scheduled_day
-        ''', (vaada_date,))
-        rows = cursor.fetchall()
-        conn.close()
-        
-        days = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת']
-        
-        return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2], 'vaada_date': row[3], 
-                'status': row[4], 'notes': row[5], 'exception_date_id': row[6],
-                'committee_name': row[7], 'scheduled_day': row[8], 'frequency': row[9], 'week_of_month': row[10],
-                'hativa_name': row[11], 'exception_date': row[12], 'exception_description': row[13], 
-                'exception_type': row[14]} for row in rows]
+        """Get committees scheduled for a specific date using SQLAlchemy"""
+        if isinstance(vaada_date, str):
+            vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+            
+        with get_db_session() as session:
+            repo = VaadaRepository(session)
+            vaadot = repo.get_by_date(vaada_date)
+            
+            result = []
+            for v in vaadot:
+                d = v.to_dict()
+                d['committee_name'] = v.committee_type.name
+                d['scheduled_day'] = v.committee_type.scheduled_day
+                d['frequency'] = v.committee_type.frequency
+                d['week_of_month'] = v.committee_type.week_of_month
+                d['hativa_name'] = v.hativa.name
+                if v.exception_date:
+                    d['exception_date'] = v.exception_date.exception_date
+                    d['exception_description'] = v.exception_date.description
+                    d['exception_type'] = v.exception_date.type
+                result.append(d)
+            return result
     
     def get_vaadot_by_date_and_hativa(self, vaada_date: str, hativa_id: int) -> List[Dict]:
-        """Get committees scheduled for a specific date and hativa"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT v.*, ct.name as committee_name, h.name as hativa_name
-            FROM vaadot v
-            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-            JOIN hativot h ON v.hativa_id = h.hativa_id
-            WHERE v.vaada_date = ? AND v.hativa_id = ? AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-        ''', (vaada_date, hativa_id))
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2],
-                'vaada_date': row[3], 'status': row[4], 'notes': row[5],
-                'committee_name': row[6], 'hativa_name': row[7]} for row in rows]
+        """Get committees scheduled for a specific date and hativa using SQLAlchemy"""
+        if isinstance(vaada_date, str):
+            vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
+            
+        with get_db_session() as session:
+            repo = VaadaRepository(session)
+            vaadot = repo.get_by_date_and_hativa(vaada_date, hativa_id)
+            return [v.to_dict() for v in vaadot]
     
     def get_vaadot_affected_by_exception(self, exception_date_id: int) -> List[Dict]:
-        """Get committees affected by a specific exception date"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date, v.status, v.notes, v.exception_date_id,
-                   ct.name, ct.scheduled_day, ct.frequency, ct.week_of_month,
-                   h.name as hativa_name,
-                   ed.exception_date, ed.description as exception_description, ed.type as exception_type
-            FROM vaadot v
-            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-            JOIN hativot h ON v.hativa_id = h.hativa_id
-            JOIN exception_dates ed ON v.exception_date_id = ed.date_id
-            WHERE v.exception_date_id = ? AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-            ORDER BY ct.scheduled_day
-        ''', (exception_date_id,))
-        rows = cursor.fetchall()
-        conn.close()
-        
-        days = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת']
-        
-        return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2], 'vaada_date': row[3], 
-                'status': row[4], 'notes': row[5], 'exception_date_id': row[6],
-                'committee_name': row[7], 'scheduled_day': row[8], 'frequency': row[9], 'week_of_month': row[10],
-                'hativa_name': row[11], 'exception_date': row[12], 'exception_description': row[13], 
-                'exception_type': row[14]} for row in rows]
+        """Get committees affected by a specific exception date using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = VaadaRepository(session)
+            vaadot = repo.get_by_exception_date(exception_date_id)
+            
+            result = []
+            for v in vaadot:
+                d = v.to_dict()
+                d['committee_name'] = v.committee_type.name
+                d['scheduled_day'] = v.committee_type.scheduled_day
+                d['frequency'] = v.committee_type.frequency
+                d['week_of_month'] = v.committee_type.week_of_month
+                d['hativa_name'] = v.hativa.name
+                if v.exception_date:
+                    d['exception_date'] = v.exception_date.exception_date
+                    d['exception_description'] = v.exception_date.description
+                    d['exception_type'] = v.exception_date.type
+                result.append(d)
+            return result
     
     # Events operations
     def add_event(self, vaadot_id: int, maslul_id: int, name: str, event_type: str,
                   expected_requests: int = 0, actual_submissions: int = 0, call_publication_date: Optional[date] = None,
                   is_call_deadline_manual: bool = False, manual_call_deadline_date: Optional[date] = None,
                   user_role: Optional[str] = None) -> int:
-        """Add a new event"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
+        """Add a new event using SQLAlchemy with constraint checks and deadline calculation"""
         
-        if call_publication_date in ("", None):
-            call_publication_date = None
-        elif isinstance(call_publication_date, str):
-            call_publication_date = datetime.strptime(call_publication_date, '%Y-%m-%d').date()
-        elif isinstance(call_publication_date, datetime):
-            call_publication_date = call_publication_date.date()
+        # Date parsing logic from original method
+        def parse_date(d):
+            if d in ("", None): return None
+            if isinstance(d, str): return datetime.strptime(d, '%Y-%m-%d').date()
+            if isinstance(d, datetime): return d.date()
+            return d
+
+        call_publication_date = parse_date(call_publication_date)
+        manual_call_deadline_date = parse_date(manual_call_deadline_date)
         
-        # Process manual call deadline date if provided
-        if manual_call_deadline_date in ("", None):
-            manual_call_deadline_date = None
-        elif isinstance(manual_call_deadline_date, str):
-            manual_call_deadline_date = datetime.strptime(manual_call_deadline_date, '%Y-%m-%d').date()
-        elif isinstance(manual_call_deadline_date, datetime):
-            manual_call_deadline_date = manual_call_deadline_date.date()
-        
-        # Validate that the route belongs to the same division as the committee and get stage data
-        cursor.execute('''
-            SELECT v.hativa_id as vaada_hativa_id, m.hativa_id as maslul_hativa_id,
-                   h1.name as vaada_hativa_name, h2.name as maslul_hativa_name,
-                   ct.name as committee_name, m.name as maslul_name,
-                   v.vaada_date, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days
-            FROM vaadot v
-            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-            JOIN hativot h1 ON v.hativa_id = h1.hativa_id
-            JOIN maslulim m ON m.maslul_id = ?
-            JOIN hativot h2 ON m.hativa_id = h2.hativa_id
-            WHERE v.vaadot_id = ?
-        ''', (maslul_id, vaadot_id))
-        
-        result = cursor.fetchone()
-        if not result:
-            conn.close()
-            raise ValueError("ועדה או מסלול לא נמצאו במערכת")
-        
-        vaada_hativa_id, maslul_hativa_id, vaada_hativa_name, maslul_hativa_name, committee_name, maslul_name, vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days = result
-        
-        if call_publication_date in ("", None):
-            call_publication_date = None
-        elif isinstance(call_publication_date, str):
-            call_publication_date = datetime.strptime(call_publication_date, '%Y-%m-%d').date()
-        elif isinstance(call_publication_date, datetime):
-            call_publication_date = call_publication_date.date()
-        
-        if vaada_hativa_id != maslul_hativa_id:
-            conn.close()
-            raise ValueError(f'המסלול "{maslul_name}" מחטיבת "{maslul_hativa_name}" אינו יכול להיות משויך לועדה "{committee_name}" מחטיבת "{vaada_hativa_name}"')
-        
-        # Check max requests per day constraint on committee date (skip for admins)
-        if user_role != 'admin':
-            max_requests_committee = int(self.get_system_setting('max_requests_committee_date') or '100')
-            current_total_requests = self.get_total_requests_on_date(vaada_date, exclude_event_id=None)
-            new_total_requests = current_total_requests + expected_requests
+        with get_db_session() as session:
+            event_repo = EventRepository(session)
+            vaada_repo = VaadaRepository(session)
+            maslul_repo = MaslulRepository(session)
+            settings_repo = SettingsRepository(session)
+            exception_repo = ExceptionDateRepository(session)
             
-            if new_total_requests > max_requests_committee:
-                conn.close()
-                raise ValueError(f'חריגה מאילוץ מקסימום בקשות ביום ועדה: התאריך {vaada_date} כבר מכיל {current_total_requests} בקשות צפויות. הוספת {expected_requests} בקשות תגרום לסך של {new_total_requests} (המגבלה היא {max_requests_committee})')
-        
-        # Calculate derived dates based on stage durations
-        stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
-        
-        # Use manual call deadline date if provided, otherwise use calculated
-        if is_call_deadline_manual and manual_call_deadline_date:
-            final_call_deadline = manual_call_deadline_date
-        else:
-            final_call_deadline = stage_dates['call_deadline_date']
-            is_call_deadline_manual = False  # Ensure flag is False if no manual date
-        
-        # Check max requests per day constraint on derived dates
-        derived_constraint_error = self.check_derived_dates_constraints(stage_dates, expected_requests, exclude_event_id=None, user_role=user_role)
-        if derived_constraint_error:
-            conn.close()
-            raise ValueError(derived_constraint_error)
-        
-        cursor.execute('''
-            INSERT INTO events (vaadot_id, maslul_id, name, event_type, expected_requests, actual_submissions,
-                              call_publication_date, call_deadline_date, intake_deadline_date, review_deadline_date, 
-                              response_deadline_date, is_call_deadline_manual)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (vaadot_id, maslul_id, name, event_type, expected_requests, actual_submissions,
-              call_publication_date, final_call_deadline, stage_dates['intake_deadline_date'],
-              stage_dates['review_deadline_date'], stage_dates['response_deadline_date'], 
-              1 if is_call_deadline_manual else 0))
-        event_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return event_id
+            # 1. Fetch Vaada and Maslul and validate
+            vaada = vaada_repo.get_by_id(vaadot_id)
+            maslul = maslul_repo.get_by_id(maslul_id)
+            
+            if not vaada or not maslul:
+                raise ValueError("ועדה או מסלול לא נמצאו במערכת")
+                
+            if vaada.hativa_id != maslul.hativa_id:
+                raise ValueError(f'המסלול "{maslul.name}" מחטיבת "{maslul.hativa.name}" אינו יכול להיות משויך לועדה "{vaada.committee_type.name}" מחטיבת "{vaada.hativa.name}"')
+            
+            # 2. Max requests constraint check
+            if user_role != 'admin':
+                max_requests = settings_repo.get_int_setting('max_requests_committee_date', 100)
+                current_total = event_repo.get_total_requests_on_date(vaada.vaada_date)
+                if current_total + expected_requests > max_requests:
+                    raise ValueError(f'חריגה מאילוץ מקסימום בקשות ביום ועדה: התאריך {vaada.vaada_date} כבר מכיל {current_total} בקשות צפויות. הוספת {expected_requests} בקשות תגרום לסך של {current_total + expected_requests} (המגבלה היא {max_requests})')
+            
+            # 3. Calculate deadlines
+            work_days = settings_repo.get_work_days()
+            stage_dates = event_repo.calculate_stage_dates(
+                vaada.vaada_date,
+                maslul.stage_a_days, maslul.stage_b_days, maslul.stage_c_days, maslul.stage_d_days,
+                lambda d: exception_repo.is_work_day(d, work_days)
+            )
+            
+            # 4. Handle manual deadline
+            final_call_deadline = manual_call_deadline_date if (is_call_deadline_manual and manual_call_deadline_date) else stage_dates['call_deadline_date']
+            
+            # 5. Check derived constraints (placeholder logic from original)
+            derived_error = event_repo.check_derived_dates_constraints(stage_dates, expected_requests, user_role=user_role)
+            if derived_error:
+                raise ValueError(derived_error)
+            
+            # 6. Create event
+            event = Event(
+                vaadot_id=vaadot_id,
+                maslul_id=maslul_id,
+                name=name,
+                event_type=event_type,
+                expected_requests=expected_requests,
+                actual_submissions=actual_submissions,
+                call_publication_date=call_publication_date,
+                call_deadline_date=final_call_deadline,
+                intake_deadline_date=stage_dates['intake_deadline_date'],
+                review_deadline_date=stage_dates['review_deadline_date'],
+                response_deadline_date=stage_dates['response_deadline_date'],
+                is_call_deadline_manual=1 if (is_call_deadline_manual and manual_call_deadline_date) else 0
+            )
+            event_repo.add(event)
+            return event.event_id
     
     def get_events(self, vaadot_id: Optional[int] = None, include_deleted: bool = False) -> List[Dict]:
-        """Get events, optionally filtered by committee"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        base_query = '''
-            SELECT 
-                e.event_id,
-                e.vaadot_id,
-                e.maslul_id,
-                e.name,
-                e.event_type,
-                e.expected_requests,
-                e.actual_submissions,
-                e.call_publication_date,
-                e.scheduled_date,
-                e.created_at,
-                e.call_deadline_date,
-                e.intake_deadline_date,
-                e.review_deadline_date,
-                e.response_deadline_date,
-                e.is_call_deadline_manual,
-                ct.name as committee_name,
-                v.vaada_date,
-                vh.name as vaada_hativa_name,
-                m.name as maslul_name,
-                h.name as hativa_name,
-                h.hativa_id,
-                ct.committee_type_id
-            FROM events e
-            JOIN vaadot v ON e.vaadot_id = v.vaadot_id
-            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-            JOIN hativot vh ON v.hativa_id = vh.hativa_id
-            JOIN maslulim m ON e.maslul_id = m.maslul_id
-            JOIN hativot h ON m.hativa_id = h.hativa_id
-
-            WHERE (e.is_deleted = 0 OR e.is_deleted IS NULL)
-              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-        '''
-        
-        if not include_deleted:
-            pass  # Already filtered in base query
-        else:
-            # If we want to include deleted, remove the WHERE clause
-            base_query = base_query.replace('WHERE (e.is_deleted = 0 OR e.is_deleted IS NULL)', 'WHERE 1=1')
-
-        if vaadot_id:
-            cursor.execute(base_query + ' AND e.vaadot_id = ? ORDER BY e.created_at DESC', (vaadot_id,))
-        else:
-            cursor.execute(base_query + ' ORDER BY e.created_at DESC')
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [{'event_id': row[0], 'vaadot_id': row[1], 'maslul_id': row[2], 'name': row[3],
-                'event_type': row[4], 'expected_requests': row[5], 'actual_submissions': row[6], 'call_publication_date': row[7],
-                'scheduled_date': row[8], 'created_at': row[9], 
-                'call_deadline_date': row[10], 'intake_deadline_date': row[11], 'review_deadline_date': row[12],
-                'response_deadline_date': row[13], 'is_call_deadline_manual': row[14], 'committee_name': row[15], 
-                'vaada_date': row[16], 'vaada_hativa_name': row[17], 'maslul_name': row[18], 'hativa_name': row[19],
-                'hativa_id': row[20] if len(row) > 20 else None,
-                'committee_type_id': row[21] if len(row) > 21 else None} for row in rows]
+        """Get events using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = EventRepository(session)
+            events = repo.get_all(vaadot_id=vaadot_id, include_deleted=include_deleted)
+            return [e.to_dict() for e in events]
     
     def update_event(self, event_id: int, vaadot_id: int, maslul_id: int, name: str, event_type: str,
                      expected_requests: int = 0, actual_submissions: int = 0, call_publication_date: Optional[date] = None,
                      is_call_deadline_manual: bool = False, manual_call_deadline_date: Optional[date] = None,
                      user_role: Optional[str] = None) -> bool:
-        """Update an existing event"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        # Process manual call deadline date if provided
-        if manual_call_deadline_date in ("", None):
-            manual_call_deadline_date = None
-        elif isinstance(manual_call_deadline_date, str):
-            manual_call_deadline_date = datetime.strptime(manual_call_deadline_date, '%Y-%m-%d').date()
-        elif isinstance(manual_call_deadline_date, datetime):
-            manual_call_deadline_date = manual_call_deadline_date.date()
-
-        # Get existing call deadline date to validate against
-        cursor.execute('SELECT call_deadline_date FROM events WHERE event_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', (event_id,))
-        existing_event = cursor.fetchone()
-        if not existing_event:
-            conn.close()
-            raise ValueError("האירוע לא נמצא במערכת")
-
-        existing_call_deadline = existing_event[0]
-
-        # Validate that call deadline date can only be postponed, not advanced
-        if is_call_deadline_manual and manual_call_deadline_date and existing_call_deadline:
-            # Convert existing deadline to date object if it's a string
-            if isinstance(existing_call_deadline, str):
-                existing_call_deadline = datetime.strptime(existing_call_deadline, '%Y-%m-%d').date()
-
-            if manual_call_deadline_date < existing_call_deadline:
-                conn.close()
-                raise ValueError(f'אסור להקדים את תאריך סיום הקול קורא. התאריך הנוכחי הוא {existing_call_deadline}, ניתן רק לדחות את התאריך (לא להקדים אותו)')
-
-        # Validate that the route belongs to the same division as the committee and get stage data
-        cursor.execute('''
-            SELECT v.hativa_id as vaada_hativa_id, m.hativa_id as maslul_hativa_id,
-                   h1.name as vaada_hativa_name, h2.name as maslul_hativa_name,
-                   ct.name as committee_name, m.name as maslul_name,
-                   v.vaada_date, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days
-            FROM vaadot v
-            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-            JOIN hativot h1 ON v.hativa_id = h1.hativa_id
-            JOIN maslulim m ON m.maslul_id = ?
-            JOIN hativot h2 ON m.hativa_id = h2.hativa_id
-            WHERE v.vaadot_id = ?
-        ''', (maslul_id, vaadot_id))
+        """Update an existing event using SQLAlchemy with constraint checks and deadline calculation"""
         
-        result = cursor.fetchone()
-        if not result:
-            conn.close()
-            raise ValueError("ועדה או מסלול לא נמצאו במערכת")
+        # Date parsing logic
+        def parse_date(d):
+            if d in ("", None): return None
+            if isinstance(d, str): return datetime.strptime(d, '%Y-%m-%d').date()
+            if isinstance(d, datetime): return d.date()
+            return d
+
+        call_publication_date = parse_date(call_publication_date)
+        manual_call_deadline_date = parse_date(manual_call_deadline_date)
         
-        vaada_hativa_id, maslul_hativa_id, vaada_hativa_name, maslul_hativa_name, committee_name, maslul_name, vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days = result
-        
-        if call_publication_date in ("", None):
-            call_publication_date = None
-        elif isinstance(call_publication_date, str):
-            call_publication_date = datetime.strptime(call_publication_date, '%Y-%m-%d').date()
-        elif isinstance(call_publication_date, datetime):
-            call_publication_date = call_publication_date.date()
-        
-        if vaada_hativa_id != maslul_hativa_id:
-            conn.close()
-            raise ValueError(f'המסלול "{maslul_name}" מחטיבת "{maslul_hativa_name}" אינו יכול להיות משויך לועדה "{committee_name}" מחטיבת "{vaada_hativa_name}"')
-        
-        # Check max requests per day constraint on committee date (excluding current event, skip for admins)
-        if user_role != 'admin':
-            max_requests_committee = int(self.get_system_setting('max_requests_committee_date') or '100')
-            current_total_requests = self.get_total_requests_on_date(vaada_date, exclude_event_id=event_id)
-            new_total_requests = current_total_requests + expected_requests
+        with get_db_session() as session:
+            event_repo = EventRepository(session)
+            vaada_repo = VaadaRepository(session)
+            maslul_repo = MaslulRepository(session)
+            settings_repo = SettingsRepository(session)
+            exception_repo = ExceptionDateRepository(session)
             
-            if new_total_requests > max_requests_committee:
-                conn.close()
-                raise ValueError(f'חריגה מאילוץ מקסימום בקשות ביום ועדה: התאריך {vaada_date} כבר מכיל {current_total_requests} בקשות צפויות (ללא האירוע הנוכחי). עדכון ל-{expected_requests} בקשות יגרום לסך של {new_total_requests} (המגבלה היא {max_requests_committee})')
-        
-        # Calculate derived dates based on stage durations
-        stage_dates = self.calculate_stage_dates(vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
-        
-        # Use manual call deadline date if provided, otherwise use calculated
-        if is_call_deadline_manual and manual_call_deadline_date:
-            final_call_deadline = manual_call_deadline_date
-        else:
-            final_call_deadline = stage_dates['call_deadline_date']
-            is_call_deadline_manual = False  # Ensure flag is False if no manual date
-        
-        # Check max requests per day constraint on derived dates (excluding current event)
-        derived_constraint_error = self.check_derived_dates_constraints(stage_dates, expected_requests, exclude_event_id=event_id, user_role=user_role)
-        if derived_constraint_error:
-            conn.close()
-            raise ValueError(derived_constraint_error)
-        
-        cursor.execute('''
-            UPDATE events 
-            SET vaadot_id = ?, maslul_id = ?, name = ?, event_type = ?, expected_requests = ?, actual_submissions = ?,
-                call_publication_date = ?, call_deadline_date = ?, intake_deadline_date = ?,
-                review_deadline_date = ?, response_deadline_date = ?, is_call_deadline_manual = ?
-            WHERE event_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)
-        ''', (vaadot_id, maslul_id, name, event_type, expected_requests, actual_submissions,
-              call_publication_date, final_call_deadline, stage_dates['intake_deadline_date'],
-              stage_dates['review_deadline_date'], stage_dates['response_deadline_date'], 
-              1 if is_call_deadline_manual else 0, event_id))
-        
-        success = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
-        return success
+            # 1. Fetch Event and validate
+            event = event_repo.get_by_id(event_id)
+            if not event:
+                raise ValueError("האירוע לא נמצא במערכת")
+
+            # 2. Postponement Validation
+            if is_call_deadline_manual and manual_call_deadline_date and event.call_deadline_date:
+                if manual_call_deadline_date < event.call_deadline_date:
+                    raise ValueError(f'אסור להקדים את תאריך סיום הקול קורא. התאריך הנוכחי הוא {event.call_deadline_date}, ניתן רק לדחות את התאריך (לא להקדים אותו)')
+
+            # 3. Fetch Vaada and Maslul and validate division match
+            vaada = vaada_repo.get_by_id(vaadot_id)
+            maslul = maslul_repo.get_by_id(maslul_id)
+            
+            if not vaada or not maslul:
+                raise ValueError("ועדה או מסלול לא נמצאו במערכת")
+                
+            if vaada.hativa_id != maslul.hativa_id:
+                raise ValueError(f'המסלול "{maslul.name}" מחטיבת "{maslul.hativa.name}" אינו יכול להיות משויך לועדה "{vaada.committee_type.name}" מחטיבת "{vaada.hativa.name}"')
+            
+            # 4. Max requests constraint check (excluding current event)
+            if user_role != 'admin':
+                max_requests = settings_repo.get_int_setting('max_requests_committee_date', 100)
+                current_total = event_repo.get_total_requests_on_date(vaada.vaada_date, exclude_event_id=event_id)
+                if current_total + expected_requests > max_requests:
+                    raise ValueError(f'חריגה מאילוץ מקסימום בקשות ביום ועדה: התאריך {vaada.vaada_date} כבר מכיל {current_total} בקשות צפויות (ללא האירוע הנוכחי). עדכון ל-{expected_requests} בקשות יגרום לסך של {current_total + expected_requests} (המגבלה היא {max_requests})')
+            
+            # 5. Calculate deadlines
+            work_days = settings_repo.get_work_days()
+            stage_dates = event_repo.calculate_stage_dates(
+                vaada.vaada_date,
+                maslul.stage_a_days, maslul.stage_b_days, maslul.stage_c_days, maslul.stage_d_days,
+                lambda d: exception_repo.is_work_day(d, work_days)
+            )
+            
+            # 6. Handle manual deadline
+            final_call_deadline = manual_call_deadline_date if (is_call_deadline_manual and manual_call_deadline_date) else stage_dates['call_deadline_date']
+            
+            # 7. Check derived constraints (placeholder logic from original)
+            derived_error = event_repo.check_derived_dates_constraints(stage_dates, expected_requests, exclude_event_id=event_id, user_role=user_role)
+            if derived_error:
+                raise ValueError(derived_error)
+            
+            # 8. Apply Updates
+            event.vaadot_id = vaadot_id
+            event.maslul_id = maslul_id
+            event.name = name
+            event.event_type = event_type
+            event.expected_requests = expected_requests
+            event.actual_submissions = actual_submissions
+            event.call_publication_date = call_publication_date
+            event.call_deadline_date = final_call_deadline
+            event.intake_deadline_date = stage_dates['intake_deadline_date']
+            event.review_deadline_date = stage_dates['review_deadline_date']
+            event.response_deadline_date = stage_dates['response_deadline_date']
+            event.is_call_deadline_manual = 1 if (is_call_deadline_manual and manual_call_deadline_date) else 0
+            
+            session.flush()
+            return True
     
     def delete_event(self, event_id: int, user_id: Optional[int] = None) -> bool:
-        """Soft delete an event"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE events 
-            SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
-            WHERE event_id = ? AND is_deleted = 0
-        ''', (datetime.now(ISRAEL_TZ), user_id, event_id))
-        success = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
-        return success
+        """Soft delete an event using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = EventRepository(session)
+            return repo.soft_delete(event_id, user_id)
 
     def delete_events_bulk(self, event_ids: List[int], user_id: Optional[int] = None) -> int:
-        """Bulk soft delete events by IDs in a single transaction. Returns number of deleted rows."""
-        if not event_ids:
-            return 0
-        ids = [int(eid) for eid in event_ids]
-        placeholders = ','.join(['?'] * len(ids))
-        conn = self.get_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute(f'''
-                UPDATE events 
-                SET is_deleted = 1, deleted_at = ?, deleted_by = ? 
-                WHERE event_id IN ({placeholders}) AND is_deleted = 0
-            ''', [datetime.now(ISRAEL_TZ), user_id] + ids)
-            deleted = cursor.rowcount or 0
-            conn.commit()
-            return deleted
-        except Exception as e:
-            conn.rollback()
-            print(f"Error bulk deleting events: {e}")
-            raise
-        finally:
-            conn.close()
+        """Bulk soft delete events using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = EventRepository(session)
+            return repo.bulk_soft_delete(event_ids, user_id)
     
     # User Management and Permissions
     
-
-    
     def get_user_by_username(self, username: str) -> Optional[Dict]:
-        """Get user by username with all their hativot (case-insensitive)"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT user_id, username, email, password_hash, full_name, role, 
-                   is_active, auth_source, ad_dn, created_at, last_login
-            FROM users
-            WHERE LOWER(username) = LOWER(?) AND is_active = 1
-        ''', (username,))
-        row = cursor.fetchone()
-        
-        if not row:
-            conn.close()
+        """Get user by username using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            user = repo.get_by_username(username)
+            if user and user.is_active:
+                return user.to_dict()
             return None
-        
-        user_id = row[0]
-        
-        # Get all hativot for this user
-        cursor.execute('''
-            SELECT h.hativa_id, h.name
-            FROM user_hativot uh
-            JOIN hativot h ON uh.hativa_id = h.hativa_id
-            WHERE uh.user_id = ?
-            ORDER BY h.name
-        ''', (user_id,))
-        hativot_rows = cursor.fetchall()
-        conn.close()
-        
-        hativot = [{'hativa_id': h[0], 'name': h[1]} for h in hativot_rows]
-        hativa_ids = [h['hativa_id'] for h in hativot]
-        
-        return {
-            'user_id': user_id,
-            'username': row[1],
-            'email': row[2],
-            'password_hash': row[3],
-            'full_name': row[4],
-            'role': row[5],
-            'is_active': row[6],
-            'auth_source': row[7],
-            'ad_dn': row[8],
-            'created_at': row[9],
-            'last_login': row[10],
-            'hativot': hativot,
-            'hativa_ids': hativa_ids
-        }
     
     def get_user_by_email(self, email: str) -> Optional[Dict]:
-        """Get user by email"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT user_id, username, email, password_hash, full_name, role, 
-                   is_active, auth_source, ad_dn, created_at, last_login
-            FROM users
-            WHERE email = ? AND is_active = 1
-        ''', (email,))
-        row = cursor.fetchone()
-        conn.close()
-        
-        if not row:
+        """Get user by email using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            user = repo.get_by_email(email)
+            if user and user.is_active:
+                return user.to_dict()
             return None
-        
-        return {
-            'user_id': row[0],
-            'username': row[1],
-            'email': row[2],
-            'password_hash': row[3],
-            'full_name': row[4],
-            'role': row[5],
-            'is_active': row[6],
-            'auth_source': row[7],
-            'ad_dn': row[8],
-            'created_at': row[9],
-            'last_login': row[10]
-        }
     
     def update_last_login(self, user_id: int):
-        """Update user's last login timestamp"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = ?
-        ''', (user_id,))
-        conn.commit()
-        conn.close()
+        """Update user's last login using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            repo.update_last_login(user_id)
     
     def get_all_users(self) -> List[Dict]:
-        """Get all users with their division information"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
-                   u.is_active, u.created_at, u.last_login, u.auth_source
-            FROM users u
-            ORDER BY u.created_at DESC
-        ''')
-        rows = cursor.fetchall()
-        
-        users = []
-        for row in rows:
-            user_id = row[0]
-            # Get all hativot for this user
-            cursor.execute('''
-                SELECT h.hativa_id, h.name
-                FROM user_hativot uh
-                JOIN hativot h ON uh.hativa_id = h.hativa_id
-                WHERE uh.user_id = ?
-                ORDER BY h.name
-            ''', (user_id,))
-            hativot_rows = cursor.fetchall()
-            
-            hativot = [{'hativa_id': h[0], 'name': h[1]} for h in hativot_rows]
-            hativa_names = ', '.join([h['name'] for h in hativot]) if hativot else ''
-            
-            users.append({
-                'user_id': user_id,
-                'username': row[1],
-                'email': row[2],
-                'full_name': row[3],
-                'role': row[4],
-                'is_active': row[5],
-                'created_at': row[6],
-                'last_login': row[7],
-                'auth_source': row[8],
-                'hativot': hativot,
-                'hativa_names': hativa_names
-            })
-        
-        conn.close()
-        return users
+        """Get all users using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            users = repo.get_all()
+            result = []
+            for user in users:
+                d = user.to_dict()
+                d['hativa_names'] = ', '.join([h.name for h in user.hativot]) if user.hativot else ''
+                result.append(d)
+            return result
     
     def get_user_by_id(self, user_id: int) -> Optional[Dict]:
-        """Get user by ID with all their hativot"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT user_id, username, email, password_hash, full_name, role, 
-                   is_active, auth_source, ad_dn, created_at, last_login
-            FROM users
-            WHERE user_id = ?
-        ''', (user_id,))
-        row = cursor.fetchone()
-        
-        if not row:
-            conn.close()
+        """Get user by ID using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            user = repo.get_by_id(user_id)
+            if user:
+                d = user.to_dict()
+                d['hativa_names'] = ', '.join([h.name for h in user.hativot]) if user.hativot else ''
+                return d
             return None
-        
-        # Get all hativot for this user
-        cursor.execute('''
-            SELECT h.hativa_id, h.name
-            FROM user_hativot uh
-            JOIN hativot h ON uh.hativa_id = h.hativa_id
-            WHERE uh.user_id = ?
-            ORDER BY h.name
-        ''', (user_id,))
-        hativot_rows = cursor.fetchall()
-        conn.close()
-        
-        hativot = [{'hativa_id': h[0], 'name': h[1]} for h in hativot_rows]
-        hativa_names = ', '.join([h['name'] for h in hativot]) if hativot else ''
-        
-        return {
-            'user_id': row[0],
-            'username': row[1],
-            'email': row[2],
-            'password_hash': row[3],
-            'full_name': row[4],
-            'role': row[5],
-            'is_active': row[6],
-            'auth_source': row[7],
-            'ad_dn': row[8],
-            'created_at': row[9],
-            'last_login': row[10],
-            'hativot': hativot,
-            'hativa_names': hativa_names
-        }
     
     def update_user(self, user_id: int, username: str, email: str, full_name: str, 
                    role: str, hativa_ids: List[int] = None, auth_source: Optional[str] = None) -> bool:
-        """Update user information and their hativot access"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            # Update basic user info
-            update_fields = ['username = ?', 'email = ?', 'full_name = ?', 'role = ?']
-            params: List = [username, email, full_name, role]
-
-            if auth_source in ('local', 'ad'):
-                update_fields.append('auth_source = ?')
-                params.append(auth_source)
-
-            params.append(user_id)
-
-            cursor.execute(f'''
-                UPDATE users 
-                SET {', '.join(update_fields)}
-                WHERE user_id = ?
-            ''', params)
-            
-            # Update user_hativot relationships
-            if hativa_ids is not None:
-                # Remove existing hativot
-                cursor.execute('DELETE FROM user_hativot WHERE user_id = ?', (user_id,))
-                
-                # Add new hativot
-                for hativa_id in hativa_ids:
-                    cursor.execute('''
-                        INSERT INTO user_hativot (user_id, hativa_id) 
-                        VALUES (?, ?)
-                    ''', (user_id, hativa_id))
-            
-            conn.commit()
-            conn.close()
-            return True
-        except Exception as e:
-            print(f"Error updating user: {e}")
-            return False
+        """Update user information using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            return repo.update_user(user_id, username, email, full_name, role, hativa_ids, auth_source)
     
     def toggle_user_status(self, user_id: int) -> bool:
-        """Toggle user active status"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE users 
-                SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END
-                WHERE user_id = ?
-            ''', (user_id,))
-            conn.commit()
-            conn.close()
-            return True
-        except Exception as e:
-            print(f"Error toggling user status: {e}")
-            return False
+        """Toggle user active status using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            return repo.toggle_status(user_id)
     
     def delete_user(self, user_id: int) -> bool:
-        """Delete user (soft delete by setting is_active to 0)"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE users SET is_active = 0 WHERE user_id = ?
-            ''', (user_id,))
-            conn.commit()
-            conn.close()
-            return True
-        except Exception as e:
-            print(f"Error deleting user: {e}")
-            return False
+        """Delete user (soft delete) using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            return repo.soft_delete(user_id)
     
     def check_username_exists(self, username: str, exclude_user_id: Optional[int] = None) -> bool:
-        """Check if username already exists (case-insensitive)"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        if exclude_user_id:
-            cursor.execute('''
-                SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?) AND user_id != ?
-            ''', (username, exclude_user_id))
-        else:
-            cursor.execute('''
-                SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?)
-            ''', (username,))
-        count = cursor.fetchone()[0]
-        conn.close()
-        return count > 0
+        """Check if username already exists using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            return repo.username_exists(username, exclude_user_id)
     
     def check_email_exists(self, email: str, exclude_user_id: Optional[int] = None) -> bool:
-        """Check if email already exists"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        if exclude_user_id:
-            cursor.execute('''
-                SELECT COUNT(*) FROM users WHERE email = ? AND user_id != ?
-            ''', (email, exclude_user_id))
-        else:
-            cursor.execute('''
-                SELECT COUNT(*) FROM users WHERE email = ?
-            ''', (email,))
-        count = cursor.fetchone()[0]
-        conn.close()
-        return count > 0
-    
-    def change_user_password(self, user_id: int, new_password_hash: str) -> bool:
-        """Change user password"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE users SET password_hash = ? WHERE user_id = ?
-            ''', (new_password_hash, user_id))
-            conn.commit()
-            conn.close()
-            return True
-        except Exception as e:
-            print(f"Error changing password: {e}")
-            return False
+        """Check if email already exists using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            return repo.email_exists(email, exclude_user_id)
     
     def get_user_hativot(self, user_id: int) -> List[Dict]:
-        """Get all hativot that a user has access to"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT h.hativa_id, h.name, h.description, h.color
-            FROM user_hativot uh
-            JOIN hativot h ON uh.hativa_id = h.hativa_id
-            WHERE uh.user_id = ?
-            ORDER BY h.name
-        ''', (user_id,))
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [{'hativa_id': row[0], 'name': row[1], 'description': row[2], 'color': row[3]} 
-                for row in rows]
+        """Get all hativot for a user using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            hativot = repo.get_user_hativot(user_id)
+            return [{'hativa_id': h.hativa_id, 'name': h.name, 
+                    'description': h.description, 'color': h.color} for h in hativot]
     
     def user_has_access_to_hativa(self, user_id: int, hativa_id: int) -> bool:
-        """Check if user has access to a specific hativa"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Admin has access to everything
-        cursor.execute('SELECT role FROM users WHERE user_id = ?', (user_id,))
-        user = cursor.fetchone()
-        if user and user[0] == 'admin':
-            conn.close()
-            return True
-        
-        # Check if user has specific access to this hativa
-        cursor.execute('''
-            SELECT COUNT(*) FROM user_hativot 
-            WHERE user_id = ? AND hativa_id = ?
-        ''', (user_id, hativa_id))
-        count = cursor.fetchone()[0]
-        conn.close()
-        
-        return count > 0
+        """Check if user has access to a hativa using SQLAlchemy"""
+        with get_db_session() as session:
+            # Check if admin
+            repo = UserRepository(session)
+            user = repo.get_by_id(user_id)
+            if user and user.role == 'admin':
+                return True
+            return repo.has_access_to_hativa(user_id, hativa_id)
     
     def add_user_hativa(self, user_id: int, hativa_id: int) -> bool:
-        """Add hativa access to user"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('''
-                INSERT OR IGNORE INTO user_hativot (user_id, hativa_id) 
-                VALUES (?, ?)
-            ''', (user_id, hativa_id))
-            conn.commit()
-            conn.close()
-            return True
-        except Exception as e:
-            print(f"Error adding user hativa: {e}")
-            return False
+        """Add hativa access to user using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            return repo.add_hativa_access(user_id, hativa_id)
     
     def remove_user_hativa(self, user_id: int, hativa_id: int) -> bool:
-        """Remove hativa access from user"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('''
-                DELETE FROM user_hativot 
-                WHERE user_id = ? AND hativa_id = ?
-            ''', (user_id, hativa_id))
-            conn.commit()
-            conn.close()
-            return True
-        except Exception as e:
-            print(f"Error removing user hativa: {e}")
-            return False
+        """Remove hativa access from user using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            return repo.remove_hativa_access(user_id, hativa_id)
     
     def get_system_setting(self, setting_key: str) -> Optional[str]:
-        """Get system setting value"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT setting_value FROM system_settings WHERE setting_key = ?
-        ''', (setting_key,))
-        row = cursor.fetchone()
-        conn.close()
-        return row[0] if row else None
+        """Get system setting value using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = SettingsRepository(session)
+            return repo.get_setting(setting_key)
     
     def update_system_setting(self, setting_key: str, setting_value: str, user_id: int):
-        """Update system setting"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE system_settings 
-            SET setting_value = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
-            WHERE setting_key = ?
-        ''', (setting_value, user_id, setting_key))
-        conn.commit()
-        conn.close()
+        """Update system setting using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = SettingsRepository(session)
+            repo.update_setting(setting_key, setting_value, user_id)
 
     def get_int_setting(self, setting_key: str, default: int) -> int:
-        """Get an integer system setting with fallback"""
-        value = self.get_system_setting(setting_key)
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return default
+        """Get an integer system setting with fallback using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = SettingsRepository(session)
+            return repo.get_int_setting(setting_key, default)
 
     def get_constraint_settings(self) -> Dict[str, Any]:
-        """Return parsed constraint settings for the scheduling system"""
-        return {
-            'work_days': self.get_work_days(),
-            'max_meetings_per_day': self.get_int_setting('max_meetings_per_day', 1),
-            'max_weekly_meetings': self.get_int_setting('max_weekly_meetings', 3),
-            'max_third_week_meetings': self.get_int_setting('max_third_week_meetings', 4)
-        }
+        """Return parsed constraint settings for the scheduling system using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = SettingsRepository(session)
+            constraints = repo.get_constraint_settings()
+            constraints['work_days'] = repo.get_work_days()
+            return constraints
     
     def is_editing_allowed(self, user_role: str) -> bool:
         """Check if editing is allowed for user role"""
@@ -2555,241 +1092,102 @@ class DatabaseManager:
     
     # Soft Delete Functions (Alternative to hard delete)
     def deactivate_hativa(self, hativa_id: int) -> bool:
-        """Deactivate division instead of deleting"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('UPDATE hativot SET is_active = 0 WHERE hativa_id = ?', (hativa_id,))
-            conn.commit()
-            conn.close()
-            return True
-        except Exception:
-            return False
+        """Deactivate division using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = HativaRepository(session)
+            return repo.deactivate(hativa_id)
     
     def activate_hativa(self, hativa_id: int) -> bool:
-        """Reactivate division"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('UPDATE hativot SET is_active = 1 WHERE hativa_id = ?', (hativa_id,))
-            conn.commit()
-            conn.close()
-            return True
-        except Exception:
-            return False
+        """Reactivate division using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = HativaRepository(session)
+            return repo.activate(hativa_id)
     
-    def can_delete_hativa(self, hativa_id: int) -> tuple:
+    def can_delete_hativa(self, hativa_id: int) -> Tuple[bool, str, Dict[str, int]]:
         """
-        Check if a hativa can be deleted (only if it has no events, vaadot, maslulim, committee_types, or users)
+        Check if a hativa can be deleted using SQLAlchemy.
         Returns: (can_delete, reason, counts)
         """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        counts = {}
-        
-        # Check for vaadot (committee meetings)
-        cursor.execute('''
-            SELECT COUNT(*) FROM vaadot 
-            WHERE hativa_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)
-        ''', (hativa_id,))
-        counts['vaadot'] = cursor.fetchone()[0]
-        
-        # Check for maslulim (routes)
-        cursor.execute('SELECT COUNT(*) FROM maslulim WHERE hativa_id = ?', (hativa_id,))
-        counts['maslulim'] = cursor.fetchone()[0]
-        
-        # Check for events through maslulim
-        cursor.execute('''
-            SELECT COUNT(*) FROM events e
-            JOIN maslulim m ON e.maslul_id = m.maslul_id
-            WHERE m.hativa_id = ? AND (e.is_deleted = 0 OR e.is_deleted IS NULL)
-        ''', (hativa_id,))
-        counts['events'] = cursor.fetchone()[0]
-        
-        # Check for committee_types
-        cursor.execute('SELECT COUNT(*) FROM committee_types WHERE hativa_id = ?', (hativa_id,))
-        counts['committee_types'] = cursor.fetchone()[0]
-        
-        # Check for users assigned to this hativa
-        cursor.execute('SELECT COUNT(*) FROM user_hativot WHERE hativa_id = ?', (hativa_id,))
-        counts['users'] = cursor.fetchone()[0]
-        
-        conn.close()
-        
-        # Build reason message if can't delete
-        blocking_items = []
-        if counts['events'] > 0:
-            blocking_items.append(f"{counts['events']} אירועים")
-        if counts['vaadot'] > 0:
-            blocking_items.append(f"{counts['vaadot']} ועדות")
-        if counts['maslulim'] > 0:
-            blocking_items.append(f"{counts['maslulim']} מסלולים")
-        if counts['committee_types'] > 0:
-            blocking_items.append(f"{counts['committee_types']} סוגי ועדות")
-        if counts['users'] > 0:
-            blocking_items.append(f"{counts['users']} משתמשים משויכים")
-        
-        if blocking_items:
-            return False, f"לא ניתן למחוק את החטיבה. קיימים: {', '.join(blocking_items)}", counts
-        
-        return True, "ניתן למחוק את החטיבה", counts
+        with get_db_session() as session:
+            repo = HativaRepository(session)
+            can_del, reason, counts = repo.can_delete(hativa_id)
+            
+            if not can_del:
+                # Localize reason message to Hebrew to match original behavior
+                blocking_items = []
+                if counts.get('events', 0) > 0:
+                    blocking_items.append(f"{counts['events']} אירועים")
+                if counts.get('vaadot', 0) > 0:
+                    blocking_items.append(f"{counts['vaadot']} ועדות")
+                if counts.get('maslulim', 0) > 0:
+                    blocking_items.append(f"{counts['maslulim']} מסלולים")
+                if counts.get('committee_types', 0) > 0:
+                    blocking_items.append(f"{counts['committee_types']} סוגי ועדות")
+                if counts.get('users', 0) > 0:
+                    blocking_items.append(f"{counts['users']} משתמשים משויכים")
+                
+                reason = f"לא ניתן למחוק את החטיבה. קיימים: {', '.join(blocking_items)}"
+                return False, reason, counts
+            
+            return True, "ניתן למחוק את החטיבה", counts
     
-    def delete_hativa(self, hativa_id: int) -> tuple:
-        """
-        Permanently delete a hativa (only if it has no related data)
-        Returns: (success, message)
-        """
-        # First check if can delete
-        can_delete, reason, counts = self.can_delete_hativa(hativa_id)
-        if not can_delete:
-            return False, reason
-        
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            # Get hativa name for the message
-            cursor.execute('SELECT name FROM hativot WHERE hativa_id = ?', (hativa_id,))
-            row = cursor.fetchone()
-            if not row:
-                conn.close()
-                return False, "החטיבה לא נמצאה"
-            
-            hativa_name = row[0]
-            
-            # Delete allowed days constraints
-            cursor.execute('DELETE FROM hativa_day_constraints WHERE hativa_id = ?', (hativa_id,))
-            
-            # Delete the hativa
-            cursor.execute('DELETE FROM hativot WHERE hativa_id = ?', (hativa_id,))
-            
-            conn.commit()
-            conn.close()
-            
-            return True, f"החטיבה '{hativa_name}' נמחקה בהצלחה"
-        except Exception as e:
-            return False, f"שגיאה במחיקת החטיבה: {str(e)}"
+    def delete_hativa(self, hativa_id: int) -> Tuple[bool, str]:
+        """Permanently delete a hativa using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = HativaRepository(session)
+            success, reason = repo.hard_delete(hativa_id)
+            if success:
+                # Build success message in Hebrew
+                return True, reason.replace("Division deleted successfully", f"החטיבה נמחקה בהצלחה")
+            else:
+                return False, f"שגיאה במחיקת החטיבה: {reason}"
     
     def deactivate_maslul(self, maslul_id: int) -> bool:
-        """Deactivate route instead of deleting"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('UPDATE maslulim SET is_active = 0 WHERE maslul_id = ?', (maslul_id,))
-            conn.commit()
-            conn.close()
-            return True
-        except Exception:
-            return False
+        """Deactivate route using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = MaslulRepository(session)
+            return repo.deactivate(maslul_id)
     
     def activate_maslul(self, maslul_id: int) -> bool:
-        """Reactivate route"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('UPDATE maslulim SET is_active = 1 WHERE maslul_id = ?', (maslul_id,))
-            conn.commit()
-            conn.close()
-            return True
-        except Exception:
-            return False
+        """Reactivate route using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = MaslulRepository(session)
+            return repo.activate(maslul_id)
     
     def deactivate_committee_type(self, committee_type_id: int) -> bool:
-        """Deactivate committee type instead of deleting"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('UPDATE committee_types SET is_active = 0 WHERE committee_type_id = ?', (committee_type_id,))
-            conn.commit()
-            conn.close()
-            return True
-        except Exception:
-            return False
+        """Deactivate committee type using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CommitteeTypeRepository(session)
+            return repo.deactivate(committee_type_id)
     
     def activate_committee_type(self, committee_type_id: int) -> bool:
-        """Reactivate committee type"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('UPDATE committee_types SET is_active = 1 WHERE committee_type_id = ?', (committee_type_id,))
-            conn.commit()
-            conn.close()
-            return True
-        except Exception:
-            return False
+        """Reactivate committee type using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CommitteeTypeRepository(session)
+            return repo.activate(committee_type_id)
     
     # Updated get functions to filter by active status
     def get_hativot_active_only(self) -> List[Dict]:
-        """Get only active divisions"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT hativa_id, name, description, color, is_active, created_at FROM hativot WHERE is_active = 1 ORDER BY name')
-        rows = cursor.fetchall()
-        conn.close()
-        return [{'hativa_id': row[0], 'name': row[1], 'description': row[2], 'color': row[3],
-                'is_active': row[4], 'created_at': row[5]} for row in rows]
+        """Get only active divisions using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = HativaRepository(session)
+            hativot = repo.get_active_only()
+            return [{'hativa_id': h.hativa_id, 'name': h.name, 'description': h.description,
+                    'color': h.color, 'is_active': h.is_active, 'created_at': h.created_at} for h in hativot]
     
     def get_maslulim_active_only(self, hativa_id: Optional[int] = None) -> List[Dict]:
-        """Get only active routes"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        if hativa_id:
-            cursor.execute('''
-                SELECT m.*, h.name as hativa_name 
-                FROM maslulim m 
-                JOIN hativot h ON m.hativa_id = h.hativa_id 
-                WHERE m.hativa_id = ? AND m.is_active = 1 AND h.is_active = 1
-                ORDER BY m.name
-            ''', (hativa_id,))
-        else:
-            cursor.execute('''
-                SELECT m.*, h.name as hativa_name 
-                FROM maslulim m 
-                JOIN hativot h ON m.hativa_id = h.hativa_id 
-                WHERE m.is_active = 1 AND h.is_active = 1
-                ORDER BY h.name, m.name
-            ''')
-        
-        rows = cursor.fetchall()
-        conn.close()
-        return [{'maslul_id': row[0], 'hativa_id': row[1], 'name': row[2], 
-                'description': row[3], 'created_at': row[4], 'is_active': row[5], 
-                'sla_days': row[6] if len(row) > 6 else 45,
-                'stage_a_days': row[7] if len(row) > 7 else 10,
-                'stage_b_days': row[8] if len(row) > 8 else 15,
-                'stage_c_days': row[9] if len(row) > 9 else 10,
-                'stage_d_days': row[10] if len(row) > 10 else 10,
-                'hativa_name': row[11] if len(row) > 11 else 'לא ידוע'} for row in rows]
+        """Get only active routes using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = MaslulRepository(session)
+            maslulim = repo.get_active_only(hativa_id=hativa_id)
+            return [m.to_dict() for m in maslulim]
     
     def get_committee_types_active_only(self, hativa_id: Optional[int] = None) -> List[Dict]:
-        """Get only active committee types"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        if hativa_id:
-            cursor.execute('''
-                SELECT ct.*, h.name as hativa_name 
-                FROM committee_types ct 
-                JOIN hativot h ON ct.hativa_id = h.hativa_id 
-                WHERE ct.hativa_id = ? AND ct.is_active = 1 AND h.is_active = 1
-                ORDER BY ct.name
-            ''', (hativa_id,))
-        else:
-            cursor.execute('''
-                SELECT ct.*, h.name as hativa_name 
-                FROM committee_types ct 
-                JOIN hativot h ON ct.hativa_id = h.hativa_id 
-                WHERE ct.is_active = 1 AND h.is_active = 1
-                ORDER BY h.name, ct.name
-            ''')
-        
-        rows = cursor.fetchall()
-        conn.close()
-        return [{'committee_type_id': row[0], 'hativa_id': row[1], 'name': row[2], 
-                'scheduled_day': row[3], 'frequency': row[4], 'week_of_month': row[5],
-                'is_active': row[6], 'created_at': row[7], 'hativa_name': row[8]} for row in rows]
+        """Get only active committee types using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CommitteeTypeRepository(session)
+            cts = repo.get_active_only(hativa_id=hativa_id)
+            return [ct.to_dict() for ct in cts]
     
     # Enhanced Business Days and SLA Calculations
     def get_work_days(self) -> List[int]:
@@ -2798,37 +1196,18 @@ class DatabaseManager:
         return [int(day) for day in work_days_str.split(',')]
 
     def get_meetings_count_on_date(self, vaada_date: Any) -> int:
-        """Get the number of meetings scheduled for a specific date"""
+        """Get the number of meetings scheduled for a specific date using SQLAlchemy"""
         if isinstance(vaada_date, str):
             vaada_date = datetime.strptime(vaada_date, '%Y-%m-%d').date()
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT COUNT(*) 
-            FROM vaadot v
-            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-            WHERE v.vaada_date = ? AND COALESCE(ct.is_operational, 0) = 0
-              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-        ''', (vaada_date,))
-        count = cursor.fetchone()[0]
-        conn.close()
-        return count
+        with get_db_session() as session:
+            repo = VaadaRepository(session)
+            return repo.count_meetings_on_date(vaada_date, is_operational=False)
 
     def get_meetings_count_in_range(self, start_date: date, end_date: date) -> int:
-        """Get number of meetings in an inclusive date range"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT COUNT(*) 
-            FROM vaadot v
-            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-            WHERE v.vaada_date BETWEEN ? AND ?
-              AND COALESCE(ct.is_operational, 0) = 0
-              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-        ''', (start_date, end_date))
-        count = cursor.fetchone()[0]
-        conn.close()
-        return count
+        """Get number of meetings in an inclusive date range using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = VaadaRepository(session)
+            return repo.count_in_range(start_date, end_date, is_operational=False)
     
     def is_work_day(self, check_date: date) -> bool:
         """Check if date is a work day (not weekend, not holiday, configured work days)"""
@@ -2877,86 +1256,20 @@ class DatabaseManager:
         return current_date
     
     def get_total_requests_on_date(self, check_date, exclude_event_id: Optional[int] = None) -> int:
-        """Get total expected requests across all events on a specific date (committee date)"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # המר לאובייקט date אם צריך
+        """Get total expected requests across all events on a specific date using SQLAlchemy"""
         if isinstance(check_date, str):
             check_date = datetime.strptime(check_date, '%Y-%m-%d').date()
-        
-        query = '''
-            SELECT COALESCE(SUM(e.expected_requests), 0)
-            FROM events e
-            JOIN vaadot v ON e.vaadot_id = v.vaadot_id
-            WHERE v.vaada_date = ?
-              AND (e.is_deleted = 0 OR e.is_deleted IS NULL)
-              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-        '''
-        params = [check_date]
-        
-        if exclude_event_id is not None:
-            query += ' AND e.event_id != ?'
-            params.append(exclude_event_id)
-        
-        cursor.execute(query, params)
-        total = cursor.fetchone()[0]
-        conn.close()
-        
-        return total if total else 0
+        with get_db_session() as session:
+            repo = EventRepository(session)
+            return repo.get_total_requests_on_date(check_date, exclude_event_id=exclude_event_id)
     
     def get_total_requests_on_derived_date(self, check_date, date_type: str, exclude_event_id: Optional[int] = None) -> int:
-        """
-        Get total expected requests for a specific derived date
-        
-        Args:
-            check_date: The date to check
-            date_type: One of 'call_deadline', 'intake_deadline', 'review_deadline', 'response_deadline'
-            exclude_event_id: Optional event ID to exclude from the count
-            
-        Returns:
-            Total expected requests on that date
-        """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # המר לאובייקט date אם צריך
+        """Get total expected requests for a specific derived date using SQLAlchemy"""
         if isinstance(check_date, str):
             check_date = datetime.strptime(check_date, '%Y-%m-%d').date()
-        
-        # Map date_type to column name
-        column_map = {
-            'call_deadline': 'call_deadline_date',
-            'intake_deadline': 'intake_deadline_date',
-            'review_deadline': 'review_deadline_date',
-            'response_deadline': 'response_deadline_date'
-        }
-        
-        if date_type not in column_map:
-            conn.close()
-            raise ValueError(f'Invalid date_type: {date_type}')
-        
-        column_name = column_map[date_type]
-        
-        query = f'''
-            SELECT COALESCE(SUM(e.expected_requests), 0)
-            FROM events e
-            JOIN vaadot v ON e.vaadot_id = v.vaadot_id
-            WHERE e.{column_name} = ? 
-              AND (e.is_deleted = 0 OR e.is_deleted IS NULL)
-              AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-        '''
-        params = [check_date]
-        
-        if exclude_event_id is not None:
-            query += ' AND e.event_id != ?'
-            params.append(exclude_event_id)
-        
-        cursor.execute(query, params)
-        total = cursor.fetchone()[0]
-        conn.close()
-        
-        return total if total else 0
+        with get_db_session() as session:
+            repo = EventRepository(session)
+            return repo.get_total_requests_on_derived_date(check_date, date_type, exclude_event_id=exclude_event_id)
     
     def check_derived_dates_constraints(self, stage_dates: Dict, expected_requests: int, 
                                        exclude_event_id: Optional[int] = None, user_role: Optional[str] = None) -> Optional[str]:
@@ -3028,186 +1341,62 @@ class DatabaseManager:
         return sla_dates
     
     def get_all_events(self, include_deleted: bool = False) -> List[Dict]:
-        """Get all events with extended information including committee types and divisions"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        where_clause = '' if include_deleted else 'WHERE (e.is_deleted = 0 OR e.is_deleted IS NULL) AND (v.is_deleted = 0 OR v.is_deleted IS NULL)'
-
-        cursor.execute(f'''
-            SELECT e.event_id, e.vaadot_id, e.maslul_id, e.name, e.event_type,
-                   e.expected_requests, e.actual_submissions, e.call_publication_date,
-                   e.call_deadline_date, e.intake_deadline_date, e.review_deadline_date,
-                   e.response_deadline_date, e.is_call_deadline_manual, e.created_at,
-                   m.name as maslul_name, m.hativa_id as maslul_hativa_id, m.sla_days,
-                   v.vaada_date,
-                   ct.name as committee_name, ct.committee_type_id,
-                   h.name as hativa_name, h.color as hativa_color,
-                   ht.name as committee_type_name
-            FROM events e
-            JOIN maslulim m ON e.maslul_id = m.maslul_id
-            JOIN vaadot v ON e.vaadot_id = v.vaadot_id
-            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-            JOIN hativot h ON m.hativa_id = h.hativa_id
-            JOIN hativot ht ON ct.hativa_id = ht.hativa_id
-            {where_clause}
-            ORDER BY v.vaada_date DESC, e.created_at DESC
-        ''')
-
-        rows = cursor.fetchall()
-        conn.close()
-
-        return [{
-            'event_id': row[0],
-            'vaadot_id': row[1],
-            'maslul_id': row[2],
-            'name': row[3],
-            'event_type': row[4],
-            'expected_requests': row[5],
-            'actual_submissions': row[6],
-            'call_publication_date': row[7],
-            'call_deadline_date': row[8],
-            'intake_deadline_date': row[9],
-            'review_deadline_date': row[10],
-            'response_deadline_date': row[11],
-            'is_call_deadline_manual': row[12],
-            'created_at': row[13],
-            'maslul_name': row[14],
-            'maslul_hativa_id': row[15],
-            'sla_days': row[16],
-            'vaada_date': row[17],
-            'committee_name': row[18],
-            'committee_type_id': row[19],
-            'hativa_name': row[20],
-            'hativa_color': row[21],
-            'committee_type_name': row[22]
-        } for row in rows]
+        """Get all events using SQLAlchemy with extended information"""
+        with get_db_session() as session:
+            repo = EventRepository(session)
+            events = repo.get_all(include_deleted=include_deleted)
+            
+            result = []
+            for e in events:
+                d = e.to_dict()
+                # Manual corrections for backward compatibility with specific keys
+                d['maslul_hativa_id'] = e.maslul.hativa_id if e.maslul else None
+                d['sla_days'] = e.maslul.sla_days if e.maslul else 45
+                d['committee_type_id'] = e.vaada.committee_type_id if e.vaada else None
+                result.append(d)
+            
+            # Sort as in original SQL: ORDER BY v.vaada_date DESC, e.created_at DESC
+            result.sort(key=lambda x: (str(x.get('vaada_date') or ''), str(x.get('created_at') or '')), reverse=True)
+            return result
 
     def get_event_by_id(self, event_id: int) -> Optional[Dict]:
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT e.*, m.name as maslul_name, m.hativa_id,
-                       v.vaada_date, ct.name as committee_name, h.name as hativa_name
-                FROM events e
-                JOIN maslulim m ON e.maslul_id = m.maslul_id
-                JOIN vaadot v ON e.vaadot_id = v.vaadot_id
-                JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-                JOIN hativot h ON m.hativa_id = h.hativa_id
-                WHERE e.event_id = ?
-                  AND (e.is_deleted = 0 OR e.is_deleted IS NULL)
-                  AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-            """, (event_id,))
-
-            row = cursor.fetchone()
-            conn.close()
-
-            if row:
-                return {
-                    'event_id': row[0],
-                    'vaadot_id': row[1],
-                    'maslul_id': row[2],
-                    'name': row[3],
-                    'event_type': row[4],
-                    'expected_requests': row[5],
-                    'scheduled_date': row[6],
-                    'status': row[7],
-                    'created_at': row[8],
-                    'maslul_name': row[9],
-                    'hativa_id': row[10],
-                    'vaada_date': row[11],
-                    'committee_name': row[12],
-                    'hativa_name': row[13]
-                }
-            return None
-        except Exception as e:
-            print(f"Error getting event by ID: {e}")
-            if 'conn' in locals():
-                conn.close()
+        """Get event by ID using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = EventRepository(session)
+            event = repo.get_by_id(event_id)
+            if event:
+                d = event.to_dict()
+                # Maintain backward compatibility with specific keys
+                d['hativa_id'] = event.maslul.hativa_id if event.maslul else None
+                return d
             return None
     
     def get_vaada_by_id(self, vaada_id: int) -> Optional[Dict]:
-        """Get committee meeting by ID"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT
-                    v.vaadot_id, v.committee_type_id, v.hativa_id, v.vaada_date,
-                    v.exception_date_id, v.notes, v.created_at,
-                    ct.name as committee_name, h.name as hativa_name,
-                    v.start_time, v.end_time
-                FROM vaadot v
-                JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-                JOIN hativot h ON v.hativa_id = h.hativa_id
-                WHERE v.vaadot_id = ?
-                  AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-            """, (vaada_id,))
-
-            row = cursor.fetchone()
-            conn.close()
-
-            if row:
-                return {
-                    'vaadot_id': row[0],
-                    'committee_type_id': row[1],
-                    'hativa_id': row[2],
-                    'vaada_date': row[3],
-                    'exception_date_id': row[4],
-                    'notes': row[5],
-                    'created_at': row[6],
-                    'committee_name': row[7],
-                    'hativa_name': row[8],
-                    'start_time': row[9],
-                    'end_time': row[10]
-                }
-            return None
-        except Exception as e:
-            print(f"Error getting vaada by ID: {e}")
-            if 'conn' in locals():
-                conn.close()
+        """Get committee meeting by ID using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = VaadaRepository(session)
+            vaada = repo.get_by_id(vaada_id)
+            if vaada:
+                d = vaada.to_dict()
+                d['committee_name'] = vaada.committee_type.name
+                d['hativa_name'] = vaada.hativa.name
+                return d
             return None
     
     def get_maslul_by_id(self, maslul_id: int) -> Optional[Dict]:
-        """Get route by ID"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT m.maslul_id, m.hativa_id, m.name, m.description, m.created_at, 
-                       m.is_active, m.sla_days, m.stage_a_days, m.stage_b_days, 
-                       m.stage_c_days, m.stage_d_days, h.name as hativa_name
-                FROM maslulim m
-                JOIN hativot h ON m.hativa_id = h.hativa_id
-                WHERE m.maslul_id = ?
-            """, (maslul_id,))
-            
-            row = cursor.fetchone()
-            conn.close()
-            
-            if row:
-                return {
-                    'maslul_id': row[0],
-                    'hativa_id': row[1],
-                    'name': row[2],
-                    'description': row[3],
-                    'created_at': row[4],
-                    'is_active': row[5],
-                    'sla_days': row[6] if row[6] is not None else 45,
-                    'stage_a_days': row[7] if row[7] is not None else 10,
-                    'stage_b_days': row[8] if row[8] is not None else 15,
-                    'stage_c_days': row[9] if row[9] is not None else 10,
-                    'stage_d_days': row[10] if row[10] is not None else 10,
-                    'hativa_name': row[11]
-                }
-            return None
-        except Exception as e:
-            print(f"Error getting maslul by ID: {e}")
-            import traceback
-            traceback.print_exc()
-            if 'conn' in locals():
-                conn.close()
+        """Get route by ID using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = MaslulRepository(session)
+            maslul = repo.get_by_id(maslul_id)
+            if maslul:
+                d = maslul.to_dict()
+                # Maintain backward compatibility with default values if None
+                if d.get('sla_days') is None: d['sla_days'] = 45
+                if d.get('stage_a_days') is None: d['stage_a_days'] = 10
+                if d.get('stage_b_days') is None: d['stage_b_days'] = 15
+                if d.get('stage_c_days') is None: d['stage_c_days'] = 10
+                if d.get('stage_d_days') is None: d['stage_d_days'] = 10
+                return d
             return None
     
     # Audit Log Methods
@@ -3216,22 +1405,16 @@ class DatabaseManager:
                      entity_name: Optional[str] = None, details: Optional[str] = None,
                      ip_address: Optional[str] = None, user_agent: Optional[str] = None,
                      status: str = 'success', error_message: Optional[str] = None) -> int:
-        """Add an audit log entry"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        timestamp = datetime.now(ISRAEL_TZ).strftime('%Y-%m-%d %H:%M:%S')
-
-        cursor.execute('''
-            INSERT INTO audit_logs 
-            (timestamp, user_id, username, action, entity_type, entity_id, entity_name, details, 
-             ip_address, user_agent, status, error_message)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (timestamp, user_id, username, action, entity_type, entity_id, entity_name, details,
-              ip_address, user_agent, status, error_message))
-        log_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return log_id
+        """Add an audit log entry using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = AuditLogRepository(session)
+            return repo.log(
+                user_id=user_id, username=username, action=action, 
+                entity_type=entity_type, entity_id=entity_id, 
+                entity_name=entity_name, details=details,
+                ip_address=ip_address, user_agent=user_agent,
+                status=status, error_message=error_message
+            )
     
     def get_audit_logs(self, limit: int = 100, offset: int = 0,
                        user_id: Optional[int] = None,
@@ -3240,977 +1423,282 @@ class DatabaseManager:
                        search_text: Optional[str] = None,
                        start_date: Optional[date] = None,
                        end_date: Optional[date] = None) -> List[Dict]:
-        """Get audit logs with optional filters"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        query = '''
-            SELECT log_id, timestamp, user_id, username, action, entity_type, 
-                   entity_id, entity_name, details, ip_address, user_agent, status, error_message
-            FROM audit_logs
-            WHERE 1=1
-        '''
-        params = []
-        
-        if user_id:
-            query += ' AND user_id = ?'
-            params.append(user_id)
-        
-        if entity_type:
-            query += ' AND entity_type = ?'
-            params.append(entity_type)
-
-        if action:
-            query += ' AND action = ?'
-            params.append(action)
-
-        if search_text:
-            query += ' AND (entity_name LIKE ? OR details LIKE ? OR entity_type LIKE ?)'
-            search_pattern = f'%{search_text}%'
-            params.extend([search_pattern, search_pattern, search_pattern])
-
-        if start_date:
-            query += ' AND DATE(timestamp) >= ?'
-            params.append(start_date)
-
-        if end_date:
-            query += ' AND DATE(timestamp) <= ?'
-            params.append(end_date)
-
-        query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?'
-        params.extend([limit, offset])
-        
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [{
-            'log_id': row[0],
-            'timestamp': row[1],
-            'user_id': row[2],
-            'username': row[3],
-            'action': row[4],
-            'entity_type': row[5],
-            'entity_id': row[6],
-            'entity_name': row[7],
-            'details': row[8],
-            'ip_address': row[9],
-            'user_agent': row[10],
-            'status': row[11],
-            'error_message': row[12]
-        } for row in rows]
+        """Get audit logs using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = AuditLogRepository(session)
+            logs = repo.get_logs(
+                limit=limit, offset=offset, user_id=user_id,
+                entity_type=entity_type, action=action,
+                search_text=search_text, start_date=start_date, end_date=end_date
+            )
+            return [log.to_dict() for log in logs]
     
     def get_audit_logs_count(self, user_id: Optional[int] = None,
-                            entity_type: Optional[str] = None,
-                            action: Optional[str] = None,
-                            search_text: Optional[str] = None,
-                            start_date: Optional[date] = None,
-                            end_date: Optional[date] = None) -> int:
-        """Get total count of audit logs matching filters"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        query = 'SELECT COUNT(*) FROM audit_logs WHERE 1=1'
-        params = []
-
-        if user_id:
-            query += ' AND user_id = ?'
-            params.append(user_id)
-
-        if entity_type:
-            query += ' AND entity_type = ?'
-            params.append(entity_type)
-
-        if action:
-            query += ' AND action = ?'
-            params.append(action)
-
-        if search_text:
-            query += ' AND (entity_name LIKE ? OR details LIKE ? OR entity_type LIKE ?)'
-            search_pattern = f'%{search_text}%'
-            params.extend([search_pattern, search_pattern, search_pattern])
-
-        if start_date:
-            query += ' AND DATE(timestamp) >= ?'
-            params.append(start_date)
-
-        if end_date:
-            query += ' AND DATE(timestamp) <= ?'
-            params.append(end_date)
-        
-        cursor.execute(query, params)
-        count = cursor.fetchone()[0]
-        conn.close()
-        return count
+                             entity_type: Optional[str] = None,
+                             action: Optional[str] = None,
+                             search_text: Optional[str] = None,
+                             start_date: Optional[date] = None,
+                             end_date: Optional[date] = None) -> int:
+        """Get total count of audit logs using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = AuditLogRepository(session)
+            return repo.get_logs_count(
+                user_id=user_id, entity_type=entity_type, action=action,
+                search_text=search_text, start_date=start_date, end_date=end_date
+            )
     
     def get_audit_statistics(self) -> Dict:
-        """Get audit log statistics"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Total logs
-        cursor.execute('SELECT COUNT(*) FROM audit_logs')
-        total_logs = cursor.fetchone()[0]
-        
-        # Logs by action
-        cursor.execute('''
-            SELECT action, COUNT(*) as count 
-            FROM audit_logs 
-            GROUP BY action 
-            ORDER BY count DESC 
-            LIMIT 10
-        ''')
-        actions = [{'action': row[0], 'count': row[1]} for row in cursor.fetchall()]
-        
-        # Logs by entity type
-        cursor.execute('''
-            SELECT entity_type, COUNT(*) as count 
-            FROM audit_logs 
-            GROUP BY entity_type 
-            ORDER BY count DESC
-        ''')
-        entities = [{'entity_type': row[0], 'count': row[1]} for row in cursor.fetchall()]
-        
-        # Recent activity (last 24 hours)
-        if self.db_type == 'postgres':
-            cursor.execute('''
-                SELECT COUNT(*) 
-                FROM audit_logs 
-                WHERE timestamp >= NOW() - INTERVAL '1 day'
-            ''')
-        else:
-            cursor.execute('''
-                SELECT COUNT(*) 
-                FROM audit_logs 
-                WHERE timestamp >= datetime('now', '-1 day')
-            ''')
-        last_24h = cursor.fetchone()[0]
-        
-        # Failed operations
-        cursor.execute('''
-            SELECT COUNT(*) 
-            FROM audit_logs 
-            WHERE status = 'error'
-        ''')
-        failed_ops = cursor.fetchone()[0]
-        
-        # Most active users
-        cursor.execute('''
-            SELECT username, COUNT(*) as count 
-            FROM audit_logs 
-            WHERE username IS NOT NULL
-            GROUP BY username 
-            ORDER BY count DESC 
-            LIMIT 5
-        ''')
-        active_users = [{'username': row[0], 'count': row[1]} for row in cursor.fetchall()]
-        
-        conn.close()
-        
-        return {
-            'total_logs': total_logs,
-            'actions': actions,
-            'entities': entities,
-            'last_24h': last_24h,
-            'failed_ops': failed_ops,
-            'active_users': active_users
-        }
+        """Get audit statistics using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = AuditLogRepository(session)
+            return repo.get_statistics()
     
     def update_event_vaada(self, event_id: int, new_vaada_id: int, user_role: Optional[str] = None) -> bool:
-        """Update event's committee meeting with max requests constraint validation on all dates"""
-        conn = None
-        try:
-            # Get max requests setting for committee date (before opening connection)
-            max_requests_committee = int(self.get_system_setting('max_requests_committee_date') or '100')
+        """Update event's committee meeting using SQLAlchemy with constraint validation"""
+        with get_db_session() as session:
+            event_repo = EventRepository(session)
+            vaada_repo = VaadaRepository(session)
+            settings_repo = SettingsRepository(session)
+            exception_repo = ExceptionDateRepository(session)
             
-            conn = self.get_connection()
-            cursor = conn.cursor()
+            # 1. Fetch Event and Target Vaada
+            event = event_repo.get_by_id(event_id)
+            target_vaada = vaada_repo.get_by_id(new_vaada_id)
             
-            # Get event's current expected_requests, maslul_id and source vaada
-            cursor.execute("""
-                SELECT e.expected_requests, e.vaadot_id, v.vaada_date, e.maslul_id
-                FROM events e
-                JOIN vaadot v ON e.vaadot_id = v.vaadot_id
-                WHERE e.event_id = ?
-                  AND (e.is_deleted = 0 OR e.is_deleted IS NULL)
-                  AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-            """, (event_id,))
-            
-            event_data = cursor.fetchone()
-            if not event_data:
-                conn.close()
-                raise ValueError("האירוע לא נמצא במערכת")
-            
-            expected_requests = event_data[0]
-            source_vaada_id = event_data[1]
-            maslul_id = event_data[3]
-            
-            # Get target committee date and maslul stage durations
-            cursor.execute("""
-                SELECT v.vaada_date, m.stage_a_days, m.stage_b_days, m.stage_c_days, m.stage_d_days
-                FROM vaadot v
-                JOIN maslulim m ON m.maslul_id = ?
-                WHERE v.vaadot_id = ?
-                  AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-            """, (maslul_id, new_vaada_id))
-            target_data = cursor.fetchone()
-            if not target_data:
-                conn.close()
-                raise ValueError("הועדה היעד לא נמצאה במערכת")
-            
-            target_vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days = target_data
-            
-            # Close connection before calling constraint check functions (which open their own connections)
-            conn.close()
-            conn = None
-            
-            # Check max requests per day constraint for target committee date (excluding this event, skip for admins)
-            if user_role != 'admin':
-                current_total_requests = self.get_total_requests_on_date(target_vaada_date, exclude_event_id=event_id)
-                new_total_requests = current_total_requests + expected_requests
+            if not event or not target_vaada:
+                raise ValueError("האירוע או הועדה לא נמצאו במערכת")
                 
-                if new_total_requests > max_requests_committee:
-                    raise ValueError(f'חריגה מאילוץ מקסימום בקשות ביום ועדה: התאריך {target_vaada_date} כבר מכיל {current_total_requests} בקשות צפויות. העברת אירוע זה עם {expected_requests} בקשות תגרום לסך של {new_total_requests} (המגבלה היא {max_requests_committee})')
+            # 2. Check max requests constraint for target committee date (excluding this event, skip for admins)
+            if user_role != 'admin':
+                max_req = settings_repo.get_int_setting('max_requests_committee_date', 100)
+                current_total = event_repo.get_total_requests_on_date(target_vaada.vaada_date, exclude_event_id=event_id)
+                if current_total + event.expected_requests > max_req:
+                    raise ValueError(f'חריגה מאילוץ מקסימום בקשות ביום ועדה: התאריך {target_vaada.vaada_date} כבר מכיל {current_total} בקשות צפויות. העברת אירוע זה עם {event.expected_requests} בקשות תגרום לסך של {current_total + event.expected_requests} (המגבלה היא {max_req})')
             
-            # Calculate derived dates for the target committee
-            stage_dates = self.calculate_stage_dates(target_vaada_date, stage_a_days, stage_b_days, stage_c_days, stage_d_days)
+            # 3. Calculate derived dates for the target committee
+            work_days = settings_repo.get_work_days()
+            maslul = event.maslul
+            stage_dates = event_repo.calculate_stage_dates(
+                target_vaada.vaada_date,
+                maslul.stage_a_days, maslul.stage_b_days, maslul.stage_c_days, maslul.stage_d_days,
+                lambda d: exception_repo.is_work_day(d, work_days)
+            )
             
-            # Check max requests per day constraint on derived dates (excluding this event)
-            derived_constraint_error = self.check_derived_dates_constraints(stage_dates, expected_requests, exclude_event_id=event_id, user_role=user_role)
-            if derived_constraint_error:
-                raise ValueError(derived_constraint_error)
+            # 4. Check derived constraints
+            derived_error = event_repo.check_derived_dates_constraints(stage_dates, event.expected_requests, exclude_event_id=event_id, user_role=user_role)
+            if derived_error:
+                raise ValueError(derived_error)
             
-            # Open new connection for the update
-            conn = self.get_connection()
-            cursor = conn.cursor()
+            # 5. Apply Update
+            event.vaadot_id = new_vaada_id
+            event.call_deadline_date = stage_dates['call_deadline_date']
+            event.intake_deadline_date = stage_dates['intake_deadline_date']
+            event.review_deadline_date = stage_dates['review_deadline_date']
+            event.response_deadline_date = stage_dates['response_deadline_date']
             
-            # Update event's committee meeting and derived dates
-            cursor.execute("""
-                UPDATE events 
-                SET vaadot_id = ?,
-                    call_deadline_date = ?,
-                    intake_deadline_date = ?,
-                    review_deadline_date = ?,
-                    response_deadline_date = ?
-                WHERE event_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)
-            """, (new_vaada_id, 
-                  stage_dates['call_deadline_date'], 
-                  stage_dates['intake_deadline_date'],
-                  stage_dates['review_deadline_date'], 
-                  stage_dates['response_deadline_date'], 
-                  event_id))
-            
-            success = cursor.rowcount > 0
-            conn.commit()
-            conn.close()
-            return success
-            
-        except ValueError:
-            if conn:
-                conn.rollback()
-                conn.close()
-            raise
-        except Exception as e:
-            print(f"Error updating event vaada: {e}")
-            if conn:
-                conn.rollback()
-                conn.close()
-            return False
+            session.flush()
+            return True
     
     # Active Directory User Management Methods
     def create_ad_user(self, username: str, email: str, full_name: str, 
                       role: str = 'viewer', hativa_id: Optional[int] = None,
                       ad_dn: str = '', profile_picture: bytes = None) -> int:
-        """
-        Create a new AD user (no password required)
-        
-        Args:
-            username: AD username (sAMAccountName)
-            email: User email
-            full_name: User's full display name
-            role: User role
-            hativa_id: Division ID
-            ad_dn: Active Directory Distinguished Name
-            
-        Returns:
-            User ID
-        """
+        """Create a new AD user using SQLAlchemy"""
         import time
-        
-        # Retry logic for database locked errors
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                conn = self.get_connection()
-                cursor = conn.cursor()
-                # Azure AD users don't use password authentication, but DB requires a value
-                # Use a placeholder that cannot be used for login
-                dummy_password = 'AZURE_AD_NO_PASSWORD_AUTH'
-                cursor.execute('''
-                    INSERT INTO users (username, email, password_hash, full_name, role, auth_source, ad_dn, profile_picture)
-                    VALUES (?, ?, ?, ?, ?, 'ad', ?, ?)
-                ''', (username, email, dummy_password, full_name, role, ad_dn, profile_picture))
-                user_id = cursor.lastrowid
-                
-                # If hativa_id provided, add to user_hativot table
-                if hativa_id:
-                    cursor.execute('''
-                        INSERT OR IGNORE INTO user_hativot (user_id, hativa_id)
-                        VALUES (?, ?)
-                    ''', (user_id, hativa_id))
-                
-                conn.commit()
-                conn.close()
-                return user_id
-            except sqlite3.OperationalError as e:
-                if 'locked' in str(e) and attempt < max_retries - 1:
-                    time.sleep(0.5)  # Wait before retry
+                with get_db_session() as session:
+                    repo = UserRepository(session)
+                    # Azure AD users don't use password authentication, but DB requires a value
+                    user = repo.create(
+                        username=username,
+                        email=email,
+                        full_name=full_name,
+                        role=role,
+                        auth_source='ad',
+                        ad_dn=ad_dn,
+                        profile_picture=profile_picture,
+                        hativa_ids=[hativa_id] if hativa_id else None
+                    )
+                    return user.user_id
+            except Exception as e:
+                if 'locked' in str(e).lower() and attempt < max_retries - 1:
+                    time.sleep(0.5)
                     continue
-                raise  # Re-raise if not a lock error or final attempt
+                raise
     
     def update_ad_user_info(self, user_id: int, email: str, full_name: str, profile_picture: bytes = None) -> bool:
-        """
-        Update AD user information from AD sync
-        
-        Args:
-            user_id: User ID
-            email: Updated email
-            full_name: Updated full name
-            
-        Returns:
-            Success boolean
-        """
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            if profile_picture:
-                cursor.execute('''
-                    UPDATE users 
-                    SET email = ?, full_name = ?, profile_picture = ?
-                    WHERE user_id = ? AND auth_source = 'ad'
-                ''', (email, full_name, profile_picture, user_id))
-            else:
-                cursor.execute('''
-                    UPDATE users 
-                    SET email = ?, full_name = ?
-                    WHERE user_id = ? AND auth_source = 'ad'
-                ''', (email, full_name, user_id))
-            conn.commit()
-            conn.close()
-            return True
-        except Exception as e:
-            print(f"Error updating AD user info: {e}")
-            return False
+        """Update AD user information using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            return repo.update_ad_user_info(user_id, email, full_name, profile_picture)
     
     def get_user_photo(self, user_id: int) -> Optional[bytes]:
-        """Get user profile picture"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('SELECT profile_picture FROM users WHERE user_id = ?', (user_id,))
-            row = cursor.fetchone()
-            conn.close()
-            
-            if row and row[0]:
-                return row[0]
-            return None
-        except Exception as e:
-            print(f"Error getting user photo: {e}")
-            return None
+        """Get user profile picture using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            return repo.get_user_photo(user_id)
 
     def get_user_by_username_any_source(self, username: str) -> Optional[Dict]:
-        """
-        Get user by username regardless of auth source (case-insensitive)
-        """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Join with user_hativot to get division context. 
-        # Falls back to picking one if multiple exist (via LIMIT 1 or implicit fetchone)
-        cursor.execute('''
-            SELECT u.user_id, u.username, u.email, u.password_hash, 
-                   u.full_name, u.role, u.is_active, u.auth_source, u.ad_dn, 
-                   u.created_at, u.last_login,
-                   h.hativa_id, h.name as hativa_name
-            FROM users u
-            LEFT JOIN user_hativot uh ON u.user_id = uh.user_id
-            LEFT JOIN hativot h ON uh.hativa_id = h.hativa_id
-            WHERE LOWER(u.username) = LOWER(?)
-            ORDER BY h.hativa_id ASC
-        ''', (username,))
-        row = cursor.fetchone()
-        conn.close()
-        
-        if row:
-            return {
-                'user_id': row[0], 'username': row[1], 'email': row[2], 'password_hash': row[3],
-                'full_name': row[4], 'role': row[5], 'is_active': row[6], 'auth_source': row[7],
-                'ad_dn': row[8], 'created_at': row[9], 'last_login': row[10],
-                'hativa_id': row[11], 'hativa_name': row[12]
-            }
-        return None
+        """Get user by username using SQLAlchemy, including division context"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            user = repo.get_by_username(username)
+            if user:
+                d = user.to_dict()
+                # Join with user_hativot implicitly through relationship
+                if user.hativot:
+                    # Match original SQL: ORDER BY h.hativa_id ASC LIMIT 1
+                    sorted_hativot = sorted(list(user.hativot), key=lambda h: h.hativa_id)
+                    first_h = sorted_hativot[0]
+                    d['hativa_id'] = first_h.hativa_id
+                    d['hativa_name'] = first_h.name
+                else:
+                    d['hativa_id'] = None
+                    d['hativa_name'] = None
+                return d
+            return None
     
     def get_ad_users(self) -> List[Dict]:
-        """Get all Active Directory users"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Use subquery to force unique user rows
-        cursor.execute('''
-            SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
-                   u.is_active, u.created_at, u.last_login, u.ad_dn,
-                   h.hativa_id, h.name as hativa_name
-            FROM users u
-            LEFT JOIN (
-                SELECT user_id, MIN(hativa_id) as hativa_id
-                FROM user_hativot
-                GROUP BY user_id
-            ) first_hativa ON u.user_id = first_hativa.user_id
-            LEFT JOIN hativot h ON first_hativa.hativa_id = h.hativa_id
-            WHERE u.auth_source = 'ad'
-            ORDER BY u.created_at DESC
-        ''')
-        rows = cursor.fetchall()
-        conn.close()
-        
-        users = []
-        for row in rows:
-            users.append({
-                'user_id': row[0],
-                'username': row[1],
-                'email': row[2],
-                'full_name': row[3],
-                'role': row[4],
-                'is_active': row[5],
-                'created_at': row[6],
-                'last_login': row[7],
-                'ad_dn': row[8],
-                'hativa_id': row[9],
-                'hativa_name': row[10],
-                'auth_source': 'ad'
-            })
-        return users
+        """Get all Active Directory users using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = UserRepository(session)
+            users = repo.get_ad_users()
+            return [u.to_dict() for u in users]
     
-    def get_local_users(self) -> List[Dict]:
-        """Get all local (non-AD) users"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Use subquery to force unique user rows
-        cursor.execute('''
-            SELECT u.user_id, u.username, u.email, u.full_name, u.role, 
-                   u.is_active, u.created_at, u.last_login,
-                   h.hativa_id, h.name as hativa_name
-            FROM users u
-            LEFT JOIN (
-                SELECT user_id, MIN(hativa_id) as hativa_id
-                FROM user_hativot
-                GROUP BY user_id
-            ) first_hativa ON u.user_id = first_hativa.user_id
-            LEFT JOIN hativot h ON first_hativa.hativa_id = h.hativa_id
-            WHERE u.auth_source = 'local' OR u.auth_source IS NULL
-            ORDER BY u.created_at DESC
-        ''')
-        rows = cursor.fetchall()
-        conn.close()
-        
-        users = []
-        for row in rows:
-            users.append({
-                'user_id': row[0],
-                'username': row[1],
-                'email': row[2],
-                'full_name': row[3],
-                'role': row[4],
-                'is_active': row[5],
-                'created_at': row[6],
-                'last_login': row[7],
-                'hativa_id': row[8],
-                'hativa_name': row[9],
-                'auth_source': 'local'
-            })
-        return users
     
     # Recycle Bin Functions
     def get_deleted_vaadot(self, hativa_id: Optional[int] = None) -> List[Dict]:
-        """Get all deleted committee meetings"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        query = '''
-            SELECT v.*, ct.name as committee_name, h.name as hativa_name,
-                   u.full_name as deleted_by_name, u.username as deleted_by_username
-            FROM vaadot v
-            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-            JOIN hativot h ON v.hativa_id = h.hativa_id
-            LEFT JOIN users u ON v.deleted_by = u.user_id
-            WHERE v.is_deleted = 1
-        '''
-        params = []
-        
-        if hativa_id:
-            query += ' AND v.hativa_id = ?'
-            params.append(hativa_id)
-        
-        query += ' ORDER BY v.deleted_at DESC'
-        
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [{'vaadot_id': row[0], 'committee_type_id': row[1], 'hativa_id': row[2],
-                'vaada_date': row[3], 'status': row[4], 'exception_date_id': row[5],
-                'notes': row[6], 'created_at': row[7], 'is_deleted': row[8],
-                'deleted_at': row[9], 'deleted_by': row[10],
-                'committee_name': row[11], 'hativa_name': row[12],
-                'deleted_by_name': row[13] if len(row) > 13 else None,
-                'deleted_by_username': row[14] if len(row) > 14 else None} for row in rows]
+        """Get all deleted committee meetings using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = VaadaRepository(session)
+            vaadot = repo.get_deleted(hativa_id=hativa_id)
+            return [v.to_dict() for v in vaadot]
     
     def get_deleted_events(self, hativa_id: Optional[int] = None) -> List[Dict]:
-        """Get all deleted events"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        query = '''
-            SELECT e.event_id, e.vaadot_id, e.maslul_id, e.name, e.event_type, 
-                   e.expected_requests, e.call_publication_date, e.created_at,
-                   e.call_deadline_date, e.intake_deadline_date, e.review_deadline_date, 
-                   e.response_deadline_date, e.actual_submissions, e.scheduled_date, 
-                   e.is_deleted, e.deleted_at, e.deleted_by,
-                   m.name as maslul_name, m.hativa_id as maslul_hativa_id,
-                   v.vaada_date, ct.name as committee_name, h.name as hativa_name,
-                   u.full_name as deleted_by_name, u.username as deleted_by_username
-            FROM events e
-            JOIN maslulim m ON e.maslul_id = m.maslul_id
-            JOIN vaadot v ON e.vaadot_id = v.vaadot_id
-            JOIN committee_types ct ON v.committee_type_id = ct.committee_type_id
-            JOIN hativot h ON m.hativa_id = h.hativa_id
-            LEFT JOIN users u ON e.deleted_by = u.user_id
-            WHERE e.is_deleted = 1
-        '''
-        params = []
-        
-        if hativa_id:
-            query += ' AND m.hativa_id = ?'
-            params.append(hativa_id)
-        
-        query += ' ORDER BY e.deleted_at DESC'
-        
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [{'event_id': row[0], 'vaadot_id': row[1], 'maslul_id': row[2],
-                'name': row[3], 'event_type': row[4], 'expected_requests': row[5],
-                'call_publication_date': row[6], 'created_at': row[7],
-                'call_deadline_date': row[8], 'intake_deadline_date': row[9],
-                'review_deadline_date': row[10], 'response_deadline_date': row[11],
-                'actual_submissions': row[12], 'scheduled_date': row[13],
-                'is_deleted': row[14], 'deleted_at': row[15],
-                'deleted_by': row[16], 'maslul_name': row[17], 'maslul_hativa_id': row[18],
-                'vaada_date': row[19], 'committee_name': row[20], 'hativa_name': row[21],
-                'deleted_by_name': row[22], 'deleted_by_username': row[23]} for row in rows]
+        """Get all deleted events using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = EventRepository(session)
+            events = repo.get_deleted(hativa_id=hativa_id)
+            return [e.to_dict() for e in events]
     
     def restore_vaada(self, vaadot_id: int) -> bool:
-        """Restore a deleted committee meeting"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            # Restore the vaada
-            cursor.execute('''
-                UPDATE vaadot 
-                SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL 
-                WHERE vaadot_id = ? AND is_deleted = 1
-            ''', (vaadot_id,))
-            success = cursor.rowcount > 0
-            
-            # Also restore related events
-            if success:
-                cursor.execute('''
-                    UPDATE events 
-                    SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL 
-                    WHERE vaadot_id = ? AND is_deleted = 1
-                ''', (vaadot_id,))
-            
-            conn.commit()
-            conn.close()
-            return success
-        except Exception as e:
-            print(f"Error restoring vaada: {e}")
-            if 'conn' in locals():
-                conn.close()
-            return False
+        """Restore a deleted committee meeting using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = VaadaRepository(session)
+            return repo.restore(vaadot_id)
     
     def restore_event(self, event_id: int) -> bool:
-        """Restore a deleted event"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                UPDATE events 
-                SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL 
-                WHERE event_id = ? AND is_deleted = 1
-            ''', (event_id,))
-            success = cursor.rowcount > 0
-            
-            conn.commit()
-            conn.close()
-            return success
-        except Exception as e:
-            print(f"Error restoring event: {e}")
-            if 'conn' in locals():
-                conn.close()
-            return False
+        """Restore a deleted event using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = EventRepository(session)
+            return repo.restore(event_id)
     
     def permanently_delete_vaada(self, vaadot_id: int) -> bool:
-        """Permanently delete a committee meeting (hard delete)"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            # Delete the vaada (events will be cascade deleted due to foreign key)
-            cursor.execute('DELETE FROM vaadot WHERE vaadot_id = ? AND is_deleted = 1', (vaadot_id,))
-            success = cursor.rowcount > 0
-            
-            conn.commit()
-            conn.close()
-            return success
-        except Exception as e:
-            print(f"Error permanently deleting vaada: {e}")
-            if 'conn' in locals():
-                conn.close()
-            return False
+        """Permanently delete a committee meeting (hard delete) using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = VaadaRepository(session)
+            return repo.hard_delete(vaadot_id)
     
     def permanently_delete_event(self, event_id: int) -> bool:
-        """Permanently delete an event (hard delete)"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute('DELETE FROM events WHERE event_id = ? AND is_deleted = 1', (event_id,))
-            success = cursor.rowcount > 0
-            
-            conn.commit()
-            conn.close()
-            return success
-        except Exception as e:
-            print(f"Error permanently deleting event: {e}")
-            if 'conn' in locals():
-                conn.close()
-            return False
+        """Permanently delete an event (hard delete) using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = EventRepository(session)
+            return repo.hard_delete(event_id)
     
     def empty_recycle_bin(self, hativa_id: Optional[int] = None) -> Tuple[int, int]:
-        """Permanently delete all items in recycle bin"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            # Delete events
-            if hativa_id:
-                cursor.execute('''
-                    DELETE FROM events 
-                    WHERE is_deleted = 1 
-                    AND maslul_id IN (SELECT maslul_id FROM maslulim WHERE hativa_id = ?)
-                ''', (hativa_id,))
-            else:
-                cursor.execute('DELETE FROM events WHERE is_deleted = 1')
-            events_deleted = cursor.rowcount or 0
-            
-            # Delete vaadot
-            if hativa_id:
-                cursor.execute('''
-                    DELETE FROM vaadot 
-                    WHERE is_deleted = 1 AND hativa_id = ?
-                ''', (hativa_id,))
-            else:
-                cursor.execute('DELETE FROM vaadot WHERE is_deleted = 1')
-            vaadot_deleted = cursor.rowcount or 0
-            
-            conn.commit()
-            conn.close()
+        """Permanently delete all items in recycle bin using SQLAlchemy"""
+        with get_db_session() as session:
+            vaada_repo = VaadaRepository(session)
+            event_repo = EventRepository(session)
+            vaadot_deleted = vaada_repo.empty_recycle_bin(hativa_id)
+            events_deleted = event_repo.empty_recycle_bin(hativa_id)
             return vaadot_deleted, events_deleted
-        except Exception as e:
-            print(f"Error emptying recycle bin: {e}")
-            if 'conn' in locals():
-                conn.close()
-            return 0, 0
 
     # Calendar Sync Operations
     def create_calendar_sync_record(self, source_type: str, source_id: int, deadline_type: str = None,
                                      calendar_email: str = 'plan@innovationisrael.org.il',
                                      calendar_event_id: str = None) -> int:
-        """Create a calendar sync tracking record"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute('''
-                INSERT INTO calendar_sync_events
-                (source_type, source_id, deadline_type, calendar_email, calendar_event_id, sync_status)
-                VALUES (?, ?, ?, ?, ?, 'pending')
-            ''', (source_type, source_id, deadline_type, calendar_email, calendar_event_id))
-            sync_id = cursor.lastrowid
-            conn.commit()
-            return sync_id
-        except sqlite3.IntegrityError:
-            # Record already exists, update it instead
-            cursor.execute('''
-                UPDATE calendar_sync_events
-                SET sync_status = 'pending', updated_at = CURRENT_TIMESTAMP
-                WHERE source_type = ? AND source_id = ? AND deadline_type = ? AND calendar_email = ?
-            ''', (source_type, source_id, deadline_type, calendar_email))
-            conn.commit()
-            cursor.execute('''
-                SELECT sync_id FROM calendar_sync_events
-                WHERE source_type = ? AND source_id = ? AND deadline_type = ? AND calendar_email = ?
-            ''', (source_type, source_id, deadline_type, calendar_email))
-            sync_id = cursor.fetchone()[0]
-            return sync_id
-        finally:
-            conn.close()
+        """Create calendar sync record using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CalendarSyncRepository(session)
+            return repo.create_record(source_type, source_id, deadline_type, calendar_email, calendar_event_id)
 
     def update_calendar_sync_status(self, sync_id: int, status: str, calendar_event_id: str = None,
                                       error_message: str = None, content_hash: str = None) -> bool:
-        """Update calendar sync status"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        if calendar_event_id:
-            if content_hash:
-                cursor.execute('''
-                    UPDATE calendar_sync_events
-                    SET sync_status = ?, calendar_event_id = ?, error_message = ?, content_hash = ?,
-                        last_synced = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                    WHERE sync_id = ?
-                ''', (status, calendar_event_id, error_message, content_hash, sync_id))
-            else:
-                cursor.execute('''
-                UPDATE calendar_sync_events
-                SET sync_status = ?, calendar_event_id = ?, error_message = ?,
-                    last_synced = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                WHERE sync_id = ?
-                ''', (status, calendar_event_id, error_message, sync_id))
-        else:
-            cursor.execute('''
-                UPDATE calendar_sync_events
-                SET sync_status = ?, error_message = ?,
-                    last_synced = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                WHERE sync_id = ?
-            ''', (status, error_message, sync_id))
-
-        success = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
-        return success
+        """Update calendar sync status using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CalendarSyncRepository(session)
+            return repo.update_status(sync_id, status, calendar_event_id, error_message, content_hash)
 
     def get_calendar_sync_record(self, source_type: str, source_id: int, deadline_type: str = None,
                                    calendar_email: str = 'plan@innovationisrael.org.il') -> Optional[Dict]:
-        """Get calendar sync record"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            SELECT sync_id, source_type, source_id, deadline_type, calendar_event_id, calendar_email,
-                   last_synced, sync_status, error_message, created_at, updated_at, content_hash
-            FROM calendar_sync_events
-            WHERE source_type = ? AND source_id = ? AND deadline_type IS ? AND calendar_email = ?
-        ''', (source_type, source_id, deadline_type, calendar_email))
-
-        row = cursor.fetchone()
-        conn.close()
-
-        if row:
-            return {
-                'sync_id': row[0], 'source_type': row[1], 'source_id': row[2],
-                'deadline_type': row[3], 'calendar_event_id': row[4], 'calendar_email': row[5],
-                'last_synced': row[6], 'sync_status': row[7], 'error_message': row[8],
-                'created_at': row[9], 'updated_at': row[10], 'content_hash': row[11] if len(row) > 11 else None
-            }
-        return None
+        """Get calendar sync record using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CalendarSyncRepository(session)
+            record = repo.get_record(source_type, source_id, deadline_type, calendar_email)
+            return record.to_dict() if record else None
 
     def get_pending_calendar_syncs(self, calendar_email: str = 'plan@innovationisrael.org.il') -> List[Dict]:
-        """Get all pending calendar sync records"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            SELECT sync_id, source_type, source_id, deadline_type, calendar_event_id, calendar_email,
-                   last_synced, sync_status, error_message, created_at, updated_at
-            FROM calendar_sync_events
-            WHERE sync_status = 'pending' AND calendar_email = ?
-            ORDER BY created_at ASC
-        ''', (calendar_email,))
-
-        rows = cursor.fetchall()
-        conn.close()
-
-        return [
-            {
-                'sync_id': row[0], 'source_type': row[1], 'source_id': row[2],
-                'deadline_type': row[3], 'calendar_event_id': row[4], 'calendar_email': row[5],
-                'last_synced': row[6], 'sync_status': row[7], 'error_message': row[8],
-                'created_at': row[9], 'updated_at': row[10]
-            }
-            for row in rows
-        ]
+        """Get pending calendar syncs using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CalendarSyncRepository(session)
+            records = repo.get_pending(calendar_email)
+            return [r.to_dict() for r in records]
 
     def delete_calendar_sync_record(self, source_type: str, source_id: int, deadline_type: str = None,
                                       calendar_email: str = 'plan@innovationisrael.org.il') -> bool:
-        """Delete calendar sync record"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            DELETE FROM calendar_sync_events
-            WHERE source_type = ? AND source_id = ? AND deadline_type IS ? AND calendar_email = ?
-        ''', (source_type, source_id, deadline_type, calendar_email))
-
-        success = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
-        return success
+        """Delete calendar sync record using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CalendarSyncRepository(session)
+            return repo.delete_record(source_type, source_id, deadline_type, calendar_email)
 
     def mark_calendar_sync_deleted(self, source_type: str, source_id: int,
                                      calendar_email: str = 'plan@innovationisrael.org.il') -> List[Dict]:
-        """Mark all calendar sync records for a source as deleted and return them"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        # Get all sync records for this source
-        cursor.execute('''
-            SELECT sync_id, source_type, source_id, deadline_type, calendar_event_id, calendar_email,
-                   last_synced, sync_status, error_message, created_at, updated_at
-            FROM calendar_sync_events
-            WHERE source_type = ? AND source_id = ? AND calendar_email = ? AND sync_status != 'deleted'
-        ''', (source_type, source_id, calendar_email))
-
-        rows = cursor.fetchall()
-
-        # Mark them as deleted
-        cursor.execute('''
-            UPDATE calendar_sync_events
-            SET sync_status = 'deleted', updated_at = CURRENT_TIMESTAMP
-            WHERE source_type = ? AND source_id = ? AND calendar_email = ? AND sync_status != 'deleted'
-        ''', (source_type, source_id, calendar_email))
-
-        conn.commit()
-        conn.close()
-
-        return [
-            {
-                'sync_id': row[0], 'source_type': row[1], 'source_id': row[2],
-                'deadline_type': row[3], 'calendar_event_id': row[4], 'calendar_email': row[5],
-                'last_synced': row[6], 'sync_status': row[7], 'error_message': row[8],
-                'created_at': row[9], 'updated_at': row[10]
-            }
-            for row in rows
-        ]
+        """Mark calendar sync records as deleted using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CalendarSyncRepository(session)
+            records = repo.mark_deleted(source_type, source_id, calendar_email)
+            return [r.to_dict() for r in records]
 
     def get_all_synced_calendar_events(self, calendar_email: str = 'plan@innovationisrael.org.il') -> List[Dict]:
-        """Get all calendar sync records that have been synced (have calendar_event_id)"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            SELECT sync_id, source_type, source_id, deadline_type, calendar_event_id, calendar_email,
-                   last_synced, sync_status, error_message, created_at, updated_at
-            FROM calendar_sync_events
-            WHERE calendar_email = ? AND calendar_event_id IS NOT NULL AND calendar_event_id != ''
-            ORDER BY created_at ASC
-        ''', (calendar_email,))
-
-        rows = cursor.fetchall()
-        conn.close()
-
-        return [
-            {
-                'sync_id': row[0], 'source_type': row[1], 'source_id': row[2],
-                'deadline_type': row[3], 'calendar_event_id': row[4], 'calendar_email': row[5],
-                'last_synced': row[6], 'sync_status': row[7], 'error_message': row[8],
-                'created_at': row[9], 'updated_at': row[10]
-            } for row in rows
-        ]
+        """Get all synced calendar events using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CalendarSyncRepository(session)
+            records = repo.get_all_synced(calendar_email)
+            return [r.to_dict() for r in records]
 
     def clear_all_calendar_sync_records(self, calendar_email: str = 'plan@innovationisrael.org.il') -> int:
-        """Delete all calendar sync records for a calendar (used when resetting sync)"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            DELETE FROM calendar_sync_events
-            WHERE calendar_email = ?
-        ''', (calendar_email,))
-
-        deleted_count = cursor.rowcount
-        conn.commit()
-        conn.close()
-
-        return deleted_count
+        """Clear all calendar sync records using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = CalendarSyncRepository(session)
+            return repo.clear_all(calendar_email)
 
     # Schedule Drafts operations
     def save_schedule_draft(self, user_id: int, data: str) -> int:
-        """Save a schedule draft and return its ID"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO schedule_drafts (user_id, data)
-            VALUES (?, ?)
-        ''', (user_id, data))
-        draft_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return draft_id
+        """Save a schedule draft using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = ScheduleDraftRepository(session)
+            return repo.save_draft(user_id, data)
 
     def get_schedule_draft(self, draft_id: int) -> Optional[Dict]:
-        """Get a schedule draft by ID"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT draft_id, user_id, data, created_at
-            FROM schedule_drafts
-            WHERE draft_id = ?
-        ''', (draft_id,))
-        row = cursor.fetchone()
-        conn.close()
-        
-        if row:
-            return {
-                'draft_id': row[0],
-                'user_id': row[1],
-                'data': row[2],
-                'created_at': row[3]
-            }
-        return None
+        """Get a schedule draft using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = ScheduleDraftRepository(session)
+            draft = repo.get_draft(draft_id)
+            return draft.to_dict() if draft else None
 
     def delete_schedule_draft(self, draft_id: int) -> bool:
-        """Delete a schedule draft"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM schedule_drafts WHERE draft_id = ?', (draft_id,))
-        success = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
-        return success
+        """Delete a schedule draft using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = ScheduleDraftRepository(session)
+            return repo.delete_by_id(draft_id)
 
     def cleanup_old_drafts(self, hours: int = 24) -> int:
-        """Delete drafts older than specified hours"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Calculate cutoff time
-        # This syntax works for SQLite, check Postgres later if needed (DB agnostic usually handled by app logic but SQL differences exist)
-        # SQLite: datetime('now', '-24 hours')
-        # Postgres: NOW() - INTERVAL '24 hours'
-        
-        if self.db_type == 'postgres':
-            cursor.execute(f"DELETE FROM schedule_drafts WHERE created_at < NOW() - INTERVAL '{hours} hours'")
-        else:
-            cursor.execute(f"DELETE FROM schedule_drafts WHERE created_at < datetime('now', '-{hours} hours')")
-            
-        count = cursor.rowcount
-        conn.commit()
-        conn.close()
-        return count
+        """Cleanup old schedule drafts using SQLAlchemy"""
+        with get_db_session() as session:
+            repo = ScheduleDraftRepository(session)
+            return repo.cleanup_old_drafts(hours)
     
 

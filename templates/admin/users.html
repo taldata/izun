@@ -235,12 +235,6 @@
                                     👁️ צופה
                                 {% endif %}
                             </span>
-                            <br>
-                            {% if user.auth_source == 'ad' %}
-                                <span class="badge bg-info mt-2">
-                                    <i class="fas fa-server"></i> Active Directory
-                                </span>
-                            {% endif %}
                         </div>
                     </div>
                     
@@ -290,7 +284,6 @@
                                     data-email="{{ user.email }}"
                                     data-fullname="{{ user.full_name }}"
                                     data-role="{{ user.role }}"
-                                    data-auth-source="{{ user.auth_source or '' }}"
                                     data-hativa-ids="{% if user.hativot %}{{ user.hativot|map(attribute='hativa_id')|list|tojson }}{% else %}[]{% endif %}">
                                 <i class="fas fa-edit"></i> ערוך
                             </button>
@@ -330,7 +323,6 @@
             </div>
             <form method="POST" action="{{ url_for('update_user') }}">
                 <input type="hidden" name="user_id" id="editUserId">
-                <input type="hidden" name="auth_source" id="editAuthSource">
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-6 mb-3">
@@ -462,7 +454,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const email = this.getAttribute('data-email');
             const fullName = this.getAttribute('data-fullname');
             const role = this.getAttribute('data-role');
-            const authSource = this.getAttribute('data-auth-source') || '';
             const hativaIdsStr = this.getAttribute('data-hativa-ids');
             const hativaIds = JSON.parse(hativaIdsStr || '[]');
             
@@ -471,7 +462,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('editEmail').value = email;
             document.getElementById('editFullName').value = fullName;
             document.getElementById('editRole').value = role;
-            document.getElementById('editAuthSource').value = authSource;
             
             // Clear all checkboxes first
             document.querySelectorAll('.edit-hativa-checkbox').forEach(cb => cb.checked = false);

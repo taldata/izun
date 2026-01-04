@@ -1,43 +1,12 @@
 from functools import wraps
 from flask import session, request, redirect, url_for, flash, jsonify
-import hashlib
-import bcrypt
 from database import DatabaseManager
-from typing import Optional
 
 class AuthManager:
     def __init__(self, db_manager: DatabaseManager, ad_service=None):
         self.db = db_manager
         self.ad_service = ad_service
         
-    def hash_password(self, password: str) -> str:
-        """Hash password using bcrypt (preferred) or SHA-256 (legacy)"""
-        # Use bcrypt for new passwords
-        return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    
-    def hash_password_legacy(self, password: str) -> str:
-        """Legacy SHA-256 hash (for backward compatibility)"""
-        return hashlib.sha256(password.encode()).hexdigest()
-    
-    # Password verification methods kept for backward compatibility with user management
-    def verify_password(self, password: str, password_hash: str) -> bool:
-        """Verify password against hash (supports both bcrypt and legacy SHA-256)"""
-        if not password_hash:
-            return False
-            
-        # Check if it's a bcrypt hash (starts with $2b$ or $2a$)
-        if password_hash.startswith('$2'):
-            try:
-                return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
-            except Exception:
-                return False
-        else:
-            # Legacy SHA-256 verification
-            return self.hash_password_legacy(password) == password_hash
-    
-    # Local authentication disabled - SSO only
-    # login_user method removed - all authentication through Azure AD SSO
-    
     def logout_user(self):
         """Clear user session"""
         session.clear()
