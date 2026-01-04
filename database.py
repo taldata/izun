@@ -1623,7 +1623,8 @@ class DatabaseManager:
         """Create calendar sync record using SQLAlchemy"""
         with get_db_session() as session:
             repo = CalendarSyncRepository(session)
-            return repo.create_record(source_type, source_id, deadline_type, calendar_email, calendar_event_id)
+            record = repo.create_record(source_type, source_id, deadline_type, calendar_email, calendar_event_id)
+            return record.sync_id
 
     def update_calendar_sync_status(self, sync_id: int, status: str, calendar_event_id: str = None,
                                       error_message: str = None, content_hash: str = None) -> bool:
