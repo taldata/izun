@@ -170,6 +170,32 @@ class UserRepository(BaseRepository[User]):
         self.session.flush()
         return True
     
+    def update_ad_user_info(self, user_id: int, email: str, full_name: str, 
+                            profile_picture: Optional[bytes] = None) -> bool:
+        """
+        Update AD user information.
+        
+        Args:
+            user_id: User ID
+            email: New email
+            full_name: New full name
+            profile_picture: New profile picture bytes
+            
+        Returns:
+            True if updated successfully
+        """
+        user = self.get_by_id(user_id)
+        if not user:
+            return False
+        
+        user.email = email
+        user.full_name = full_name
+        if profile_picture is not None:
+            user.profile_picture = profile_picture
+            
+        self.session.flush()
+        return True
+    
     def update_profile_picture(self, user_id: int, 
                                 profile_picture: Optional[bytes]) -> bool:
         """
@@ -415,7 +441,7 @@ class UserRepository(BaseRepository[User]):
         result = self.session.execute(stmt)
         return list(result.unique().scalars().all())
     
-    def get_photo(self, user_id: int) -> Optional[bytes]:
+    def get_user_photo(self, user_id: int) -> Optional[bytes]:
         """
         Get user profile picture.
         

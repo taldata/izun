@@ -43,7 +43,7 @@ class CalendarSyncRepository(BaseRepository[CalendarSyncEvent]):
             deadline_type=deadline_type,
             calendar_email=calendar_email,
             calendar_event_id=calendar_event_id,
-            status=status,
+            sync_status=status,
             content_hash=content_hash,
             last_synced=datetime.now()
         )
@@ -56,7 +56,7 @@ class CalendarSyncRepository(BaseRepository[CalendarSyncEvent]):
         """Update sync status."""
         record = self.get_by_id(sync_id)
         if record:
-            record.status = status
+            record.sync_status = status
             record.last_synced = datetime.now()
             if calendar_event_id:
                 record.calendar_event_id = calendar_event_id
@@ -70,7 +70,7 @@ class CalendarSyncRepository(BaseRepository[CalendarSyncEvent]):
 
     def get_pending(self, calendar_email: Optional[str] = None) -> List[CalendarSyncEvent]:
         """Get all pending sync records."""
-        filters = [self.model_class.status == 'pending']
+        filters = [self.model_class.sync_status == 'pending']
         if calendar_email:
             filters.append(self.model_class.calendar_email == calendar_email)
             

@@ -1,7 +1,10 @@
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict, List, Optional, Tuple
+import logging
 
 from database import DatabaseManager
+
+logger = logging.getLogger(__name__)
 
 
 def _nearest_five_events(events: List[Dict]) -> List[Dict]:
@@ -28,6 +31,8 @@ def _nearest_five_events(events: List[Dict]) -> List[Dict]:
                 # Accept both date ('YYYY-MM-DD') and datetime ('YYYY-MM-DD HH:MM:SS')
                 if isinstance(val, datetime):
                     return val
+                if isinstance(val, date):
+                    return datetime(val.year, val.month, val.day)
                 if isinstance(val, str):
                     if " " in val:
                         return datetime.fromisoformat(val.replace(" ", "T"))
@@ -50,46 +55,54 @@ def get_committee_summary(database: DatabaseManager, vaadot_id: int) -> Dict:
     """
     Build a summary object for a committee (vaada) including key details and up to 5 nearest events.
     """
-    vaada = database.get_vaada_by_id(vaadot_id)
-    if not vaada:
-        return {"success": False, "message": "ועדה לא נמצאה"}
+    try:
+        logger.info(f"Getting summary for committee {vaadot_id}")
+        vaada = database.get_vaada_by_id(vaadot_id)
+        if not vaada:
+            logger.warning(f"Committee {vaadot_id} not found")
+            return {"success": False, "message": "ועדה לא נמצאה"}
 
-    # Get all events for this committee
-    events = database.get_events(vaadot_id=vaadot_id)
+        # Get all events for this committee
+        events = database.get_events(vaadot_id=vaadot_id)
+        logger.info(f"Found {len(events)} events for committee {vaadot_id}")
 
-    # Select nearest five
-    nearest = _nearest_five_events(events)
+        # Select nearest five
+        nearest = _nearest_five_events(events)
 
-    # Map minimal fields for UI
-    def map_event(ev: Dict) -> Dict:
-        return {
-            "event_id": ev.get("event_id"),
-            "title": ev.get("name"),
-            "location": ev.get("hativa_name"),  # no explicit location in schema; reuse division as proxy
-            "start": ev.get("scheduled_date") or ev.get("call_deadline_date"),
-            "end": ev.get("response_deadline_date"),
-            "event_type": ev.get("event_type"),
-            "maslul_name": ev.get("maslul_name"),
-            "expected_requests": ev.get("expected_requests") or 0,
-            "actual_submissions": ev.get("actual_submissions") or 0,
+        # Map minimal fields for UI
+        def map_event(ev: Dict) -> Dict:
+            return {
+                "event_id": ev.get("event_id"),
+                "title": ev.get("name"),
+                "location": ev.get("hativa_name"),  # no explicit location in schema; reuse division as proxy
+                "start": ev.get("scheduled_date") or ev.get("call_deadline_date"),
+                "end": ev.get("response_deadline_date"),
+                "event_type": ev.get("event_type"),
+                "maslul_name": ev.get("maslul_name"),
+                "expected_requests": ev.get("expected_requests") or 0,
+                "actual_submissions": ev.get("actual_submissions") or 0,
+            }
+
+        summary = {
+            "success": True,
+            "committee": {
+                "vaadot_id": vaada.get("vaadot_id"),
+                "name": vaada.get("committee_name"),
+                "type_id": vaada.get("committee_type_id"),
+                "hativa_id": vaada.get("hativa_id"),
+                "hativa_name": vaada.get("hativa_name"),
+                "date": vaada.get("vaada_date"),
+            },
+            "nearest_events": [map_event(ev) for ev in nearest],
+            "counts": {
+                "total_events": len(events),
+                "nearest_count": len(nearest),
+            },
         }
+        return summary
 
-    summary = {
-        "success": True,
-        "committee": {
-            "vaadot_id": vaada.get("vaadot_id"),
-            "name": vaada.get("committee_name"),
-            "type_id": vaada.get("committee_type_id"),
-            "hativa_id": vaada.get("hativa_id"),
-            "hativa_name": vaada.get("hativa_name"),
-            "date": vaada.get("vaada_date"),
-        },
-        "nearest_events": [map_event(ev) for ev in nearest],
-        "counts": {
-            "total_events": len(events),
-            "nearest_count": len(nearest),
-        },
-    }
-    return summary
+    except Exception as e:
+        logger.error(f"Error generating committee summary: {e}", exc_info=True)
+        return {"success": False, "message": "שגיאה בטעינת הנתונים"}
 
 
